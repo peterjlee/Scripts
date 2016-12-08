@@ -34,10 +34,8 @@ ______________This entire fork merely adds 5 extended versions of the color codi
 ###[BAR_ROI_Color_Coder53+autoprefs](./BAR_ROI_Color_Coder53+autoprefs_ASC.ijm)
   Additional features include:
        1. The measured range of values is shown for all measurements in the Measurement selector (this makes it easier to manually select a range for the color ramp).
-       
-       2. The selected LUT (color lookup table) can be reversed.
-       
-       3. An automatic suggested value for the decimal places can be selected (based on the magnitude and range of the values).
+2. The selected LUT (color lookup table) can be reversed.
+3. An automatic suggested value for the decimal places can be selected (based on the magnitude and range of the values).
        
        4. A ramp height is suggested base on the image height.
        

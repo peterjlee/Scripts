@@ -62,12 +62,15 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Array.getStatistics(resultsColumn, min, max, null, null); 
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
-	
+	if (headingsWithRange[0]==" :  Infinity - -Infinity")
+		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	/* create the dialog prompt */
 	Dialog.create("ROI Color Coder: "+ tN);
-	macroP = getInfo("macro.filepath");
 	Dialog.setInsets(6, 0, -15);
-	Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
+	macroP = getInfo("macro.filepath");
+	/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
+	if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels");
+	else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
 	Dialog.addMessage("Filename: " + tN);
 	Dialog.setInsets(6, 0, 6);
 	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
@@ -148,7 +151,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	
 	/* get values for chosen parameter */
 	values= newArray(items);
-	for (i=0; i<items; i++) values[i]= getResult(parameter,i);
+	if (parameter!="Object"){
+		for (i=0; i<items; i++) values[i] = getResult(parameter,i);
+	}
+	else for (i=0; i<items; i++) values[i] = i+1;
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
 	if (isNaN(min)) min= arrayMin;
 	if (isNaN(max)) max= arrayMax;
@@ -508,7 +514,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		else labelInnerShadowDisp = innerShadowDisp;
 		if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
 		else labelInnerShadowBlur = innerShadowBlur;
-		fontFactor = minFontSize/100;
+		fontFactor = meanFontSize/100; 
 		outlineStroke = round(fontFactor * outlineStrokePC);
 		labelShadowDrop = floor(fontFactor * labelShadowDrop);
 		labelShadowDisp = floor(fontFactor * labelShadowDisp);
@@ -569,13 +575,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.create("Statistics Summary Options");
 			Dialog.addCheckbox("Add parameter label to top line of summary?", true);
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);			
-			statsChoice = newArray("None", "Dashed line:  ---", "Number of objects:  " + items,
+			statsChoice = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items,
 			"Mean:  " + arrayMean + " " +unitLabel,
 			"Median:  " + median + " " +unitLabel, "StdDev:  " + arraySD + " " +unitLabel,
 			"CoeffVar:  " + coeffVar + "%", "Min-Max:  " + arrayMin + " - " + arrayMax + " " +unitLabel,
 			"Minimum:  " + arrayMin, "Maximum:  " + arrayMax,
 			"Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "User Text",
-			"Long dashed underline:  ___","Blank line");
+			"Long Underline:  ___","Blank line");
 			// statsChoiceLines = 9;
 			textChoiceLines = 3;
 			userInput = newArray(textChoiceLines);
@@ -667,7 +673,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (statsLabLine[i]!="None") {
 				statsLines = i + 1;
 				if (indexOf(statsLabLine[i], ":  ")>0) statsLabLine[i] = substring(statsLabLine[i], 0, indexOf(statsLabLine[i], ":  "));
-				if (statsLabLine[i]=="Dashed line:  ---") statsLabLineText[i] = "----------";
+				if (statsLabLine[i]=="Dashed Line:  ---") statsLabLineText[i] = "----------";
 				else if (statsLabLine[i]=="Number of objects") statsLabLineText[i] = "Objects = " + items;
 				else if (statsLabLine[i]=="Mean") statsLabLineText[i] = "Mean = " + arrayMean + " " + unitLabel;
 				else if (statsLabLine[i]=="Median") statsLabLineText[i] = "Median = " + median + " " + unitLabel;
@@ -683,7 +689,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					 else statsLabLineText[i] = "";
 					 userTextLine += 1;
 				}
-				else if (statsLabLine[i]=="Long dashed underline:  ___") statsLabLineText[i] = "__________";
+				else if (statsLabLine[i]=="Long Underline") statsLabLineText[i] = "__________";
 				else if (statsLabLine[i]=="Blank line") statsLabLineText[i] = " ";
 				if (getStringWidth(statsLabLineText[i])>longestStringWidth) longestStringWidth = getStringWidth(statsLabLineText[i]);
 			}
@@ -1259,7 +1265,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		else stringLabel = string;
 		return stringLabel;
 	}
-	function unCleanLabel(string) { /* v161104 This function replaces special characters with standard characters for file system compatible filenames */
+	function unCleanLabel(string) { 
+	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
+	/* mod 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
@@ -1268,6 +1276,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string= replace(string, fromCharCode(197), "Angstrom"); /* angstrom symbol */
 		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* replace thin spaces  */
+		string= replace(string, " ", "_"); /* replace spaces - these can be a problem with image combination */
 		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
 		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
 		string= replace(string, "__", "_"); /* clean up autofilenames */

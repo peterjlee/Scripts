@@ -3,7 +3,6 @@
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
 	complementary to the ParticleAnalyzer (Analyze>Analyze Particles...), generating
 	particle-size heat maps. Requires IJ 1.47r.
-
 	Tiago Ferreira, v.5.4 2017.03.10 (add optional log10 scale) + pjl mods 3/13/2017
 	 + option to reverse LUT
 	 + dialog requester shows min and max values for all measurements to make it easier to choose a range 8/5/2016
@@ -16,7 +15,6 @@
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
-
 	saveSettings;
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	if (nImages==0){
@@ -24,7 +22,6 @@
         + "Run demo? (Results Table and ROI Manager will be cleared)");
 	    runDemo();
 	}
-
 	run("Select None");
 	/*
 	Set options for black objects on white background as this works better for publications */
@@ -61,7 +58,8 @@
 		Array.getStatistics(resultsColumn, min, max, null, null); 
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
-	
+	if (headingsWithRange[0]==" :  Infinity - -Infinity")
+		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	/* create the dialog prompt */
 	Dialog.create("ROI Color Coder: " + tN);
 	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
@@ -147,10 +145,13 @@
 	
 	/* get values for chosen parameter */
 	values= newArray(items);
-	for (i=0; i<items; i++) {
-		if (useLog) values[i] = log(getResult(parameter,i)) / log(10);
-		else values[i] = getResult(parameter,i);
+	if (parameter!="Object"){
+		for (i=0; i<items; i++) {
+			if (useLog) values[i] = log(getResult(parameter,i)) / log(10);
+			else values[i] = getResult(parameter,i);
+		}
 	}
+	else for (i=0; i<items; i++) values[i] = i+1;
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
 	if (useLog) {
 		log10AMin = arrayMin;
@@ -666,7 +667,9 @@
 		else stringLabel = string;
 		return stringLabel;
 	}
-	function unCleanLabel(string) { /* v161104 This function replaces special characters with standard characters for file system compatible filenames */
+	function unCleanLabel(string) { 
+	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
+	/* mod 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
@@ -675,6 +678,7 @@
 		string= replace(string, fromCharCode(197), "Angstrom"); /* angstrom symbol */
 		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* replace thin spaces  */
+		string= replace(string, " ", "_"); /* replace spaces - these can be a problem with image combination */
 		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
 		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
 		string= replace(string, "__", "_"); /* clean up autofilenames */

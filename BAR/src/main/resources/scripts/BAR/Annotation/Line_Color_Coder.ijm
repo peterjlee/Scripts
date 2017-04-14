@@ -5,23 +5,23 @@
 	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
 	This version draws line between two sets of coordinates in a results table
 	Stats and true min and max added to ramp 8/16-7/2016
-	This version v161013
+	This version v170411 removes spaces from image names for compatibility with new image combinations
+	
  */
 macro "Line Color Coder with Labels"{
-	// assess required conditions before proceeding
 	requires("1.47r");
 	saveSettings;
-	// Some cleanup
-	close("*Ramp"); // closes previous ramp windows
-//
-	/* Set options for black objects on white background as this works better for publications */
+	close("*_Ramp"); /* cleanup: closes previous ramp windows */
+	run("Select None");
+	/*
+	Set options for black objects on white background as this works better for publications */
 	run("Options...", "iterations=1 white count=1"); /* set white background */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
 	setOption("BlackBackground", false);
 	run("Appearance...", " "); /* do not use Inverting LUT */
-	// The above should be the defaults but this makes sure (black particles on a white background)
-	// http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
-//
+	/*	The above should be the defaults but this makes sure (black particles on a white background)
+		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
+	*/
 	switchIsOn = "false";
 	activateIsOn = "false";
 	selEType = selectionType; 
@@ -29,26 +29,21 @@ macro "Line Color Coder with Labels"{
 		getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
 		if (selEWidth<10 || selEHeight<10) selEWidth, selEHeight;
 	}
-	t=getTitle();
-	checkForUnits();
+	id = getImageID();	t=getTitle(); /* get id of image and title */	
+	checkForUnits(); /* Required function */
 	checkForAnyResults();
 	nRes= nResults;
 	setBatchMode(true);
-	tN = stripExtensionsFromString(t); // as in N=name could also use File.nameWithoutExtension but that is specific to last opened file
-	tN = unCleanLabel(tN); // remove special characters to might cause issues saving file
-	imageHeight = getHeight();
-	imageWidth = getWidth();
-	rampH = round(0.88*imageHeight); // suggest ramp slightly small to allow room for labels
-	fontSize = rampH/28; // default fonts size based on imageHeight
-	originalImageDepth = bitDepth();
-	// get id of image and number of Results
-	id = getImageID();
-//
-	// Now variables specific to line drawing:
+	tN = stripExtensionsFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
+	tN = unCleanLabel(tN); /* remove special characters to might cause issues saving file */
+	imageHeight = getHeight(); imageWidth = getWidth();
+	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
+	fontSize = rampH/28; /* default fonts size based on imageHeight */
+	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
+	/* Now variables specific to line drawing: */
 	defaultLineWidth = round((imageWidth+imageHeight)/1000);
-	// getBoundingRect(x, y, w, h);
-	headings = split(String.getResultsHeadings, "\t");
-// To make it easier to find coordinates the heading are now filtered for X and Y
+	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
+	/* To make it easier to find coordinates the heading are now filtered for X and Y */
 	headingsWithX= filterArrayByContents(headings,"X", "x");
 	if (headingsWithX.length<2) restoreExit("Not enough x coordinates \(" + headingsWithX.length + "\)");
 	headingsWithY= filterArrayByContents(headings,"Y", "y");
@@ -61,7 +56,9 @@ macro "Line Color Coder with Labels"{
 		Array.getStatistics(resultsColumn, min, max, null, null); 
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
-		// create the dialog prompt
+	if (headingsWithRange[0]==" :  Infinity - -Infinity")
+		headingsWithRange[0] = "ID" + ":  1 - " + items; /* relabels ImageJ ID column */
+	/* create the dialog prompt */
 	Dialog.create("Line Color Coder: " + tN);
 	Dialog.addMessage("This macro draws lines between sets of coordinates\nin a table and colors them according to an LUT");
 	Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
@@ -91,7 +88,7 @@ macro "Line Color Coder with Labels"{
 	Dialog.setInsets(-35, 243, 0);
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.addNumber("No. of labels:", 10, 0, 3, "(Defines major ticks interval)");
-	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific"), "Auto");
+	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
 	Dialog.setInsets(-38, 200, 0);
 	Dialog.addMessage(rampH + " pxls suggested\nby image height");
@@ -106,6 +103,7 @@ macro "Line Color Coder with Labels"{
 	Dialog.addCheckbox("Force rotated legend label", false);
 	Dialog.addCheckbox("Add thin lines at true minimum and maximum if different", false);
 	Dialog.addCheckbox("Add thin lines at true mean and ± SD", false);
+	Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
 	Dialog.addNumber("Thin line label font:", 70, 0, 3, "% of font size");
 	Dialog.show;
 		fromX = Dialog.getChoice;
@@ -121,9 +119,9 @@ macro "Line Color Coder with Labels"{
 		makeAnimStack= Dialog.getCheckbox;
 		frameSkip= Dialog.getNumber;
 		lineWidth= Dialog.getNumber;
-		if (lineWidth<1) lineWidth = 1; // otherwise what is the point?
+		if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
 		unitLabel = Dialog.getChoice();
-		rangeS= Dialog.getString; // changed from original to allow negative values - see below
+		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
 		numLabels= Dialog.getNumber;
 		dpChoice= Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
@@ -135,27 +133,27 @@ macro "Line Color Coder with Labels"{
 		rotLegend= Dialog.getCheckbox;
 		minmaxLines = Dialog.getCheckbox;
 		statsRampLines= Dialog.getCheckbox;
+		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
 		
-		// Some more cleanup after last run
+		/* Some more cleanup after last run */
 		if (makeAnimStack) closeImageByTitle("animStack");
 		if (!overwriteImage) closeImageByTitle(t+"_Lines");
 		
-//		
 		if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
 		else rampH = rampChoice;
-//	
+	
 		range = split(rangeS, "-");
 		if (range.length==1) {
 			min= NaN; max= parseFloat(range[0]);
 		} else {
 			min= parseFloat(range[0]); max= parseFloat(range[1]);
 		}
-		if (indexOf(rangeS, "-")==0) min = 0 - min; //checks to see if min is a negative value (lets hope the max isn't).
+		if (indexOf(rangeS, "-")==0) min = 0 - min; /* checks to see if min is a negative value (lets hope the max isn't). */
 		fontSR2 = fontSize * thinLinesFontSTweak/100;
 		
 		if (restrictLines=="New Selection") {
-			if (is("Batch Mode")==true) setBatchMode(false); // Does not accept interaction while batch mode is on
+			if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
 			setTool("rectangle");
 			msgtitle="Restricted Range of Lines";
 			msg = "Draw a box in the image to which you want the lines restricted";
@@ -163,20 +161,20 @@ macro "Line Color Coder with Labels"{
 			selEType = selectionType; 
 			getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
 			selEType = selectionType; 
-			if (is("Batch Mode")==false) setBatchMode(true);	// toggle batch mode back on
+			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 		}
 		
-		rampLW = maxOf(1, round(rampH/512)); // ramp line width with a minimum of 1 pixel
-		minmaxLW = round(rampLW / 4); // line widths for ramp stats
+		rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
+		minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
 		
-// get values for chosen parameter
+	/* get values for chosen parameter */
 	values = newArray(nRes);
 	for (i=0; i<nRes; i++) values[i]= getResult(parameter,i);
-	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arrayStdDev);
+	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	if (isNaN(min)) min= arrayMin;
 	if (isNaN(max)) max= arrayMax;
-//
-// Determine parameter label
+	/*
+	Determine parameter label */
 	parameterLabel = parameter;
 	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
 	if (unitLabel=="Manual") {
@@ -190,22 +188,24 @@ macro "Line Color Coder with Labels"{
 	if (unitLabel=="None") unitLabel = ""; 
 	parameterLabel = stripUnitFromString(parameter);
 	unitLabel= cleanLabel(unitLabel);
-//
-// Create LUT-map legend
+	/*
+		Create LUT-map legend
+	*/
 	rampW = round(rampH/8); canvasH = round(4*fontSize +rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
 	if (statsRampLines || minmaxLines) tickL /= 2;
+	tickLR = round(tickL * statsRampTicks/100);
 	getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 	call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
 	newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
-// load the LUT as a hexColor array
-	lineColors = loadLutColors(lut);
-// continue the legend design;
+	tR = getTitle; /* short variable label for ramp */
+	lineColors = loadLutColors(lut);/* load the LUT as a hexColor array: requires function */
+	/* continue the legend design */
 	setColor(0, 0, 0);
 	setBackgroundColor(255, 255, 255);
 	setLineWidth(rampLW);
 	setFont(fontName, fontSize, fontStyle);
-	if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); // converts ramp to RGB if not gray
-	if (ticks) { // left & right borders
+	if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not gray */
+	if (ticks) { /* left & right borders */
 		drawLine(0, 0, rampH, 0);
 		drawLine(0, rampW-1, rampH, rampW-1);
 	} else
@@ -213,14 +213,16 @@ macro "Line Color Coder with Labels"{
 	if (!revLut) run("Rotate 90 Degrees Left");
 	else run("Rotate 90 Degrees Right");
 	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
-//
-	decPlaces = -1;	//defaults to scientific notation
+	
 	if (dpChoice=="Auto")
 		decPlaces = autoCalculateDecPlaces(decPlaces);
-	if (dpChoice=="Manual") 
+	else if (dpChoice=="Manual") 
 		decPlaces=getNumber("Choose Number of Decimal Places", 0);
-//
-// draw ticks and values
+	else if (dpChoice=="Scientific")
+		decPlaces = -1;
+	else decPlaces = dpChoice;	
+		
+	/* draw ticks and values */
 	step = rampH;
 	if (numLabels>2) step /= (numLabels-1);
 	for (i=0; i<numLabels; i++) {
@@ -245,7 +247,7 @@ macro "Line Color Coder with Labels"{
 			}
 		}
 	}
-	//  now draw the additional ramp lines
+	/*  now draw the additional ramp lines */
 	if (minmaxLines || statsRampLines) {
 		setBatchMode("exit and display");
 		newImage("label_mask", "8-bit black", getWidth(), getHeight(), 1);
@@ -293,7 +295,7 @@ macro "Line Color Coder with Labels"{
 				drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
 			}
 		}
-	// use a mask to create black outline white text to stand out against ramp colors
+	/* use a mask to create black outline white text to stand out against ramp colors */
 	rampOutlineStroke = round(rampLW/2);
 	setThreshold(0, 128);
 	setOption("BlackBackground", false);
@@ -302,7 +304,6 @@ macro "Line Color Coder with Labels"{
 	run("Select None");
 	getSelectionFromMask("label_mask");
 	run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
-	setBackgroundFromColorName("#"+roiColors[255]); // functionoutlineColor]")
 	setBackgroundFromColorName("black"); // functionoutlineColor]")
 	run("Clear");
 	run("Select None");
@@ -316,24 +317,24 @@ macro "Line Color Coder with Labels"{
 	setFont(fontName, fontSize, fontStyle);
 	setColor(0,0,0);
 	}
-//
-// parse symbols in unit and draw final label below ramp
+	/*
+	parse symbols in unit and draw final label below ramp */
 	rampParameterLabel= cleanLabel(parameterLabel);
 	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); // replace lonely ° symbol
 	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { // can center align if labels shorter than ramp width
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 	}
-//
-	else { // need to left align if labels are longer and increase distance from ramp
+	
+	else { /* need to left align if labels are longer and increase distance from ramp */
 		run("Auto Crop (guess background color)");
 		getDisplayedArea(null, null, canvasW, canvasH);
 		run("Rotate 90 Degrees Left");
 		canvasW = getHeight + round(2.5*fontSize);
 		rampParameterLabel += ", " + rampUnitLabel;
 		rampParameterLabel = expandLabel(rampParameterLabel);
-		rampParameterLabel = replace(rampParameterLabel, fromCharCode(0x2009), " "); // expand again now we have the space
-		rampParameterLabel = replace(rampParameterLabel, "px", "pixels"); // expand "px" used to keep Results columns narrower
+		rampParameterLabel = replace(rampParameterLabel, fromCharCode(0x2009), " "); /* expand again now we have the space */
+		rampParameterLabel = replace(rampParameterLabel, "px", "pixels"); /* expand "px" that was used to keep the Results columns narrower */
 		run("Canvas Size...", "width="+ canvasH +" height="+ canvasW+" position=Bottom-Center");
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		run("Rotate 90 Degrees Right");
@@ -342,13 +343,13 @@ macro "Line Color Coder with Labels"{
 	run("Auto Crop (guess background color)");
 	setBatchMode("true");
 	getDisplayedArea(null, null, canvasW, canvasH);
-	//add padding to legend box
+	/* add padding to legend box */
 	canvasW += round(imageWidth/150);
 	canvasH += round(imageHeight/150);
 	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center");
 	tR = getTitle;
-	lcf=(pixelWidth+pixelHeight)/2; // length conversion factor
-// iterate through the results table and draw lines with the ramp color
+	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor */
+	/* iterate through the results table and draw lines with the ramp color */
 	selectImage(id);
 	if (is("Batch Mode")==false) setBatchMode(true);
 	setLineWidth(lineWidth);
@@ -403,7 +404,7 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	tNC = getTitle();
-//
+	
 	Dialog.create("Combine Labeled Image and Legend?");
 		if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
 		else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); // close enough
@@ -416,7 +417,7 @@ macro "Line Color Coder with Labels"{
 		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
 			rampScale = imageHeight/canvasH;
 			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
-			canvasH = getHeight(); // update ramp height
+			canvasH = getHeight(); /* update ramp height */
 		}
 		srW = getWidth;
 		comboW = srW + imageWidth;
@@ -434,7 +435,7 @@ macro "Line Color Coder with Labels"{
 		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
 	}
 		
-// display result		
+	/* display result		 */
 	restoreSettings;
 	if (switchIsOn== "true") {
 		hideResultsAs(tableUsed);
@@ -455,7 +456,6 @@ macro "Line Color Coder with Labels"{
 			run("Paste");
 			selectWindow(baseImage);
 	}
-	}
 	function autoCalculateDecPlaces(dP){
 		step = (max-min)/numLabels;
 		stepSci = d2s(step, -1);
@@ -471,7 +471,16 @@ macro "Line Color Coder with Labels"{
 	function checkForAnyResults() {
 		if (nResults==0 && (getValue("results.count"))==0){
 			nonImageWindowList = getList("window.titles");
-			if (nonImageWindowList.length==0) restoreExit("No obvious tables open to work with  ¯|_(?)_/¯");
+			if (nonImageWindowList.length==0) {
+				Dialog.create("No Results to Work With");
+				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following colums in any order:\n   1.\) The paramenter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
+				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit"); 
+				Dialog.show();
+				tableDecision = Dialog.getRadioButton();
+				if (tableDecision=="Exit") restoreExit("GoodBye");
+				else open();
+				nonImageWindowList = getList("window.titles");
+			}
 			nonImageWindowList = Array.concat(newArray("none - exit"), nonImageWindowList);
 			Dialog.create("Select table to use...");
 			Dialog.addChoice("Select Table to Activate", nonImageWindowList);
@@ -502,6 +511,7 @@ macro "Line Color Coder with Labels"{
 				tableUsed = Dialog.getChoice;
 				restoreResultsFrom(tableUsed);
 			}
+		}
 		else if ((getValue("results.count"))!=0 && nResults==0) {
 			nonImageWindowList = getList("window.titles");
 			if (list.length==0) restoreExit("Whoops, no other tables either");
@@ -513,30 +523,33 @@ macro "Line Color Coder with Labels"{
 			restoreResultsFrom(tableUsed);
 		}
 	}
-	function checkForUnits() {
+	function checkForUnits() {  /* 
+		/* v161108 (adds inches to possible reasons for checking calibration)
+		*/
 		getPixelSize(unit, pixelWidth, pixelHeight);
-		if (pixelWidth!=pixelHeight || pixelWidth==1){
+		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches"){
 			Dialog.create("No Units");
-			Dialog.addCheckbox("Unit asymmetry or pixels units; do you want to define units for this image?", true);
+			Dialog.addCheckbox("Unit asymmetry, pixel units or dpi remnants; do you want to define units for this image?", true);
 			Dialog.show();
 			setScale = Dialog.getCheckbox;
 			if (setScale) run("Set Scale...");
-			}
+		}
 	}
 	function cleanLabel(string) {
-		string = replace(string, "\\^2", fromCharCode(178)); // superscript 2 
-		string = replace(string, "\\^3", fromCharCode(179)); // superscript 3 UTF-16 (decimal)
-		string = replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); // superscript -1
-		string = replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); // superscript -2
-		string = replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); // superscript -1
-		string = replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); // superscript -2
-		string = replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); // micrometer units
-		string = replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); // angstrom symbol
-		string = replace(string, "  ", " "); // double spaces
-		string = replace(string, "_", fromCharCode(0x2009)); // replace underlines with thin spaces
-		string = replace(string, "px", "pixels"); // expand pixel abbreviation
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); // remove space before degree symbol
-		string = replace(string, " °", fromCharCode(0x00B0)); // remove space before degree symbol
+		/* v161104 */
+		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
+		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
+		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /*	superscript -1 */
+		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /*	superscript -2 */
+		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micrometer units*/
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* angstrom symbol*/
+		string= replace(string, "  ", " "); /* double spaces*/
+		string= replace(string, "_", fromCharCode(0x2009)); /* replace underlines with thin spaces*/
+		string= replace(string, "px", "pixels"); /* expand pixel abbreviate*/
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
+		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */
@@ -545,7 +558,7 @@ macro "Line Color Coder with Labels"{
         close();
 		}
 	}
-	function expandLabel(string) {  // mostly for better looking summary tables
+	function expandLabel(string) {  /* mostly for better looking summary tables */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
@@ -556,24 +569,24 @@ macro "Line Color Coder with Labels"{
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
 		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); // put this here as an exception to the above
-		string = replace(string, "°, degrees", "°"); // that would be otherwise too many degrees
-		string = replace(string, fromCharCode(0x00C2), ""); // remove mystery Â
-		string = replace(string, " ", fromCharCode(0x2009)); // use this last so all spaces converted
+		string = replace(string, "0-90", "0-90°"); /* put this here as an exception to the above */
+		string = replace(string, "°, degrees", "°"); /* that would be otherwise too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* remove mystery Â */
+		string = replace(string, " ", fromCharCode(0x2009)); /* use this last so all spaces converted */
 		return string;
 	}
-	function closeNonImageByTitle(windowTitle) { // obviously
+	function closeNonImageByTitle(windowTitle) { /* obviously */
 	if (isOpen(windowTitle)) {
 		selectWindow(windowTitle);
         run("Close");
 		}
 	}
 	function filterArrayByContents(inputArray,filterString1,filterString2) {
-		arrayLengthCounter = 0; //reset row counter
+		arrayLengthCounter = 0; /* reset row counter */
 		outputArray = newArray(inputArray.length);
 		pointsRowCounter = 0;
 		for (a=0; a<outputArray.length; a++){
-			if((indexOf(inputArray[a], filterString1))>= 0 || (indexOf(inputArray[a], filterString2))>= 0) {  //filter by intensity label
+			if((indexOf(inputArray[a], filterString1))>= 0 || (indexOf(inputArray[a], filterString2))>= 0) {  /* filter by intensity label */
 					outputArray[pointsRowCounter] = inputArray[a];
 					pointsRowCounter += 1;
 			}
@@ -581,12 +594,58 @@ macro "Line Color Coder with Labels"{
 		outputArray = Array.slice(outputArray, 0, pointsRowCounter);
 		return outputArray;
 	}
+		/* ASC Color Functions */
+	function getColorArrayFromColorName(colorName) {
+		cA = newArray(255,255,255);
+		if (colorName == "white") cA = newArray(255,255,255);
+		else if (colorName == "black") cA = newArray(0,0,0);
+		else if (colorName == "light_gray") cA = newArray(200,200,200);
+		else if (colorName == "gray") cA = newArray(127,127,127);
+		else if (colorName == "dark_gray") cA = newArray(51,51,51);
+		else if (colorName == "red") cA = newArray(255,0,0);
+		else if (colorName == "pink") cA = newArray(255, 192, 203);
+		else if (colorName == "green") cA = newArray(255,255,0);
+		else if (colorName == "blue") cA = newArray(0,0,255);
+		else if (colorName == "yellow") cA = newArray(255,255,0);
+		else if (colorName == "orange") cA = newArray(255, 165, 0);
+		else if (colorName == "garnet") cA = newArray(120,47,64);
+		else if (colorName == "gold") cA = newArray(206,184,136);
+		else if (colorName == "aqua_modern") cA = newArray(75,172,198);
+		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189);
+		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);
+		else if (colorName == "blue_modern") cA = newArray(58,93,174);
+		else if (colorName == "gray_modern") cA = newArray(83,86,90);
+		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);
+		else if (colorName == "green_modern") cA = newArray(155,187,89);
+		else if (colorName == "orange_modern") cA = newArray(247,150,70);
+		else if (colorName == "pink_modern") cA = newArray(255,105,180);
+		else if (colorName == "purple_modern") cA = newArray(128,100,162);
+		else if (colorName == "red_N_modern") cA = newArray(227,24,55);
+		else if (colorName == "red_modern") cA = newArray(192,80,77);
+		else if (colorName == "tan_modern") cA = newArray(238,236,225);
+		else if (colorName == "violet_modern") cA = newArray(76,65,132);
+		else if (colorName == "yellow_modern") cA = newArray(247,238,69);
+		return cA;
+	}
+	function setColorFromColorName(colorName) {
+		colorArray = getColorArrayFromColorName(colorName);
+		setColor(colorArray[0], colorArray[1], colorArray[2]);
+	}
+	function setBackgroundFromColorName(colorName) {
+		colorArray = getColorArrayFromColorName(colorName);
+		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
+	}
+	function pad(n) {
+		n = toString(n);
+		if(lengthOf(n)==1) n = "0"+n;
+		return n;
+	}
 	function getLutsList() {
 		lutsCheck = 0;
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
-		// A list of frequently used luts for the top of the list . . . 
+		/* A list of frequently used luts for the top of the list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		baseLuts = newArray(preferredLuts.length);
 		baseLutsCount = 0;
@@ -600,7 +659,7 @@ macro "Line Color Coder with Labels"{
 		}
 		baseLuts=Array.trim(baseLuts, baseLutsCount);
 		lutsList=Array.concat(baseLuts, defaultLuts);
-		return lutsList; // required to return new array
+		return lutsList; /* required to return new array */
 	}
 	function loadLutColors(lut) {
 		run(lut);
@@ -612,16 +671,27 @@ macro "Line Color Coder with Labels"{
 		}
 		return hexColors;
 	}
-	function pad(n) {
-		n= toString(n); if (lengthOf(n)==1) n= "0"+n; return n;
+	/*
+	End of Color Functions 
+	*/
+	function getSelectionFromMask(selection_Mask){
+		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
+		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
+		tempTitle = getTitle();
+		selectWindow(selection_Mask);
+		run("Create Selection"); /* selection inverted perhaps because mask has inverted lut? */
+		run("Make Inverse");
+		selectWindow(tempTitle);
+		run("Restore Selection");
+		if (!batchMode) setBatchMode(false); /* return to original batch mode */
 	}
 	function hideResultsAs(deactivatedResults) {
-		if (isOpen("Results")) {  // This swapping of tables does not increase run time significantly
+		if (isOpen("Results")) {  /* This swapping of tables does not increase run time significantly */
 			selectWindow("Results");
 			IJ.renameResults(deactivatedResults);
 		}
 	}
-	function removeTrailingZerosAndPeriod(string) { //removes trailing zeros after period
+	function removeTrailingZerosAndPeriod(string) { /* removes trailing zeros after period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
 		}
@@ -630,9 +700,9 @@ macro "Line Color Coder with Labels"{
 		}
 		return string;
 	}
-	function restoreExit(message){ // clean up before aborting macro then exit
-		restoreSettings(); //clean up before exiting
-		setBatchMode("exit & display"); // not sure if this does anything useful if exiting gracefully but otherwise harmless
+	function restoreExit(message){ /* clean up before aborting macro then exit */
+		restoreSettings(); /* clean up before exiting */
+		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
 		exit(message);
 	}
 	function restoreResultsFrom(deactivatedResults) {
@@ -649,12 +719,12 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function stripUnitFromString(string) {
-		if (endsWith(string,"\)")) { // label with units from string string if available
+		if (endsWith(string,"\)")) { /* label with units from string string if available */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  //if it contains a number it probably isn't a unit
+			if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
 				stringLabel = substring(string, 0, unitIndexStart);
 			}
 			else stringLabel = string;
@@ -662,28 +732,30 @@ macro "Line Color Coder with Labels"{
 		else stringLabel = string;
 		return stringLabel;
 	}	
-	function unCleanLabel(string) { // this function replaces special characters with standard characters for file system compatible filenames
-		string = replace(string, fromCharCode(178), "\\^2"); // superscript 2 
-		string = replace(string, fromCharCode(179), "\\^3"); // superscript 3 UTF-16 (decimal)
-		string = replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); // superscript -1
-		string = replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); // superscript -2
-		string = replace(string, fromCharCode(181), "u"); // micrometer units
-		string = replace(string, fromCharCode(197), "Angstrom"); // angstrom symbol
-		string = replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); // replace thin spaces degrees combination
-		string = replace(string, fromCharCode(0x2009), "_"); // replace thin spaces
-		string = replace(string, "_\\+", "\\+"); /* clean up autofilenames */
-		string = replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
-		string = replace(string, "__", "_"); /* clean up autofilenames */
-		string = replace(string, "_+", "\\+"); /* clean up autofilenames */
+	function unCleanLabel(string) { 
+	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
+	/* mod 041117 to remove spaces as well */
+		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
+		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
+		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
+		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
+		string= replace(string, fromCharCode(181), "u"); /* micrometer units */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* angstrom symbol */
+		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
+		string= replace(string, fromCharCode(0x2009), "_"); /* replace thin spaces  */
+		string= replace(string, " ", "_"); /* replace spaces - these can be a problem with image combination */
+		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
+		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
+		string= replace(string, "__", "_"); /* clean up autofilenames */
 		return string;
-	}	
+	}
 	function unitLabelFromString(string, imageUnit) {
-	if (endsWith(string,"\)")) { // label with units from string string if available
+	if (endsWith(string,"\)")) { /* label with units from string string if available */
 		unitIndexStart = lastIndexOf(string, "\(");
 		unitIndexEnd = lastIndexOf(string, "\)");
 		stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 		unitCheck = matches(stringUnit, ".*[0-9].*");
-		if (unitCheck==0) {  //if it contains a number it probably isn't a unit
+		if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
 			unitLabel = stringUnit;
 		}
 		else {

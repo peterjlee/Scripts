@@ -1,4 +1,3 @@
-
 /*	Fork of ROI_Color_Coder.ijm 	IJ BAR: https://github.com/tferr/Scripts#scripts
  	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
  	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
@@ -12,7 +11,9 @@
 	Adjusted to allow Grays-only if selected and default to white background.
 	Added the ability to added user-text to summary and data preview in summary dialog.
 	+ adds choice for number of lines of statistics (not really needed)
-	This version v161117 adds more decimal place control
+	+ v161117 adds more decimal place control
+	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
+	+ v171024 Added an option to just label the objects without color codeing
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -37,6 +38,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
+	getPixelSize(unit, pixelWidth, pixelHeight);
+	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
@@ -79,12 +82,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.setInsets(0, 120, 12);
 	Dialog.addCheckbox("Reverse LUT?", false); 
 	Dialog.setInsets(6, 0, 6);
-	Dialog.addMessage("Color Coded Borders or Filled ROIs?");
-	Dialog.addNumber("Outlines or ROIs?", 0, 0, 3, " Width in pixels \(0 to fill ROIs\)");
+	Dialog.addMessage("Color Coded Borders or Filled ROIs or no Color Coding \(just labels\)?");
+	Dialog.addNumber("Outlines or Solid?", 0, 0, 3, " Width in pixels \(0 to fill ROIs, -1 to label only\)");
 	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
 	Dialog.setInsets(12, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):______________");
-	getPixelSize(unit, pixelWidth, pixelHeight);
 	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 	Dialog.setInsets(-42, 197, -5);
@@ -176,209 +178,212 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (unitLabel=="None") unitLabel = ""; 
 	parameterLabel = stripUnitFromString(parameter);
 	unitLabel= cleanLabel(unitLabel);
-/*
-		Create LUT-map legend
-*/
-	rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
-	if (statsRampLines || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
-	tickLR = round(tickL * statsRampTicks/100);
-	getLocationAndSize(imgx, imgy, imgwidth, imgheight);
-	call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
-	
-	newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
-	tR = getTitle; /* short variable label for ramp */
-	
-	roiColors= loadLutColors(lut); /* load the LUT as a hexColor array: requires function */
-	/* continue the legend design */
-	setColor(0, 0, 0);
-	setBackgroundColor(255, 255, 255);
-	setFont(fontName, fontSize, fontStyle);
-	if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
-	setLineWidth(rampLW*2);
-	if (ticks) drawRect(0, 0, rampH, rampW);
-	if (!revLut) run("Rotate 90 Degrees Left");
-	else run("Rotate 90 Degrees Right");
-	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
-	
-	if (dpChoice=="Auto")
-		decPlaces = autoCalculateDecPlaces(decPlaces);
-	else if (dpChoice=="Manual") 
-		decPlaces=getNumber("Choose Number of Decimal Places", 0);
-	else if (dpChoice=="Scientific")
-		decPlaces = -1;
-	else decPlaces = dpChoice;
+	/* Begin object color coding */
+	if (stroke>=0) {
+		/*
+				Create LUT-map legend
+		*/
+		rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
+		if (statsRampLines || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
+		tickLR = round(tickL * statsRampTicks/100);
+		getLocationAndSize(imgx, imgy, imgwidth, imgheight);
+		call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
 		
-	/* draw ticks and values */
-	step = rampH;
-	if (numLabels>2) step /= (numLabels-1);
-	setLineWidth(rampLW);
-	/* now to see if the selected range values are within 98% of actual */
-	if (0.98*min>arrayMin || max<0.98*arrayMax) minmaxOOR = true;
-	else minmaxOOR = false;
-	if (min<0.98*arrayMin || 0.98*max>arrayMax) minmaxIOR = true;
-	else minmaxIOR = false;
-	if (minmaxIOR && minmaxLines) minmaxLines = true;
-	else minmaxLines = false;
-	for (i=0; i<numLabels; i++) {
-		yPos = floor(fontSize/2 + rampH - i*step + 1.5*fontSize);
-		rampLabel = min + (max-min)/(numLabels-1) * i;
-		rampLabelString = removeTrailingZerosAndPeriod(d2s(rampLabel,decPlaces));
-		if (minmaxIOR) {
-			/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
-			if (i==0 && min>arrayMin) {
-				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
-				rampLabelString = rampExt + "-" + rampLabelString; 
-			}if (i==numLabels-1 && max<arrayMax) {
-				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
-				rampLabelString += "-" + rampExt; 
-			}
-		}
-		drawString(rampLabelString, rampW+4*rampLW, round(yPos+fontSize/2));
-		if (ticks) {
-			if (i==0 || i==numLabels-1) {
-				setLineWidth(rampLW/2);
-				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
-			}	
-			else {
-				setLineWidth(rampLW);
-				drawLine(0, yPos, tickL, yPos);					/* left tick */
-				drawLine(rampW-1-tickL, yPos, rampW, yPos);
-				setLineWidth(rampLW/2);
-				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
-				setLineWidth(rampLW); /* reset line width */
-			}
-		}
-	}
-	/* now add lines and the true min and max and for stats if chosen in previous dialog */
-	if (minmaxLines || statsRampLines) {
-		newImage("label_mask", "8-bit black", getWidth(), getHeight(), 1);
-		setColor("white");
-		setLineWidth(rampLW);
-		if (minmaxLines) {
-			if (min==max) restoreExit("Something terribly wrong with this range!");
-			trueMaxFactor = (arrayMax-min)/(max-min);
-			maxPos= round(fontSize/2 + (rampH * (1 - trueMaxFactor)) +1.5*fontSize);
-			trueMinFactor = (arrayMin-min)/(max-min);
-			minPos= round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize);
-			if (trueMaxFactor<1) {
-				setFont(fontName, fontSR2, fontStyle);
-				drawString("Max", round((rampW-getStringWidth("Max"))/2), round(maxPos+0.5*fontSR2));
-				drawLine(rampLW, maxPos, tickLR, maxPos);
-				drawLine(rampW-1-tickLR, maxPos, rampW-rampLW-1, maxPos);
-			}
-			if (trueMinFactor>0) {
-				setFont(fontName, fontSR2, fontStyle);
-				drawString("Min", round((rampW-getStringWidth("Min"))/2), round(minPos+0.5*fontSR2));
-				drawLine(rampLW, minPos, tickLR, minPos);
-				drawLine(rampW-1-tickLR, minPos, rampW-rampLW-1, minPos);
-			}
-		}
-		if (statsRampLines) {
-			meanFactor = (arrayMean-min)/(max-min);
-			plusSDFactor =  (arrayMean+arraySD-min)/(max-min);
-			minusSDFactor =  (arrayMean-arraySD-min)/(max-min);
-			meanPos= round(fontSize/2 + (rampH * (1 - meanFactor)) +1.5*fontSize);
-			plusSDPos= round(fontSize/2 + (rampH * (1 - plusSDFactor)) +1.5*fontSize);
-			minusSDPos= round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize);
-			setFont(fontName, 0.9*fontSR2, fontStyle);
-			drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos+0.4*fontSR2));
-			drawLine(rampLW, meanPos, tickLR, meanPos);
-			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
-			if (plusSDFactor<1) {
-				setFont(fontName, fontSR2, fontStyle);
-				drawString("+SD", round((rampW-getStringWidth("+SD"))/2), round(plusSDPos+0.5*fontSR2));
-				drawLine(rampLW, plusSDPos, tickLR, plusSDPos);
-				drawLine(rampW-1-tickLR, plusSDPos, rampW-rampLW-1, plusSDPos);
-			}
-			if (minusSDFactor>0) {
-				setFont(fontName, fontSR2, fontStyle);
-				drawString("-SD", round((rampW-getStringWidth("-SD"))/2), round(minusSDPos+0.5*fontSR2));
-				drawLine(rampLW, minusSDPos, tickLR, minusSDPos);
-				drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
-			}
-		}
-		/* now use a mask to create black outline around white text to stand out against ramp colors */
-		rampOutlineStroke = round(rampLW/2);
-		setThreshold(0, 128);
-		setOption("BlackBackground", false);
-		run("Convert to Mask");
-		selectWindow(tR);
-		run("Select None");
-		getSelectionFromMask("label_mask");
-		run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
-		setBackgroundColor(0, 0, 0);
-		run("Clear");
-		run("Select None");
-		getSelectionFromMask("label_mask");
+		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
+		tR = getTitle; /* short variable label for ramp */
+		
+		roiColors= loadLutColors(lut); /* load the LUT as a hexColor array: requires function */
+		/* continue the legend design */
+		setColor(0, 0, 0);
 		setBackgroundColor(255, 255, 255);
-		run("Clear");
-		run("Select None");
-		closeImageByTitle("label_mask");
-		/* reset colors and font */
 		setFont(fontName, fontSize, fontStyle);
-		setColor(0,0,0);
-	}
-/*	parse symbols in unit and draw final label below ramp */
-	selectWindow(tR);
-	rampParameterLabel= cleanLabel(parameterLabel);
-	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
-	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
-		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
-		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
-	}
-	
-	else { /* need to left align if labels are longer and increase distance from ramp */
+		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
+		setLineWidth(rampLW*2);
+		if (ticks) drawRect(0, 0, rampH, rampW);
+		if (!revLut) run("Rotate 90 Degrees Left");
+		else run("Rotate 90 Degrees Right");
+		run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
+		
+		if (dpChoice=="Auto")
+			decPlaces = autoCalculateDecPlaces(decPlaces);
+		else if (dpChoice=="Manual") 
+			decPlaces=getNumber("Choose Number of Decimal Places", 0);
+		else if (dpChoice=="Scientific")
+			decPlaces = -1;
+		else decPlaces = dpChoice;
+			
+		/* draw ticks and values */
+		step = rampH;
+		if (numLabels>2) step /= (numLabels-1);
+		setLineWidth(rampLW);
+		/* now to see if the selected range values are within 98% of actual */
+		if (0.98*min>arrayMin || max<0.98*arrayMax) minmaxOOR = true;
+		else minmaxOOR = false;
+		if (min<0.98*arrayMin || 0.98*max>arrayMax) minmaxIOR = true;
+		else minmaxIOR = false;
+		if (minmaxIOR && minmaxLines) minmaxLines = true;
+		else minmaxLines = false;
+		for (i=0; i<numLabels; i++) {
+			yPos = floor(fontSize/2 + rampH - i*step + 1.5*fontSize);
+			rampLabel = min + (max-min)/(numLabels-1) * i;
+			rampLabelString = removeTrailingZerosAndPeriod(d2s(rampLabel,decPlaces));
+			if (minmaxIOR) {
+				/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
+				if (i==0 && min>arrayMin) {
+					rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
+					rampLabelString = rampExt + "-" + rampLabelString; 
+				}if (i==numLabels-1 && max<arrayMax) {
+					rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
+					rampLabelString += "-" + rampExt; 
+				}
+			}
+			drawString(rampLabelString, rampW+4*rampLW, round(yPos+fontSize/2));
+			if (ticks) {
+				if (i==0 || i==numLabels-1) {
+					setLineWidth(rampLW/2);
+					drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
+				}	
+				else {
+					setLineWidth(rampLW);
+					drawLine(0, yPos, tickL, yPos);					/* left tick */
+					drawLine(rampW-1-tickL, yPos, rampW, yPos);
+					setLineWidth(rampLW/2);
+					drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
+					setLineWidth(rampLW); /* reset line width */
+				}
+			}
+		}
+		/* now add lines and the true min and max and for stats if chosen in previous dialog */
+		if (minmaxLines || statsRampLines) {
+			newImage("label_mask", "8-bit black", getWidth(), getHeight(), 1);
+			setColor("white");
+			setLineWidth(rampLW);
+			if (minmaxLines) {
+				if (min==max) restoreExit("Something terribly wrong with this range!");
+				trueMaxFactor = (arrayMax-min)/(max-min);
+				maxPos= round(fontSize/2 + (rampH * (1 - trueMaxFactor)) +1.5*fontSize);
+				trueMinFactor = (arrayMin-min)/(max-min);
+				minPos= round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize);
+				if (trueMaxFactor<1) {
+					setFont(fontName, fontSR2, fontStyle);
+					drawString("Max", round((rampW-getStringWidth("Max"))/2), round(maxPos+0.5*fontSR2));
+					drawLine(rampLW, maxPos, tickLR, maxPos);
+					drawLine(rampW-1-tickLR, maxPos, rampW-rampLW-1, maxPos);
+				}
+				if (trueMinFactor>0) {
+					setFont(fontName, fontSR2, fontStyle);
+					drawString("Min", round((rampW-getStringWidth("Min"))/2), round(minPos+0.5*fontSR2));
+					drawLine(rampLW, minPos, tickLR, minPos);
+					drawLine(rampW-1-tickLR, minPos, rampW-rampLW-1, minPos);
+				}
+			}
+			if (statsRampLines) {
+				meanFactor = (arrayMean-min)/(max-min);
+				plusSDFactor =  (arrayMean+arraySD-min)/(max-min);
+				minusSDFactor =  (arrayMean-arraySD-min)/(max-min);
+				meanPos= round(fontSize/2 + (rampH * (1 - meanFactor)) +1.5*fontSize);
+				plusSDPos= round(fontSize/2 + (rampH * (1 - plusSDFactor)) +1.5*fontSize);
+				minusSDPos= round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize);
+				setFont(fontName, 0.9*fontSR2, fontStyle);
+				drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos+0.4*fontSR2));
+				drawLine(rampLW, meanPos, tickLR, meanPos);
+				drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
+				if (plusSDFactor<1) {
+					setFont(fontName, fontSR2, fontStyle);
+					drawString("+SD", round((rampW-getStringWidth("+SD"))/2), round(plusSDPos+0.5*fontSR2));
+					drawLine(rampLW, plusSDPos, tickLR, plusSDPos);
+					drawLine(rampW-1-tickLR, plusSDPos, rampW-rampLW-1, plusSDPos);
+				}
+				if (minusSDFactor>0) {
+					setFont(fontName, fontSR2, fontStyle);
+					drawString("-SD", round((rampW-getStringWidth("-SD"))/2), round(minusSDPos+0.5*fontSR2));
+					drawLine(rampLW, minusSDPos, tickLR, minusSDPos);
+					drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
+				}
+			}
+			/* now use a mask to create black outline around white text to stand out against ramp colors */
+			rampOutlineStroke = round(rampLW/2);
+			setThreshold(0, 128);
+			setOption("BlackBackground", false);
+			run("Convert to Mask");
+			selectWindow(tR);
+			run("Select None");
+			getSelectionFromMask("label_mask");
+			run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
+			setBackgroundColor(0, 0, 0);
+			run("Clear");
+			run("Select None");
+			getSelectionFromMask("label_mask");
+			setBackgroundColor(255, 255, 255);
+			run("Clear");
+			run("Select None");
+			closeImageByTitle("label_mask");
+			/* reset colors and font */
+			setFont(fontName, fontSize, fontStyle);
+			setColor(0,0,0);
+		}
+		/*	parse symbols in unit and draw final label below ramp */
+		selectWindow(tR);
+		rampParameterLabel= cleanLabel(parameterLabel);
+		rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
+		if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
+			if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
+			if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
+		}
+		
+		else { /* need to left align if labels are longer and increase distance from ramp */
+			run("Auto Crop (guess background color)");
+			getDisplayedArea(null, null, canvasW, canvasH);
+			run("Rotate 90 Degrees Left");
+			canvasW = getHeight + round(2.5*fontSize);
+			rampParameterLabel += ", " + rampUnitLabel;
+			rampParameterLabel = expandLabel(rampParameterLabel);
+			rampParameterLabel = replace(rampParameterLabel, fromCharCode(0x2009), " "); /* expand again now we have the space */
+			rampParameterLabel = replace(rampParameterLabel, "px", "pixels"); /* expand "px" used to keep Results columns narrower */
+			run("Canvas Size...", "width="+ canvasH +" height="+ canvasW+" position=Bottom-Center");
+			if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
+			run("Rotate 90 Degrees Right");
+		}
+		
 		run("Auto Crop (guess background color)");
+		setBatchMode("true");
 		getDisplayedArea(null, null, canvasW, canvasH);
-		run("Rotate 90 Degrees Left");
-		canvasW = getHeight + round(2.5*fontSize);
-		rampParameterLabel += ", " + rampUnitLabel;
-		rampParameterLabel = expandLabel(rampParameterLabel);
-		rampParameterLabel = replace(rampParameterLabel, fromCharCode(0x2009), " "); /* expand again now we have the space */
-		rampParameterLabel = replace(rampParameterLabel, "px", "pixels"); /* expand "px" used to keep Results columns narrower */
-		run("Canvas Size...", "width="+ canvasH +" height="+ canvasW+" position=Bottom-Center");
-		if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
-		run("Rotate 90 Degrees Right");
-	}
-	
-	run("Auto Crop (guess background color)");
-	setBatchMode("true");
-	getDisplayedArea(null, null, canvasW, canvasH);
-	
-	canvasW += round(imageWidth/150); canvasH += round(imageHeight/150); /* add padding to legend box */
-	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center");
-	
-	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
-	/*
-		iterate through the ROI Manager list and colorize ROIs
-	*/
-	selectImage(id);
-	for (countNaN=0, i=0; i<items; i++) {
-		showStatus("Coloring object " + i + ", " + (nROIs-i) + " more to go");
-		if (isNaN(values[i])) countNaN++;
-		if (!revLut) {
-			if (values[i]<=min) lutIndex= 0;
-			else if (values[i]>max) lutIndex= 255;
-			else lutIndex= round(255 * (values[i] - min) / (max - min));
+		
+		canvasW += round(imageWidth/150); canvasH += round(imageHeight/150); /* add padding to legend box */
+		run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center");
+
+		/*
+			iterate through the ROI Manager list and colorize ROIs
+		*/
+		selectImage(id);
+		for (countNaN=0, i=0; i<items; i++) {
+			showStatus("Coloring object " + i + ", " + (nROIs-i) + " more to go");
+			if (isNaN(values[i])) countNaN++;
+			if (!revLut) {
+				if (values[i]<=min) lutIndex= 0;
+				else if (values[i]>max) lutIndex= 255;
+				else lutIndex= round(255 * (values[i] - min) / (max - min));
+			}
+			else {
+				if (values[i]<=min) lutIndex= 255;
+				else if (values[i]>max) lutIndex= 0;
+				else lutIndex= round(255 * (max - values[i]) / (max - min));
+			}
+			roiManager("select", i);
+			if (stroke>0) {
+				roiManager("Set Line Width", stroke);
+				roiManager("Set Color", alpha+roiColors[lutIndex]);
+			} else
+				roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
+			labelValue = values[i];
+			labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
+			labelString = removeTrailingZerosAndPeriod(labelString); /* remove trailing characters */
+			// roiManager("Rename", labelString); /* label roi with feature value: not necessary if creating new labels */
+			Overlay.show;		
 		}
-		else {
-			if (values[i]<=min) lutIndex= 255;
-			else if (values[i]>max) lutIndex= 0;
-			else lutIndex= round(255 * (max - values[i]) / (max - min));
-		}
-		roiManager("select", i);
-		if (stroke>0) {
-			roiManager("Set Line Width", stroke);
-			roiManager("Set Color", alpha+roiColors[lutIndex]);
-		} else
-			roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
-		labelValue = values[i];
-		labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
-		labelString = removeTrailingZerosAndPeriod(labelString); /* remove trailing characters */
-		// roiManager("Rename", labelString); /* label roi with feature value: not necessary if creating new labels */
-		Overlay.show;		
+		roiManager("Show All without labels");
 	}
-	roiManager("Show All without labels");
+	/* End of object coloring */
 	/* Now to add scaled object labels */
 	/* First: set default label settings */
 	outlineStrokePC = 6; /* default outline stroke: % of font size */
@@ -461,8 +466,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	else if (dpChoice!="Auto")
 		decPlaces = dpChoice;
 	if (fontStyle=="unstyled") fontStyle="";
-	run("Flatten"); /* Flatten converts to RGB so . . .  */
-	if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+	if (stroke>=0) {
+		run("Flatten"); /* Flatten converts to RGB so . . .  */
+		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+	} else run("Duplicate...", "title=labeled");
 	flatImage = getTitle();
 	if (is("Batch Mode")==false) setBatchMode(true);
 	newImage("label_mask", "8-bit black", imageWidth, imageHeight, 1);
@@ -798,44 +805,47 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 /*	
 		End of Optional Summary section
 */
-	run("Colors...", "foreground=black background=white selection=yellow"); /* reset colors */
-	selectWindow(flatImage);
-	if (countNaN!=0)
-		print("\n>>>> ROI Color Coder:\n"
-			+ "Some values from the \""+ parameter +"\" column could not be retrieved.\n"
-			+ countNaN +" ROI(s) were labeled with a default color.");
-	rename(tN + "_" + parameterLabel + "_coded");
-	tNC = getTitle();
-	/* Image and Ramp combination dialog */
-	Dialog.create("Combine Labeled Image and Legend?");
-		if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
-		else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); /* 93% is close enough */
-		else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image");
-		Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
-		Dialog.show();
-	createCombo = Dialog.getChoice();
-	if (createCombo!="No") {
-		selectWindow(tR);
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
-			rampScale = imageHeight/canvasH;
-			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
-			canvasH = getHeight(); /* update ramp height */
+	if (stroke>=0) {
+		run("Colors...", "foreground=black background=white selection=yellow"); /* reset colors */
+		selectWindow(flatImage);
+		if (countNaN!=0)
+			print("\n>>>> ROI Color Coder:\n"
+				+ "Some values from the \""+ parameter +"\" column could not be retrieved.\n"
+				+ countNaN +" ROI(s) were labeled with a default color.");
+		rename(tN + "_" + parameterLabel + "_coded");
+		tNC = getTitle();
+		/* Image and Ramp combination dialog */
+		Dialog.create("Combine Labeled Image and Legend?");
+			if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
+			else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); /* 93% is close enough */
+			else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image");
+			Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
+			Dialog.show();
+		createCombo = Dialog.getChoice();
+		if (createCombo!="No") {
+			selectWindow(tR);
+			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
+				rampScale = imageHeight/canvasH;
+				run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
+				canvasH = getHeight(); /* update ramp height */
+			}
+			srW = getWidth;
+			comboW = srW + imageWidth;
+			selectWindow(tNC);
+			if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
+			run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
+			makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
+			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
+			else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
+			run("Flatten");
+			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+			rename(tNC + "+ramp");
+			closeImageByTitle("scaled_ramp");
+			closeImageByTitle("temp_combo");
+			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
 		}
-		srW = getWidth;
-		comboW = srW + imageWidth;
-		selectWindow(tNC);
-		if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
-		run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
-		makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
-		else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
-		run("Flatten");
-		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
-		rename(tNC + "+ramp");
-		closeImageByTitle("scaled_ramp");
-		closeImageByTitle("temp_combo");
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
 	}
+	else rename(t + "_" + parameterLabel + "_labels");
 	setBatchMode("exit & display");
 	restoreSettings;
 	showStatus("ROI Color Coder with Scaled Labels and Summary Macro Finished");
@@ -917,9 +927,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	run("Select None");
 	if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
 	restoreSettings();
+	run("Collect Garbage");
 	showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
 	beep(); wait(300); beep(); wait(300); beep();
 	}
+/*
+			( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
+*/
 	function autoCalculateDecPlaces(dP){
 		step = (max-min)/numLabels;
 		stepSci = d2s(step, -1);
@@ -1240,8 +1254,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return string;
 	}
 	function restoreExit(message){ /* clean up before aborting macro then exit */
+		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* clean up before exiting */
 		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		run("Collect Garbage");
 		exit(message);
 	}
 	function stripExtensionsFromString(string) {

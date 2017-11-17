@@ -1,9 +1,7 @@
 /*	Fork of ROI_Color_Coder.ijm  IJ BAR: https://github.com/tferr/Scripts#scripts
 	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
- 	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
- 	complementary to the ParticleAnalyzer (Analyze>Analyze Particles...), generating
- 	particle-size heat maps. Requires IJ 1.47r.
- 	Tiago Ferreira, v.5.4 2017.03.10 + pjl mods 3/14/2017
+ 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
+ 	Based on Tiago Ferreira, v.5.4 2017.03.10 + pjl mods 3/14/2017
 	 + summary table
 	 + option to reverse LUT
 	 + dialog requester shows min and max values for all measurements to make it easier to choose a range 8/5/2016
@@ -13,7 +11,8 @@
 	 + automated units + Legend title orientation choice 10/13-20/16
 	 + optional montage that combines the labeled image with the legend 10/1/201
 	 + option (v161116 onwards) to change the number of rows in the summary table
-	 This version v170315 (updates to AR v.5.4 version i.e. includes log option)
+	 + v170315 (updates to AR v.5.4 version i.e. includes log option)
+	 + v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
  */
 /* assess required conditions before proceeding */
 	requires("1.47r");
@@ -28,8 +27,7 @@
 	if (selectionType()==0) {
 		getSelectionBounds(originalSelEX, originalSelEY, originalSelEWidth, originalSelEHeight);
 		selectionExists = true;
-	}
-	else selectionExists = false;
+	} else selectionExists = false;
 	run("Select None");
 	/*
 	Set options for black objects on white background as this works better for publications */
@@ -40,7 +38,7 @@
 	/*	The above should be the defaults but this makes sure (black particles on a white background)
 		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
-	id = getImageID();	t=getTitle(); /* get id of image and title */	
+	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
@@ -66,6 +64,8 @@
 		Array.getStatistics(resultsColumn, min, max, null, null); 
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
+	if (headingsWithRange[0]==" :  Infinity - -Infinity")
+		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */														 
 	/* create the dialog prompt */
 	Dialog.create("ROI Color Coder: " + tN);
 	Dialog.setInsets(6, 0, -15);
@@ -96,7 +96,7 @@
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.addNumber("No. of labels:", 10, 0, 3, "(Defines major ticks interval)");
+	Dialog.addNumber("No. of labels:", 11, 0, 3, "(Defines major ticks interval)");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
 	Dialog.setInsets(-38, 195, 0);
@@ -155,11 +155,9 @@
 //		
 	range = split(rangeS, "-");
 	if (range.length==1) {
-		min= NaN;
-		max= parseFloat(range[0]);
+		min= NaN; max= parseFloat(range[0]);
 	} else {
-		min= parseFloat(range[0]);
-		max= parseFloat(range[1]);
+		min= parseFloat(range[0]); max= parseFloat(range[1]);
 	}
 	if (indexOf(rangeS, "-")==0) min = 0 - min; /* checks to see if min is a negative value (lets hope the max isn't). */
 	
@@ -776,8 +774,10 @@
 	else run("Flatten");
 	if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 	restoreSettings;
-	setBatchMode("exit & display");	
+	setBatchMode("exit & display");
+	run("Collect Garbage");
 	showStatus("BAR ROI Color + Summary Macro Finished");
+	beep(); wait(300); beep(); wait(300); beep();										  
 /*
 			( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
 */
@@ -902,9 +902,9 @@
 		string = replace(string, " ", fromCharCode(0x2009)); /* use this last so all spaces converted */
 		return string;
 	}
-//
-	/* Macro Color Functions */
-//
+/*
+	 Macro Color Functions
+ */
 	function getColorArrayFromColorName(colorName) {
 		cA = newArray(255,255,255);
 		if (colorName == "white") cA = newArray(255,255,255);
@@ -974,6 +974,7 @@
 		}
 		return hexColors;
 	}
+	/* Hex conversion below adapted from T.Ferreira, 20010.01 http://imagejdocu.tudor.lu/doku.php?id=macro:rgbtohex */
 	function pad(n) {
 		n= toString(n); if (lengthOf(n)==1) n= "0"+n; return n;
 	}
@@ -1009,8 +1010,10 @@
 		return string;
 	}
 	function restoreExit(message){ /* clean up before aborting macro then exit */
+		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* clean up before exiting */
 		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		run("Collect Garbage");
 		exit(message);
 	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
@@ -1042,7 +1045,6 @@
 		else stringLabel = string;
 		return stringLabel;
 	}
-
 	function unCleanLabel(string) { 
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
 	/* mod 041117 to remove spaces as well */
@@ -1082,8 +1084,4 @@
 		else unitLabel = imageUnit;
 	}
 	return unitLabel;
-	}
-	function writeLabel(labelColor){
-		setColorFromColorName(labelColor);
-		drawString(finalLabel, finalLabelX, finalLabelY); 
-	}
+	}			  

@@ -11,20 +11,21 @@
 	 + cleans up previous runs and checks for data
 	 + automated units + Legend title orientation choice 10/13-20/16
 	 + optional montage that combines the labeled image with the legend 10/1/2016
-	This version v170315 (updates to AR v.5.4 version i.e. includes log option)
+	 + v170315 (updates to AR v.5.4 version i.e. includes log option)
+	 + v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
 	saveSettings;
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
+	// run("Remove Overlay");		   
 	if (nImages==0){
 		showMessageWithCancel("No images open or the ROI Manager is empty...\n"
         + "Run demo? (Results Table and ROI Manager will be cleared)");
 	    runDemo();
 	}
 	run("Select None");
-	/*
-	Set options for black objects on white background as this works better for publications */
+	/*	Set options for black objects on white background as this works better for publications */
 	run("Options...", "iterations=1 white count=1"); /* set white background */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
 	setOption("BlackBackground", false);
@@ -34,21 +35,23 @@
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
+	getPixelSize(unit, pixelWidth, pixelHeight);											 
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
 	nRES = nResults;
+	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
+	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
 	if (nRES!=nROIs) restoreExit("Exit: Results table \(" + nRES + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	setBatchMode(true);
 	tN = stripExtensionsFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
-	tN = unCleanLabel(tN); /* remove special characters to might cause issues saving file */
+	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	fontSize = rampH/28; /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
-	
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray(headings.length);
 	for (i=0; i<headings.length; i++) {
@@ -62,20 +65,28 @@
 		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	/* create the dialog prompt */
 	Dialog.create("ROI Color Coder: " + tN);
+	if (menuLimit > 752) {  /* menu bloat allowed only for small screens */
+		Dialog.setInsets(6, 0, -15);
+		macroP = getInfo("macro.filepath");
+		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
+		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels");
+		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
+		Dialog.addMessage("Filename: " + tN);
+		Dialog.setInsets(6, 0, 6);
+	}
 	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 	Dialog.setInsets(0, 120, 12);
-	Dialog.addCheckbox("Log transform (base-10)", false);
+	Dialog.addCheckbox("Log transform (base-10) - Experimental", false);
 	Dialog.addChoice("LUT:", luts, luts[0]);
 	Dialog.setInsets(0, 120, 12);
 	Dialog.addCheckbox("Reverse LUT?", false); 
-	Dialog.setInsets(6, 0, 6);
+	Dialog.setInsets(-6, 0, -6);
 	Dialog.addMessage("Color Coded Borders or Filled ROIs?");
 	Dialog.addNumber("Outlines or ROIs?", 0, 0, 3, " Width in pixels \(0 to fill ROIs\)");
 	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
 	Dialog.setInsets(12, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):______________");
-	getPixelSize(unit, pixelWidth, pixelHeight);
 	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 	Dialog.setInsets(-42, 197, -5);
@@ -83,7 +94,7 @@
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.addNumber("No. of labels:", 10, 0, 3, "(Defines major ticks interval)");
+	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
 	Dialog.setInsets(-38, 195, 0);
@@ -112,8 +123,8 @@
 		alpha= pad(toHex(255*Dialog.getNumber/100));
 		unitLabel = Dialog.getChoice();
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
-		numLabels = Dialog.getNumber;
-		dpChoice= Dialog.getChoice;
+		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
+		dpChoice = Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
 		fontStyle = Dialog.getChoice;
 			if (fontStyle=="unstyled") fontStyle="";
@@ -127,7 +138,7 @@
 		thinLinesFontSTweak= Dialog.getNumber;
 //
 	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
-	else rampH = rampChoice;	
+	else rampH = rampChoice;
 //
 	range = split(rangeS, "-");
 	if (range.length==1) {
@@ -214,6 +225,8 @@
 	call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
 	
 	newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
+	/* ramp color/gray range is horizontal only so must be rotated later */
+	if (revLut) run("Flip Horizontally");
 	tR = getTitle; /* short variable label for ramp */
 	
 	roiColors= loadLutColors(lut); /* load the LUT as a hexColor array: requires function */
@@ -223,11 +236,16 @@
 	setFont(fontName, fontSize, fontStyle);
 	if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
 	setLineWidth(rampLW*2);
-	if (ticks) drawRect(0, 0, rampH, rampW);
-	if (!revLut) run("Rotate 90 Degrees Left");
-	else run("Rotate 90 Degrees Right");
+	if (ticks) {
+		drawRect(0, 0, rampH, rampW);
+		/* The next steps add the top and bottom ticks */
+		rampWT = rampW + 2*rampLW;
+		run("Canvas Size...", "width="+ rampH +" height="+ rampWT +" position=Top-Center");
+		drawLine(0, rampW-1, 0,  rampW-1 + 2*rampLW); /* left/bottom tick - remember coordinate range is one less then max dimension because coordinates start at zero */
+		drawLine(rampH-1, rampW-1, rampH-1, rampW + 2*rampLW - 1); /* right/top tick */
+	}
+	run("Rotate 90 Degrees Left");
 	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
-	
 	if (dpChoice=="Auto")
 		decPlaces = autoCalculateDecPlaces(decPlaces);
 	else if (dpChoice=="Manual") 
@@ -235,8 +253,9 @@
 	else if (dpChoice=="Scientific")
 		decPlaces = -1;
 	else decPlaces = dpChoice;
-//
+	if (parameter=="Object") decPlaces = 0; /* This should be an integer */
 	/* draw ticks and values */
+	rampOffset = (getHeight-rampH)/2; /* getHeight-rampH ~ 2 * fontSize */
 	step = rampH;
 	if (numLabels>2) step /= (numLabels-1);
     setLineWidth(rampLW);
@@ -254,7 +273,7 @@
 	if (useLog) log10Incr = log10DisplayedRange/(numLabels-1);
 //
 	for (i=0; i<numLabels; i++) {
-		yPos = floor(fontSize/2 + rampH - i*step + 1.5*fontSize);
+		yPos = rampH + rampOffset - i*step -1; /* minus 1 corrects for coordinates starting at zero */
 		if (!useLog) rampLabel= min + (displayedRange)/(numLabels-1) * i;
 		else rampLabel= pow(10,(log10Min+(log10Incr * i)));
 		rampLabelString = removeTrailingZerosAndPeriod(d2s(rampLabel,decPlaces));
@@ -270,11 +289,14 @@
 			rampLabelString += "-" + rampExt; 
 		}
 		drawString(rampLabelString, rampW+4, round(yPos+fontSize/2));
-		if (ticks && i>0 && i<numLabels-1) {
-			drawLine(0, yPos, tickL, yPos);					/* left tick */
-			drawLine(rampW-1-tickL, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
-		}
-	}
+		if (ticks) {
+			if (i > 0 && i < numLabels-1) {
+				setLineWidth(rampLW);
+				drawLine(0, yPos, tickL, yPos);					/* left tick */
+				drawLine(rampW-1-tickL, yPos, rampW, yPos);
+				setLineWidth(rampLW/2);
+				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
+			}
 	/* now add lines and the true min and max and for stats if chosen in previous dialog */
 	rampVOffset = 2 * fontSize;
 	if (minmaxLines || statsRampLines) {
@@ -461,8 +483,10 @@
 	
 	else run("Flatten");
 	if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+	setBatchMode("exit & display");
 	restoreSettings;
-	setBatchMode("exit & display");	
+	beep(); wait(300); beep(); wait(300); beep();
+	run("Collect Garbage");
 	showStatus("BAR ROI Color Coder + Autoprefs Macro Finished");
 /*
 			( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
@@ -524,16 +548,19 @@
 		}
 		return roiManager("count"); /* returns the new count of entries */
 	}
-	function checkForUnits() {  /* 
+	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)
-		*/
+		 v170914 Radio dialog with more information displayed */
 		getPixelSize(unit, pixelWidth, pixelHeight);
 		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches"){
-			Dialog.create("No Units");
-			Dialog.addCheckbox("Unit asymmetry, pixel units or dpi remnants; do you want to define units for this image?", true);
+			Dialog.create("Suspicious Units");
+			rescaleChoices = newArray("Define new units for this image", "Use current scale", "Exit this macro");
+			rescaleDialogLabel = "pixelHeight = "+pixelHeight+", pixelWidth = "+pixelWidth+", unit = "+unit+": what would you like to do?";
+			Dialog.addRadioButtonGroup(rescaleDialogLabel, rescaleChoices, 3, 1, rescaleChoices[0]) ;
 			Dialog.show();
-			setScale = Dialog.getCheckbox;
-			if (setScale) run("Set Scale...");
+			rescaleChoice = Dialog.getRadioButton;
+			if (rescaleChoice==rescaleChoices[0]) run("Set Scale...");
+			else if (rescaleChoice==rescaleChoices[2]) restoreExit("Goodbye");
 		}
 	}
 	function cleanLabel(string) {
@@ -634,8 +661,10 @@
 		return string;
 	}
 	function restoreExit(message){ /* clean up before aborting macro then exit */
+		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* clean up before exiting */
 		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		run("Collect Garbage");
 		exit(message);
 	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
@@ -643,7 +672,7 @@
 		setThreshold(126, 255);
 		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitray scale to demonstrate unit usage. */
 		run("Convert to Mask");
-		// run("Analyze Particles...", "display clear add");
+		run("Analyze Particles...", "display clear add");
 		resetThreshold();
 	}
 	function stripExtensionsFromString(string) {
@@ -685,25 +714,33 @@
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
-	if (endsWith(string,"\)")) { /* label with units from string string if available */
-		unitIndexStart = lastIndexOf(string, "\(");
-		unitIndexEnd = lastIndexOf(string, "\)");
-		stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
-		unitCheck = matches(stringUnit, ".*[0-9].*");
-		if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
-			unitLabel = stringUnit;
+		if (endsWith(string,"\)")) { /* label with units from string string if available */
+			unitIndexStart = lastIndexOf(string, "\(");
+			unitIndexEnd = lastIndexOf(string, "\)");
+			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
+			unitCheck = matches(stringUnit, ".*[0-9].*");
+			if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+				unitLabel = stringUnit;
+			}
+			else {
+				unitLabel = "";
+			}
 		}
 		else {
-			unitLabel = "";
+			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
+			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
+			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
+			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90") unitLabel = fromCharCode(0x00B0);
+			else if (string=="%Area") unitLabel = "%";
+			else unitLabel = imageUnit;
 		}
-	}
-	else {
-		if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-		else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
-		else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-		else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90") unitLabel = fromCharCode(0x00B0);
-		else if (string=="%Area") unitLabel = "%";
-		else unitLabel = imageUnit;
-	}
-	return unitLabel;
-	}
+  
+	   
+																
+																																					
+																																																																	 
+																																		  
+											
+							 
+  
+		return unitLabel;

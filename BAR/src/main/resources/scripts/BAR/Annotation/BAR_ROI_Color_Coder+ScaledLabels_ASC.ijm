@@ -568,10 +568,10 @@ macro "ROI Color Coder with Scaled Labels"{
 		/*
 		Create drop labelShadow if desired */
 		if (labelShadowDrop!=0 || labelShadowDisp!=0)
-			createShadowDropFromMask(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
+			createShadowDropFromMask5(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
 		/*	Create inner shadow if desired */
 		if (labelInnerShadowDrop!=0 || labelInnerShadowDisp!=0) 
-			createInnerShadowFromMask(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
+			createInnerShadowFromMask4(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
 		run("Select None");
 		/* Create outer shadow or glow */
 		if (isOpen("shadow") && shadowDarkness>0) imageCalculator("Subtract",flatImage,"shadow");
@@ -660,10 +660,10 @@ macro "ROI Color Coder with Scaled Labels"{
 		/*
 		Create parameter label drop shadow - no option dialog */
 			if (labelShadowDrop!=0 || labelShadowDisp!=0)
-				createShadowDropFromMask(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
+				createShadowDropFromMask5(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
 			/*	Create inner shadow if desired */
 			if (labelInnerShadowDrop!=0 || labelInnerShadowDisp!=0 || labelInnerShadowBlur!=0) 
-				createInnerShadowFromMask(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
+				createInnerShadowFromMask4(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
 			/* Apply drop shadow or glow */
 			if (isOpen("shadow") && shadowDarkness>0)					imageCalculator("Subtract", flatImage,"shadow");
 			if (isOpen("shadow") && shadowDarkness<0)	/* Glow */
@@ -745,84 +745,69 @@ macro "ROI Color Coder with Scaled Labels"{
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
    */
 	function AddMCsToResultsTable () {
-	/* 	Based on "MCentroids.txt" Morphological centroids by thinning assumes white particles: G.Landini
-		http://imagejdocu.tudor.lu/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
-		http://www.mecourse.com/landinig/software/software.html
-		Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
-		v171121
-	*/
-		saveSettings();
-		run("Options...", "iterations=1 white count=1"); /* set white background */
-		setOption("BlackBackground", false);
-		run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
-		run("Appearance...", " "); /* do not use Inverting LUT */
-		workingTitle = getTitle();
-		if (!checkForPlugin("morphology_collection")) restoreExit("Exiting: Gabriel Landini's morphology suite is needed to run this macro.");
-		binaryCheck(workingTitle);
-		checkForRoiManager();
-		roiOriginalCount = roiManager("count");
-		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
-		if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
-		start = getTime();
-		getPixelSize(selectedUnit, pixelWidth, pixelHeight);
-		lcf=(pixelWidth+pixelHeight)/2;
-		objects = roiManager("count");
-		mcImageWidth = getWidth();
-		mcImageHeight = getHeight();
-		showStatus("Looping through all " + roiOriginalCount + " objects for morphological centers . . .");
-		for (i=0 ; i<roiOriginalCount; i++) {
-			showProgress(-i, roiManager("count"));
-			selectWindow(workingTitle);
-			roiManager("select", i);
-			Roi.getBounds(Rx, Ry, Rwidth, Rheight);
-			setResult("ROIctr_X\(px\)", i, round(Rx + Rwidth/2));
-			setResult("ROIctr_Y\(px\)", i, round(Ry + Rheight/2));
-			Roi.getContainedPoints(RPx, RPy); /* this includes holes when ROIs are used so no hole filling is needed */
-			newImage("Contained Points "+i,"8-bit black",Rwidth,Rheight,1); /* give each sub-image a unique name for debugging purposes */
-			for (j=0; j<RPx.length; j++)
-				setPixel(RPx[j]-Rx, RPy[j]-Ry, 255);
-			selectWindow("Contained Points "+i);
-			run("BinaryThin2 ", "kernel_a='0 2 2 0 1 1 0 0 2 ' kernel_b='0 0 2 0 1 1 0 2 2 ' rotations='rotate 45' iterations=-1 white");
-			if (lcf==1) {
-				for (RPx=1; RPx<(Rwidth-1); RPx++){
-					for (RPy=1; RPy<(Rheight-1); RPy++){ /* start at "1" because there should not be a pixel at the border */
-						if((getPixel(RPx, RPy))==255) {  
-							setResult("mc_X\(px\)", i, RPx+Rx);
-							setResult("mc_Y\(px\)", i, RPy+Ry);
-							setResult("mc_offsetX\(px\)", i, getResult("X",i)-(RPx+Rx));
-							setResult("mc_offsetY\(px\)", i, getResult("Y",i)-(RPy+Ry));
-							RPy = Rheight;
-							RPx = Rwidth; /* one point and done */
-						}
-					}
+/* 	Based on "MCentroids.txt" Morphological centroids by thinning assumes white particles: G.Landini
+	http://imagejdocu.tudor.lu/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
+	http://www.mecourse.com/landinig/software/software.html
+	Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
+	v180102 updated
+*/
+	saveSettings();
+	run("Options...", "iterations=1 white count=1"); /* set white background */
+	setOption("BlackBackground", false);
+	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
+	run("Appearance...", " "); /* do not use Inverting LUT */
+	workingTitle = getTitle();
+	if (!checkForPlugin("morphology_collection")) restoreExit("Exiting: Gabriel Landini's morphology suite is needed to run this macro.");
+	binaryCheck(workingTitle);
+	checkForRoiManager();
+	roiOriginalCount = roiManager("count");
+	batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
+	if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
+	start = getTime();
+	getPixelSize(selectedUnit, pixelWidth, pixelHeight);
+	lcf=(pixelWidth+pixelHeight)/2;
+	objects = roiManager("count");
+	mcImageWidth = getWidth();
+	mcImageHeight = getHeight();
+	showStatus("Looping through all " + roiOriginalCount + " objects for morphological centers . . .");
+	for (i=0 ; i<roiOriginalCount; i++) {
+		showProgress(-i, roiManager("count"));
+		selectWindow(workingTitle);
+		roiManager("select", i);
+		Roi.getBounds(Rx, Ry, Rwidth, Rheight);
+		setResult("ROIctr_X\(px\)", i, round(Rx + Rwidth/2));
+		setResult("ROIctr_Y\(px\)", i, round(Ry + Rheight/2));
+		Roi.getContainedPoints(RPx, RPy); /* this includes holes when ROIs are used so no hole filling is needed */
+		newImage("Contained Points "+i,"8-bit black",Rwidth,Rheight,1); /* give each sub-image a unique name for debugging purposes */
+		for (j=0; j<RPx.length; j++)
+			setPixel(RPx[j]-Rx, RPy[j]-Ry, 255);
+		selectWindow("Contained Points "+i);
+		run("BinaryThin2 ", "kernel_a='0 2 2 0 1 1 0 0 2 ' kernel_b='0 0 2 0 1 1 0 2 2 ' rotations='rotate 45' iterations=-1 white");
+		for (RPx=1; RPx<(Rwidth-1); RPx++){
+			for (RPy=1; RPy<(Rheight-1); RPy++){ /* start at "1" because there should not be a pixel at the border */
+				if((getPixel(RPx, RPy))==255) {  
+					setResult("mc_X\(px\)", i, RPx+Rx);
+					setResult("mc_Y\(px\)", i, RPy+Ry);
+					setResult("mc_offsetX\(px\)", i, getResult("X",i)-(RPx+Rx));
+					setResult("mc_offsetY\(px\)", i, getResult("Y",i)-(RPy+Ry));
+					// if (lcf!=1) {
+						// setResult("mc_X\(" + selectedUnit + "\)", i, (RPx+Rx)*lcf); /* perhaps not too useful */
+						// setResult("mc_Y\(" + selectedUnit + "\)", i, (RPy+Ry)*lcf); /* perhaps not too useful */
+					// }
+					RPy = Rheight;
+					RPx = Rwidth; /* one point and done */
 				}
 			}
-			else if (lcf!=1) {
-				for (RPx=1; RPx<(Rwidth-1); RPx++){
-					for (RPy=1; RPy<(Rheight-1); RPy++){ /* start at "1" because there should not be a pixel at the border */
-						if((getPixel(RPx, RPy))==255) {
-							setResult("mc_X\(px\)", i, RPx+Rx);
-							setResult("mc_Y\(px\)", i, RPy+Ry);					
-							// setResult("mc_X\(" + selectedUnit + "\)", i, (RPx+Rx)*lcf); /* perhaps not too useful */
-							// setResult("mc_Y\(" + selectedUnit + "\)", i, (RPy+Ry)*lcf); /* perhaps not too useful */
-							setResult("mc_offsetX\(px\)", i, round((getResult("X",i)/lcf-(RPx+Rx))));
-							setResult("mc_offsetY\(px\)", i, round((getResult("Y",i)/lcf-(RPy+Ry))));
-							RPy = Rheight;
-							RPx = Rwidth; /* one point and done */
-						}
-					}
-				}
-			}
-			closeImageByTitle("Contained Points "+i);
 		}
-		updateResults();
-		run("Select None");
-		if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
-		restoreSettings();
-		run("Collect Garbage");
-		showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
-		beep(); wait(300); beep(); wait(300); beep();
-		run("Collect Garbage"); 
+		closeImageByTitle("Contained Points "+i);
+	}
+	updateResults();
+	run("Select None");
+	if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
+	restoreSettings();
+	showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
+	beep(); wait(300); beep(); wait(300); beep();
+	run("Collect Garbage"); 
 	}
 	function autoCalculateDecPlaces(dP){
 		step = (max-min)/numLabels;
@@ -969,7 +954,7 @@ macro "ROI Color Coder with Scaled Labels"{
         close();
 		}
 	}
-	function createInnerShadowFromMask(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
+	function createInnerShadowFromMask4(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
 		/* requires previous run of:  originalImageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls four variables: drop, displacement blur and darkness */
@@ -996,7 +981,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		divider = (100 / abs(iShadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
-	function createShadowDropFromMask(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
+	function createShadowDropFromMask5(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
 		/* requires previous run of:  originalImageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls five variables: drop, displacement blur and darkness */

@@ -558,10 +558,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/*
 		Create drop labelShadow if desired */
 		if (labelShadowDrop!=0 || labelShadowDisp!=0)
-			createShadowDropFromMask(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
+			createShadowDropFromMask5(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
 		/*	Create inner shadow if desired */
 		if (labelInnerShadowDrop!=0 || labelInnerShadowDisp!=0) 
-			createInnerShadowFromMask(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
+			createInnerShadowFromMask4(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
 		run("Select None");
 		/* Create outer shadow or glow */
 		if (isOpen("shadow") && shadowDarkness>0) imageCalculator("Subtract",flatImage,"shadow");
@@ -824,10 +824,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/*
 		Create drop shadow if desired */
 		if (summLabelShadowDrop!=0 || summLabelShadowDisp!=0)
-			createShadowDropFromMask(summLabelShadowDrop, summLabelShadowDisp, summLabelShadowBlur, summLabelShadowDarkness, outlineStroke);
+			createShadowDropFromMask5(summLabelShadowDrop, summLabelShadowDisp, summLabelShadowBlur, summLabelShadowDarkness, outlineStroke);
 		/*	Create inner shadow if desired */
 		if (summLabelInnerShadowDrop!=0 || summLabelInnerShadowDisp!=0 || summLabelInnerShadowBlur!=0) 
-			createInnerShadowFromMask(summLabelInnerShadowDrop, summLabelInnerShadowDisp, summLabelInnerShadowBlur, summLabelInnerShadowDarkness);
+			createInnerShadowFromMask4(summLabelInnerShadowDrop, summLabelInnerShadowDisp, summLabelInnerShadowBlur, summLabelInnerShadowDarkness);
 		/* Apply drop shadow or glow */
 		if (isOpen("shadow") && summLabelShadowDarkness>0)		
 			imageCalculator("Subtract", flatImage,"shadow");
@@ -910,7 +910,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	http://imagejdocu.tudor.lu/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
 	http://www.mecourse.com/landinig/software/software.html
 	Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
-	v161115
+	v180102 updated
 */
 	saveSettings();
 	run("Options...", "iterations=1 white count=1"); /* set white background */
@@ -923,7 +923,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	checkForRoiManager();
 	roiOriginalCount = roiManager("count");
 	batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
-	if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
+	if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
 	start = getTime();
 	getPixelSize(selectedUnit, pixelWidth, pixelHeight);
 	lcf=(pixelWidth+pixelHeight)/2;
@@ -944,33 +944,19 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			setPixel(RPx[j]-Rx, RPy[j]-Ry, 255);
 		selectWindow("Contained Points "+i);
 		run("BinaryThin2 ", "kernel_a='0 2 2 0 1 1 0 0 2 ' kernel_b='0 0 2 0 1 1 0 2 2 ' rotations='rotate 45' iterations=-1 white");
-		if (lcf==1) {
-			for (RPx=1; RPx<(Rwidth-1); RPx++){
-				for (RPy=1; RPy<(Rheight-1); RPy++){ /* start at "1" because there should not be a pixel at the border */
-					if((getPixel(RPx, RPy))==255) {  
-						setResult("mc_X\(px\)", i, RPx+Rx);
-						setResult("mc_Y\(px\)", i, RPy+Ry);
-						setResult("mc_offsetX\(px\)", i, getResult("X",i)-(RPx+Rx));
-						setResult("mc_offsetY\(px\)", i, getResult("Y",i)-(RPy+Ry));
-						RPy = Rheight;
-						RPx = Rwidth; /* one point and done */
-					}
-				}
-			}
-		}
-		else if (lcf!=1) {
-			for (RPx=1; RPx<(Rwidth-1); RPx++){
-				for (RPy=1; RPy<(Rheight-1); RPy++){ /* start at "1" because there should not be a pixel at the border */
-					if((getPixel(RPx, RPy))==255) {
-						setResult("mc_X\(px\)", i, RPx+Rx);
-						setResult("mc_Y\(px\)", i, RPy+Ry);					
+		for (RPx=1; RPx<(Rwidth-1); RPx++){
+			for (RPy=1; RPy<(Rheight-1); RPy++){ /* start at "1" because there should not be a pixel at the border */
+				if((getPixel(RPx, RPy))==255) {  
+					setResult("mc_X\(px\)", i, RPx+Rx);
+					setResult("mc_Y\(px\)", i, RPy+Ry);
+					setResult("mc_offsetX\(px\)", i, getResult("X",i)-(RPx+Rx));
+					setResult("mc_offsetY\(px\)", i, getResult("Y",i)-(RPy+Ry));
+					// if (lcf!=1) {
 						// setResult("mc_X\(" + selectedUnit + "\)", i, (RPx+Rx)*lcf); /* perhaps not too useful */
 						// setResult("mc_Y\(" + selectedUnit + "\)", i, (RPy+Ry)*lcf); /* perhaps not too useful */
-						setResult("mc_offsetX\(px\)", i, round((getResult("X",i)/lcf-(RPx+Rx))));
-						setResult("mc_offsetY\(px\)", i, round((getResult("Y",i)/lcf-(RPy+Ry))));
-						RPy = Rheight;
-						RPx = Rwidth; /* one point and done */
-					}
+					// }
+					RPy = Rheight;
+					RPx = Rwidth; /* one point and done */
 				}
 			}
 		}
@@ -980,9 +966,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	run("Select None");
 	if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
 	restoreSettings();
-	run("Collect Garbage");
 	showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
 	beep(); wait(300); beep(); wait(300); beep();
+	run("Collect Garbage"); 
 	}
 	function autoCalculateDecPlaces(dP){
 		step = (max-min)/numLabels;
@@ -1129,7 +1115,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
         close();
 		}
 	}
-	function createInnerShadowFromMask(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
+	function createInnerShadowFromMask4(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
 		/* requires previous run of:  originalImageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls four variables: drop, displacement blur and darkness */
@@ -1156,7 +1142,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		divider = (100 / abs(iShadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
-	function createShadowDropFromMask(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
+	function createShadowDropFromMask5(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
 		/* requires previous run of:  originalImageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls five variables: drop, displacement blur and darkness */
@@ -1322,8 +1308,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	    run("Blobs (25K)");
 		setThreshold(126, 255);
 		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitray scale to demonstrate unit usage. */
-		// run("Convert to Mask");
-		// run("Analyze Particles...", "display clear add");
+		run("Convert to Mask");
+		run("Analyze Particles...", "display clear add");
 		resetThreshold();
 	}
 	function stripExtensionsFromString(string) {

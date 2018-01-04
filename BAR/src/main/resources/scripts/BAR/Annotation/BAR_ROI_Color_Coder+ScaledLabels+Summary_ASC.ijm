@@ -17,9 +17,10 @@
 	+ adds choice for number of lines of statistics (not really needed)
 	+ v161117 adds more decimal place control
 	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
-	+ v171024 Added an option to just label the objects without color codeing
+	+ v171024 Added an option to just label the objects without color coding
 	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
 	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
+	+ v180104 Updated functions to latest versions.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -911,16 +912,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	http://www.mecourse.com/landinig/software/software.html
 	Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
 	v180102 updated
+	v180104 removed unnecessary changes to settings
 */
-	saveSettings();
-	run("Options...", "iterations=1 white count=1"); /* set white background */
-	setOption("BlackBackground", false);
-	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
-	run("Appearance...", " "); /* do not use Inverting LUT */
 	workingTitle = getTitle();
 	if (!checkForPlugin("morphology_collection")) restoreExit("Exiting: Gabriel Landini's morphology suite is needed to run this macro.");
-	binaryCheck(workingTitle);
-	checkForRoiManager();
+	binaryCheck(workingTitle); /* Makes sure image is binary and sets to white background, black objects */
+	checkForRoiManager(); /* This macro uses ROIs and a Results table that matches in count */
 	roiOriginalCount = roiManager("count");
 	batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 	if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
@@ -965,7 +962,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	updateResults();
 	run("Select None");
 	if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
-	restoreSettings();
 	showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage"); 
@@ -983,16 +979,15 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return dP;
 	}
 	function binaryCheck(windowTitle) { /* for black objects on white background */
+		/* v180104 added line to remove inverting LUT and changed to auto default threshold */
 		selectWindow(windowTitle);
 		if (is("binary")==0) run("8-bit");
 		/* Quick-n-dirty threshold if not previously thresholded */
 		getThreshold(t1,t2); 
 		if (t1==-1)  {
 			run("8-bit");
-			setThreshold(0, 128);
-			setOption("BlackBackground", true);
+			run("Auto Threshold", "method=Default");
 			run("Convert to Mask");
-			run("Invert");
 			}
 		/* Make sure black objects on white background for consistency */
 		if (((getPixel(0, 0))==0 || (getPixel(0, 1))==0 || (getPixel(1, 0))==0 || (getPixel(1, 1))==0))
@@ -1000,7 +995,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
 			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
 		if (((getPixel(0, 0))+(getPixel(0, 1))+(getPixel(1, 0))+(getPixel(1, 1))) != 4*(getPixel(0, 0)) ) 
-			restoreExit("Border Issue");
+				restoreExit("Border Issue"); 	
+		if (is("Inverting LUT")==true) run("Invert LUT");
 	}
 	function checkForPlugin(pluginName) {
 		/* v161102 changed to true-false */
@@ -1053,11 +1049,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 	}
 	function checkForRoiManager() {
-		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . . */
+		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . .
+			v180104 only asks about ROIs if there is a mismatch with the results */
 		nROIs = roiManager("count");
-		nRES = nResults; /* not really needed except to provide useful information below */
-		if (nROIs==0) runAnalyze = true;
-		else runAnalyze = getBoolean("There are already " + nROIs + " in the ROI manager; do you want to clear the ROI manager and reanalyze?");
+		nRES = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0) runAnalyze = true; /* Assumes that ROIs are required and that is why this function is being called */
+		else if(nROIs!=nRES) runAnalyze = getBoolean("There are " + nRES + " results and " + nROIs + " ROIs; do you want to clear the ROI manager and reanalyze?");
+		else runAnalyze = false;
 		if (runAnalyze) {
 			roiManager("reset");
 			Dialog.create("Analysis check");

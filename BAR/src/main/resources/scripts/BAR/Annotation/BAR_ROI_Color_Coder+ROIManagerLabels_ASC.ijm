@@ -7,7 +7,9 @@
  	+ min and max lines for ramp
 	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
 	+ added the ability to add lines on ramp for statistics
-	This version v161117 adds more decimal place control
+	+ v161117 adds more decimal place control
+	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
+	+ Update functions to latest versions.
  */
 macro "ROI Color Coder with Labels"{
 	requires("1.47r");
@@ -409,6 +411,7 @@ if (minmaxIOR) {
 	}
 	restoreSettings;
 	setBatchMode("exit & display");
+	run("Collect Garbage"); 
 	showStatus("ROI Color Coder + Object Labels Macro Finished");
 	/*
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
@@ -446,11 +449,17 @@ if (minmaxIOR) {
 		}
 	}
 	function checkForRoiManager() {
+		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . .
+			v180104 only asks about ROIs if there is a mismatch with the results */
 		nROIs = roiManager("count");
-		nRES = nResults;
-		if (nROIs==0)  {
-			Dialog.create("No ROI");
-			Dialog.addCheckbox("Run Analyze-particles to generate roiManager values?", true);
+		nRES = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0) runAnalyze = true; /* Assumes that ROIs are required and that is why this function is being called */
+		else if(nROIs!=nRES) runAnalyze = getBoolean("There are " + nRES + " results and " + nROIs + " ROIs; do you want to clear the ROI manager and reanalyze?");
+		else runAnalyze = false;
+		if (runAnalyze) {
+			roiManager("reset");
+			Dialog.create("Analysis check");
+			Dialog.addCheckbox("Run Analyze-particles to generate new roiManager values?", true);
 			Dialog.addMessage("This macro requires that all objects have been loaded into the roi manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
 			Dialog.show();
 			analyzeNow = Dialog.getCheckbox();
@@ -462,8 +471,9 @@ if (minmaxIOR) {
 				if (nResults!=roiManager("count"))
 					restoreExit("Results and ROI Manager counts do not match!");
 			}
-			else restoreExit();
+			else restoreExit("Goodbye, your previous setting will be restored.");
 		}
+		return roiManager("count"); /* returns the new count of entries */
 	}
 	function checkForUnits() {  /* 
 		/* v161108 (adds inches to possible reasons for checking calibration)
@@ -495,9 +505,9 @@ if (minmaxIOR) {
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */
-        if (isOpen(windowTitle)) {
+		if (isOpen(windowTitle)) {
 		selectWindow(windowTitle);
-        close();
+		close();
 		}
 	}
 	function expandLabel(string) {  /* mostly for better looking summary tables */
@@ -572,8 +582,10 @@ if (minmaxIOR) {
 		return string;
 	}
 	function restoreExit(message){ /* clean up before aborting macro then exit */
+		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* clean up before exiting */
 		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		run("Collect Garbage"); 
 		exit(message);
 	}
 	function stripExtensionsFromString(string) {

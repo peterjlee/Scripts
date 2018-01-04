@@ -3,16 +3,17 @@
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
 	complementary to the ParticleAnalyzer (Analyze>Analyze Particles...), generating
 	particle-size heat maps. Requires IJ 1.47r.
-	Tiago Ferreira, v.5.4 2017.03.10 (add optional log10 scale) + pjl mods 3/13/2017
-	 + option to reverse LUT
-	 + dialog requester shows min and max values for all measurements to make it easier to choose a range 8/5/2016
-	 + optional min and max lines for ramp
-	 + optional mean and std. dev. lines for ramp
-	 + cleans up previous runs and checks for data
-	 + automated units + Legend title orientation choice 10/13-20/16
-	 + optional montage that combines the labeled image with the legend 10/1/2016
-	 + v170315 (updates to AR v.5.4 version i.e. includes log option)
+	Tiago Ferreira, v.5.4 2017.03.10 (add optional log10 scale) + pjl mods 3/13/2017.
+	 + option to reverse LUT.
+	 + dialog requester shows min and max values for all measurements to make it easier to choose a range 8/5/2016.
+	 + optional min and max lines for ramp.
+	 + optional mean and std. dev. lines for ramp.
+	 + cleans up previous runs and checks for data.
+	 + automated units + Legend title orientation choice 10/13-20/16.
+	 + optional montage that combines the labeled image with the legend 10/1/2016.
+	 + v170315 (updates to AR v.5.4 version i.e. includes log option).
 	 + v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
+	 + v180104 Updated functions to latest versions.
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
@@ -524,11 +525,13 @@
 		}
 	}
 	function checkForRoiManager() {
-		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . . */
+		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . .
+			v180104 only asks about ROIs if there is a mismatch with the results */
 		nROIs = roiManager("count");
-		nRES = nResults; /* not really needed except to provide useful information below */
-		if (nROIs==0) runAnalyze = true;
-		else runAnalyze = getBoolean("There are already " + nROIs + " in the ROI manager; do you want to clear the ROI manager and reanalyze?");
+		nRES = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0) runAnalyze = true; /* Assumes that ROIs are required and that is why this function is being called */
+		else if(nROIs!=nRES) runAnalyze = getBoolean("There are " + nRES + " results and " + nROIs + " ROIs; do you want to clear the ROI manager and reanalyze?");
+		else runAnalyze = false;
 		if (runAnalyze) {
 			roiManager("reset");
 			Dialog.create("Analysis check");

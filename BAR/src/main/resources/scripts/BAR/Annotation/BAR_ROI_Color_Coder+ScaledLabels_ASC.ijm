@@ -16,6 +16,7 @@
 	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
 	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
 	+ v180104 Updated functions to latest versions.
+	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
  */
  
 macro "ROI Color Coder with Scaled Labels"{
@@ -40,6 +41,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
 	setOption("BlackBackground", false);
 	run("Appearance...", " "); /* do not use Inverting LUT */
+	if (is("Inverting LUT")==true) run("Invert LUT"); /* more effectively removes Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background)
 		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
@@ -184,7 +186,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	if (unitLabel=="None") unitLabel = ""; 
 	parameterLabel = stripUnitFromString(parameter);
 	unitLabel= cleanLabel(unitLabel);
-	/* Begin object color coding */
+	/* Begin object color coding if stroke set */
 	if (stroke>=0) {
 		/*	Create LUT-map legend	*/
 		rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
@@ -324,7 +326,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				}
 			}
 			/* now use a mask to create black outline around white text to stand out against ramp colors */
-			rampOutlineStroke = round(rampLW/2);
+			rampOutlineStroke = maxOf(1,round(rampLW/2));
 			setThreshold(0, 128);
 			setOption("BlackBackground", false);
 			run("Convert to Mask");
@@ -456,7 +458,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);			Dialog.show();
 			fontColor = Dialog.getChoice(); /* Object label color */
 			fontSCorrection =  Dialog.getNumber()/100;
-			minLFontS = Dialog.getNumber(); 
+			minLFontS = Dialog.getNumber();
 			maxLFontS = Dialog.getNumber(); 
 			fontStyle = Dialog.getChoice();
 			fontName = Dialog.getChoice();
@@ -503,6 +505,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		if (fontStyle=="unstyled") fontStyle="";
 		if (stroke>=0) {
 			run("Flatten"); /* Flatten converts to RGB so . . .  */
+			rename(tN + "_" + parameterLabel + "_labels");
 			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 		} else {
 			run("Duplicate...", "title=labeled");
@@ -531,13 +534,22 @@ macro "ROI Color Coder with Scaled Labels"{
 			if (lFontS>maxLFontS) lFontS = maxLFontS; 
 			if (lFontS<minLFontS) lFontS = minLFontS;
 			setFont(fontName,lFontS,fontStyle);
-			if (ctrChoice=="ROI Center") 
+			if (ctrChoice=="ROI Center") {
 				textOffset = roiX + ((roiWidth) - getStringWidth(labelString))/2;
-			else textOffset = getResult("mc_X\(px\)",i) - getStringWidth(labelString)/2;
+				textDrop = roiY+roiHeight/2 + lFontS/2;
+			} else {
+				textOffset = getResult("mc_X\(px\)",i) - getStringWidth(labelString)/2;
+				textDrop = getResult("mc_Y\(px\)",i) + lFontS/2;
+			}
+			/* Now make sure label is not out of the canvas */
+			lFontFactor = lFontS/100;
+			textOffset = maxOf(lFontFactor*shadowDisp,textOffset);
+			textOffset = minOf(imageWidth-getStringWidth(labelString)-lFontFactor*shadowDisp,textOffset);
+			textDrop = maxOf(0, textDrop);
+			textDrop = minOf(imageHeight,textDrop);
+			/* draw object label */
 			setColorFromColorName("white");
-			if (ctrChoice=="ROI Center")
-				drawString(labelString, textOffset, roiY+roiHeight/2 + lFontS/2);
-			else drawString(labelString, textOffset, getResult("mc_Y\(px\)",i) + lFontS/2);
+			drawString(labelString, textOffset, textDrop);
 			fontArray[i] = lFontS;
 		}
 		roiManager("show none");
@@ -559,13 +571,18 @@ macro "ROI Color Coder with Scaled Labels"{
 		if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
 		else labelInnerShadowBlur = innerShadowBlur;
 		fontFactor = meanFontSize/100;
+		minFontFactor = minFontSize/100;
 		outlineStroke = round(fontFactor * outlineStrokePC);
+		if (outlineStrokePC>0) outlineStroke = maxOf(1,outlineStroke); /* set a minimum stroke */
 		labelShadowDrop = floor(fontFactor * labelShadowDrop);
+		if (shadowDrop>0) labelShadowDrop = maxOf(1+outlineStroke, labelShadowDrop);
 		labelShadowDisp = floor(fontFactor * labelShadowDisp);
+		if (shadowDisp>0) labelShadowDisp = maxOf(1+outlineStroke, labelShadowDisp);
 		labelShadowBlur = floor(fontFactor * labelShadowBlur);
-		labelInnerShadowDrop = floor(fontFactor * labelInnerShadowDrop);
-		labelInnerShadowDisp = floor(fontFactor * labelInnerShadowDisp);
-		labelInnerShadowBlur = floor(fontFactor * labelInnerShadowBlur);
+		if (shadowBlur>0) labelShadowBlur = maxOf(outlineStroke, labelShadowBlur);
+		labelInnerShadowDrop = floor(minFontFactor * labelInnerShadowDrop);
+		labelInnerShadowDisp = floor(minFontFactor * labelInnerShadowDisp);
+		labelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
 		/*
 		Create drop labelShadow if desired */
 		if (labelShadowDrop!=0 || labelShadowDisp!=0)
@@ -577,6 +594,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		/* Create outer shadow or glow */
 		if (isOpen("shadow") && shadowDarkness>0) imageCalculator("Subtract",flatImage,"shadow");
 		if (isOpen("shadow") && shadowDarkness<0) imageCalculator("Add", flatImage,"shadow");	/* Glow */
+		selectWindow(flatImage);
 		/* Create outline around text */
 		getSelectionFromMask("label_mask");
 		run("Enlarge...", "enlarge=[outlineStroke] pixel");
@@ -612,7 +630,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		else labelInnerShadowDisp = innerShadowDisp;
 		if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
 		else labelInnerShadowBlur = innerShadowBlur;
-			fontFactor = meanFontSize/100;
+		fontFactor = meanFontSize/100;
 		outlineStroke = round(fontFactor * outlineStrokePC);
 		labelShadowDrop = floor(fontFactor * labelShadowDrop);
 		labelShadowDisp = floor(fontFactor * labelShadowDisp);
@@ -666,7 +684,8 @@ macro "ROI Color Coder with Scaled Labels"{
 			if (labelInnerShadowDrop!=0 || labelInnerShadowDisp!=0 || labelInnerShadowBlur!=0) 
 				createInnerShadowFromMask4(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
 			/* Apply drop shadow or glow */
-			if (isOpen("shadow") && shadowDarkness>0)					imageCalculator("Subtract", flatImage,"shadow");
+			if (isOpen("shadow") && shadowDarkness>0)
+				imageCalculator("Subtract", flatImage,"shadow");
 			if (isOpen("shadow") && shadowDarkness<0)	/* Glow */
 				imageCalculator("Add", flatImage,"shadow");
 			run("Select None");
@@ -686,7 +705,8 @@ macro "ROI Color Coder with Scaled Labels"{
 				imageCalculator("Subtract", flatImage,"inner_shadow");
 			if (isOpen("inner_shadow") && innerShadowDarkness<0)	/* Glow */
 				imageCalculator("Add", flatImage,"inner_shadow");
-			rename(tN + "_" + parameterLabel + "+objectlabels");
+			selectWindow(flatImage);
+			rename(tN + "_" + parameterLabel + "\+objectlabels");
 			flatImage = getTitle();
 			closeImageByTitle("shadow");
 			closeImageByTitle("inner_shadow");
@@ -703,7 +723,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			print("\n>>>> ROI Color Coder:\n"
 				+ "Some values from the \""+ parameter +"\" column could not be retrieved.\n"
 				+ countNaN +" ROI(s) were labeled with a default color.");
-		rename(tN + "_" + parameterLabel + "_coded");
+		rename(getTitle() + "\+coded");
 		tNC = getTitle();
 		/* Image and Ramp combination dialog */
 		Dialog.create("Combine Labeled Image and Legend?");
@@ -720,12 +740,12 @@ macro "ROI Color Coder with Scaled Labels"{
 				run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
 				canvasH = getHeight(); /* update ramp height */
 			}
-			srW = getWidth;
-			comboW = srW + imageWidth;
+			srW = getWidth + maxOf(2,imageWidth/500);
+			comboW = srW + imageWidth + maxOf(2,imageWidth/500);
 			selectWindow(tNC);
 			if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
 			run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
-			makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
+			makeRectangle(imageWidth + maxOf(2,imageWidth/500), round((imageHeight-canvasH)/2), srW, imageHeight);
 			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
 			else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
 			run("Flatten");
@@ -798,6 +818,12 @@ macro "ROI Color Coder with Scaled Labels"{
 		}
 		closeImageByTitle("Contained Points "+i);
 	}
+	updateResults();
+	run("Select None");
+	if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
+	showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
+	beep(); wait(300); beep(); wait(300); beep();
+	run("Collect Garbage"); 
 	function autoCalculateDecPlaces(dP){
 		step = (max-min)/numLabels;
 		stepSci = d2s(step, -1);
@@ -987,7 +1013,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		run("Select None");
 		if (oShadowBlur>0) {
 			run("Gaussian Blur...", "sigma=[oShadowBlur]");
-			run("Unsharp Mask...", "radius=[oShadowBlur] mask=0.4"); /* Make Gaussian shadow edge a little less fuzzy */
+			// run("Unsharp Mask...", "radius=[oShadowBlur] mask=0.4"); /* Make Gaussian shadow edge a little less fuzzy */
 		}
 		/* Now make sure shadow of glow does not impact outline */
 		getSelectionFromMask("label_mask");

@@ -17,6 +17,7 @@
 	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
 	+ v180104 Updated functions to latest versions.
 	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
+	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
  */
  
 macro "ROI Color Coder with Scaled Labels"{
@@ -492,8 +493,6 @@ macro "ROI Color Coder with Scaled Labels"{
 			run("Select None");
 			if (batchMode) setBatchMode(true); /* Toggle batch mode back on if previously on */
 		}
-		shadowDarkness = (255/100) * (abs(shadowDarkness));
-		innerShadowDarkness = (255/100) * (100 - (abs(innerShadowDarkness)));
 		if (dpChoice=="Auto")
 			decPlaces = autoCalculateDecPlaces(decPlaces);
 		else if (dpChoice=="Manual") 
@@ -630,6 +629,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		else labelInnerShadowDisp = innerShadowDisp;
 		if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
 		else labelInnerShadowBlur = innerShadowBlur;
+		/* convert font percentages to pixels */								  
 		fontFactor = meanFontSize/100;
 		outlineStroke = round(fontFactor * outlineStrokePC);
 		labelShadowDrop = floor(fontFactor * labelShadowDrop);
@@ -824,7 +824,8 @@ macro "ROI Color Coder with Scaled Labels"{
 	showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage"); 
-	function autoCalculateDecPlaces(dP){
+	}
+ 	function autoCalculateDecPlaces(dP){
 		step = (max-min)/numLabels;
 		stepSci = d2s(step, -1);
 		iExp = indexOf(stepSci, "E");

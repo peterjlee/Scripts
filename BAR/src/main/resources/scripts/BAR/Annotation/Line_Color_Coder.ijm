@@ -5,8 +5,9 @@
 	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
 	This version draws line between two sets of coordinates in a results table
 	Stats and true min and max added to ramp 8/16-7/2016
-	This version v170411 removes spaces from image names for compatibility with new image combinations
-	
+	+ v170411 removes spaces from image names for compatibility with new image combinations
+	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
+	+ v180125 fixed "items" should be "nRes" error.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -31,6 +32,7 @@ macro "Line Color Coder with Labels"{
 	}
 	id = getImageID();	t=getTitle(); /* get id of image and title */	
 	checkForUnits(); /* Required function */
+	getPixelSize(unit, pixelWidth, pixelHeight);
 	checkForAnyResults();
 	nRes= nResults;
 	setBatchMode(true);
@@ -45,11 +47,11 @@ macro "Line Color Coder with Labels"{
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
 	headingsWithX= filterArrayByContents(headings,"X", "x");
-	if (headingsWithX.length<2) restoreExit("Not enough x coordinates \(" + headingsWithX.length + "\)");
+	if (lengthOf(headingsWithX)<2) restoreExit("Not enough x coordinates \(" + lengthOf(headingsWithX) + "\)");
 	headingsWithY= filterArrayByContents(headings,"Y", "y");
-	if (headingsWithY.length<2) restoreExit("Not enough y coordinates \(" + headingsWithY.length + "\)");
-	headingsWithRange= newArray(headings.length);
-	for (i=0; i<headings.length; i++) {
+	if (lengthOf(headingsWithY)<2) restoreExit("Not enough y coordinates \(" + lengthOf(headingsWithY) + "\)");
+	headingsWithRange= newArray(lengthOf(headings));
+	for (i=0; i<lengthOf(headings); i++) {
 		resultsColumn = newArray(nRes);
 		for (j=0; j<nRes; j++)
 			resultsColumn[j] = getResult(headings[i], j);
@@ -57,7 +59,7 @@ macro "Line Color Coder with Labels"{
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
 	if (headingsWithRange[0]==" :  Infinity - -Infinity")
-		headingsWithRange[0] = "ID" + ":  1 - " + items; /* relabels ImageJ ID column */
+		headingsWithRange[0] = "ID" + ":  1 - " + nRes; /* relabels ImageJ ID column */
 	/* create the dialog prompt */
 	Dialog.create("Line Color Coder: " + tN);
 	Dialog.addMessage("This macro draws lines between sets of coordinates\nin a table and colors them according to an LUT");
@@ -75,11 +77,11 @@ macro "Line Color Coder with Labels"{
 	else Dialog.addRadioButtonGroup("Restrict Lines to Area?", newArray("No", "New Selection"), 1, 3, "No"); 
 	Dialog.addCheckbox("Overwrite Active Image?", false); 
 	Dialog.addCheckbox("Create a stack for animation?", false); 
+	Dialog.addCheckbox("Animation: 1 line\/white frame?", false); /* Using individual non-disposing lines can reduce the size of gif animation files */
 	Dialog.addNumber("Anim: Layers:", 10, 0, 3, "frames to skip");
 	Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
 	Dialog.setInsets(12, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):________________");
-	getPixelSize(unit, pixelWidth, pixelHeight);
 	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 	Dialog.setInsets(-42, 197, -5);
@@ -87,7 +89,8 @@ macro "Line Color Coder with Labels"{
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 243, 0);
 	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.addNumber("No. of labels:", 10, 0, 3, "(Defines major ticks interval)");
+	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
+	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
 	Dialog.setInsets(-38, 200, 0);
@@ -117,12 +120,14 @@ macro "Line Color Coder with Labels"{
 		restrictLines= Dialog.getRadioButton;
 		overwriteImage= Dialog.getCheckbox;
 		makeAnimStack= Dialog.getCheckbox;
+		singleLine= Dialog.getCheckbox;
 		frameSkip= Dialog.getNumber;
 		lineWidth= Dialog.getNumber;
 		if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
 		unitLabel = Dialog.getChoice();
-		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
-		numLabels= Dialog.getNumber;
+		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
+		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
+		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice= Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
 		fontStyle = Dialog.getChoice;
@@ -144,7 +149,7 @@ macro "Line Color Coder with Labels"{
 		else rampH = rampChoice;
 	
 		range = split(rangeS, "-");
-		if (range.length==1) {
+		if (lengthOf(range)==1) {
 			min= NaN; max= parseFloat(range[0]);
 		} else {
 			min= parseFloat(range[0]); max= parseFloat(range[1]);
@@ -188,65 +193,95 @@ macro "Line Color Coder with Labels"{
 	if (unitLabel=="None") unitLabel = ""; 
 	parameterLabel = stripUnitFromString(parameter);
 	unitLabel= cleanLabel(unitLabel);
-	/*
-		Create LUT-map legend
-	*/
-	rampW = round(rampH/8); canvasH = round(4*fontSize +rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
-	if (statsRampLines || minmaxLines) tickL /= 2;
+	/*	Create LUT-map legend	*/
+	rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
+	if (statsRampLines || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
 	tickLR = round(tickL * statsRampTicks/100);
 	getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 	call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
 	newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
+	/* ramp color/gray range is horizontal only so must be rotated later */
+	if (revLut) run("Flip Horizontally");
 	tR = getTitle; /* short variable label for ramp */
 	lineColors = loadLutColors(lut);/* load the LUT as a hexColor array: requires function */
 	/* continue the legend design */
 	setColor(0, 0, 0);
 	setBackgroundColor(255, 255, 255);
-	setLineWidth(rampLW);
 	setFont(fontName, fontSize, fontStyle);
-	if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not gray */
-	if (ticks) { /* left & right borders */
-		drawLine(0, 0, rampH, 0);
-		drawLine(0, rampW-1, rampH, rampW-1);
-	} else
+	if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
+	setLineWidth(rampLW*2);
+	if (ticks) {
 		drawRect(0, 0, rampH, rampW);
-	if (!revLut) run("Rotate 90 Degrees Left");
-	else run("Rotate 90 Degrees Right");
+		/* The next steps add the top and bottom ticks */
+		rampWT = rampW + 2*rampLW;
+		run("Canvas Size...", "width="+ rampH +" height="+ rampWT +" position=Top-Center");
+		drawLine(0, rampW-1, 0,  rampW-1 + 2*rampLW); /* left/bottom tick - remember coordinate range is one less then max dimension because coordinates start at zero */
+		drawLine(rampH-1, rampW-1, rampH-1, rampW + 2*rampLW - 1); /* right/top tick */
+	}
+	run("Rotate 90 Degrees Left");
 	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
-	
 	if (dpChoice=="Auto")
 		decPlaces = autoCalculateDecPlaces(decPlaces);
 	else if (dpChoice=="Manual") 
 		decPlaces=getNumber("Choose Number of Decimal Places", 0);
 	else if (dpChoice=="Scientific")
 		decPlaces = -1;
-	else decPlaces = dpChoice;	
-		
-	/* draw ticks and values */
+	else decPlaces = dpChoice;
+	if (parameter=="Object") decPlaces = 0; /* This should be an integer */
+	/*
+	draw ticks and values */
+	rampOffset = (getHeight-rampH)/2; /* getHeight-rampH ~ 2 * fontSize */
 	step = rampH;
 	if (numLabels>2) step /= (numLabels-1);
+	setLineWidth(rampLW);
+	/* now to see if the selected range values are within 98% of actual */
+	if (0.98*min>arrayMin || max<0.98*arrayMax) minmaxOOR = true;
+	else minmaxOOR = false;
+	if (min<0.98*arrayMin || 0.98*max>arrayMax) minmaxIOR = true;
+	else minmaxIOR = false;
+	if (minmaxIOR && minmaxLines) minmaxLines = true;
+	else minmaxLines = false;
 	for (i=0; i<numLabels; i++) {
-		yPos = floor(fontSize/2 + rampH - i*step + 1.5*fontSize);
+		yPos = rampH + rampOffset - i*step -1; /* minus 1 corrects for coordinates starting at zero */
 		rampLabel = min + (max-min)/(numLabels-1) * i;
 		rampLabelString = removeTrailingZerosAndPeriod(d2s(rampLabel,decPlaces));
-		if (i==0 && min>arrayMin) {
-			rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); // adding 1 to dp makes sure range is different
-			rampLabelString = rampExt + "-" + rampLabelString; 
+		if (minmaxIOR) {
+			/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
+			if (i==0 && min>arrayMin) {
+				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
+				rampLabelString = rampExt + "-" + rampLabelString; 
+			}if (i==numLabels-1 && max<arrayMax) {
+				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
+				rampLabelString += "-" + rampExt; 
+			}
 		}
-		if (i==numLabels-1 && max<arrayMax) {
-			rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
-			rampLabelString += "-" + rampExt; 
-		}
-		// above we add overrun labels if the true data extends beyond the ramp
-		drawString(rampLabelString, rampW+4, round(yPos+fontSize/2));
+		drawString(rampLabelString, rampW+4*rampLW, round(yPos+fontSize/2));
 		if (ticks) {
-			if (i==0 || i==numLabels-1)	drawLine(0, yPos, rampW-1, yPos);
-			else {
-				drawLine(0, yPos, tickL, yPos);					// left tick
-				drawLine(rampW-1-tickL, yPos, rampW+1, yPos); // right tick extends over border by 1 pixel as subtle cross-tick
+			if (i > 0 && i < numLabels-1) {
+				setLineWidth(rampLW);
+				drawLine(0, yPos, tickL, yPos);					/* left tick */
+				drawLine(rampW-1-tickL, yPos, rampW, yPos);
+				setLineWidth(rampLW/2);
+				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
 			}
 		}
 	}
+	/* draw minor ticks */
+	if (ticks && minorTicks > 0) {
+		minorTickStep = step/minorTicks;
+		for (i=0; i<numLabels*minorTicks; i++) {
+			if (i > 0 && i < (((numLabels-1)*minorTicks))) {
+				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starteding at zero */
+				setLineWidth(round(rampLW/4));
+				drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
+										  
+																																	  
+				drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
+				setLineWidth(rampLW); /* reset line width */
+			}
+		}
+	}
+	/* end draw minor ticks */
 	/*  now draw the additional ramp lines */
 	if (minmaxLines || statsRampLines) {
 		setBatchMode("exit and display");
@@ -387,8 +422,16 @@ macro "Line Color Coder with Labels"{
 						drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
 						frameSkipCounter += 1;
 						if (frameSkipCounter==frameSkip) {
-							if (makeAnimStack) addImageToStack("animStack",workingT);
-							frameSkipCounter = 0;
+							if (makeAnimStack) {
+								if (!singleLine)	addImageToStack("animStack",workingT);
+								else {
+									newImage("tempFrame", "RGB white", imageWidth, imageHeight, 1);
+									drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
+									addImageToStack("animStack","tempFrame");
+									closeImageByTitle("tempFrame");
+								}
+							}
+						frameSkipCounter = 0;
 						}
 					}
 				}
@@ -396,14 +439,22 @@ macro "Line Color Coder with Labels"{
 					drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
 					frameSkipCounter += 1;
 					if (frameSkipCounter==frameSkip) {
-						if (makeAnimStack) addImageToStack("animStack",workingT);
+						if (makeAnimStack) {
+							if (!singleLine)	addImageToStack("animStack",workingT);
+							else {
+								newImage("tempFrame", "RGB white", imageWidth, imageHeight, 1);
+								drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
+								addImageToStack("animStack","tempFrame");
+								closeImageByTitle("tempFrame");
+							}
+						}
 						frameSkipCounter = 0;
 					}
 				}
 			}
 		}
 	}
-	tNC = getTitle();
+	// tNC = getTitle();
 	
 	Dialog.create("Combine Labeled Image and Legend?");
 		if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
@@ -421,7 +472,7 @@ macro "Line Color Coder with Labels"{
 		}
 		srW = getWidth;
 		comboW = srW + imageWidth;
-		selectWindow(tNC);
+		selectWindow(workingT);
 		if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
 		run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
 		makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
@@ -429,7 +480,7 @@ macro "Line Color Coder with Labels"{
 		else run("Image to Selection...", "image=" + tR + " opacity=100"); // can use "else" here because we have already eliminated the "No" option
 		run("Flatten");
 		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); // restores gray if all gray settings
-		rename(tNC + "+ramp");
+		rename(workingT + "+ramp");
 		closeImageByTitle("scaled_ramp");
 		closeImageByTitle("temp_combo");
 		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
@@ -445,6 +496,7 @@ macro "Line Color Coder with Labels"{
 		hideResultsAs(tableUsed);
 	}
 	setBatchMode("exit & display");
+	run("Collect Garbage");
 	showStatus("Line Drawing Macro Finished");
 	/*
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
@@ -471,7 +523,7 @@ macro "Line Color Coder with Labels"{
 	function checkForAnyResults() {
 		if (nResults==0 && (getValue("results.count"))==0){
 			nonImageWindowList = getList("window.titles");
-			if (nonImageWindowList.length==0) {
+			if (lengthOf(nonImageWindowList)==0) {
 				Dialog.create("No Results to Work With");
 				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following colums in any order:\n   1.\) The paramenter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
 				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit"); 
@@ -502,7 +554,7 @@ macro "Line Color Coder with Labels"{
 				restoreExit("Your have selected \"Exit\", perhaps now change name of your table to \"Results\"");
 			}else {
 				nonImageWindowList = getList("window.titles");
-				if (nonImageWindowList.length==0) restoreExit("Whoops, no other tables either");
+				if (lengthOf(nonImageWindowList)==0) restoreExit("Whoops, no other tables either");
 				Dialog.create("Select table to analyze...");
 				Dialog.addChoice("Select Table to Activate", nonImageWindowList);
 				Dialog.show();
@@ -514,7 +566,7 @@ macro "Line Color Coder with Labels"{
 		}
 		else if ((getValue("results.count"))!=0 && nResults==0) {
 			nonImageWindowList = getList("window.titles");
-			if (list.length==0) restoreExit("Whoops, no other tables either");
+			if (lengthOf(list)==0) restoreExit("Whoops, no other tables either");
 			Dialog.create("Select table to analyze...");
 			Dialog.addChoice("Select Table to Activate", nonImageWindowList);
 			Dialog.show();
@@ -583,9 +635,9 @@ macro "Line Color Coder with Labels"{
 	}
 	function filterArrayByContents(inputArray,filterString1,filterString2) {
 		arrayLengthCounter = 0; /* reset row counter */
-		outputArray = newArray(inputArray.length);
+		outputArray = newArray(lengthOf(inputArray));
 		pointsRowCounter = 0;
-		for (a=0; a<outputArray.length; a++){
+		for (a=0; a<lengthOf(outputArray); a++){
 			if((indexOf(inputArray[a], filterString1))>= 0 || (indexOf(inputArray[a], filterString2))>= 0) {  /* filter by intensity label */
 					outputArray[pointsRowCounter] = inputArray[a];
 					pointsRowCounter += 1;
@@ -647,10 +699,10 @@ macro "Line Color Coder with Labels"{
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
 		/* A list of frequently used luts for the top of the list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
-		baseLuts = newArray(preferredLuts.length);
+		baseLuts = newArray(lengthOf(preferredLuts));
 		baseLutsCount = 0;
-		for (i=0; i<preferredLuts.length; i++) {
-			for (j=0; j<defaultLuts.length; j++) {
+		for (i=0; i<lengthOf(preferredLuts); i++) {
+			for (j=0; j<lengthOf(defaultLuts); j++) {
 				if (preferredLuts[i]==defaultLuts[j]) {
 					baseLuts[baseLutsCount] = preferredLuts[i];
 					baseLutsCount += 1;
@@ -701,8 +753,10 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function restoreExit(message){ /* clean up before aborting macro then exit */
+		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* clean up before exiting */
 		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		run("Collect Garbage");
 		exit(message);
 	}
 	function restoreResultsFrom(deactivatedResults) {

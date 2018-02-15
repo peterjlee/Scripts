@@ -45,8 +45,8 @@ macro "ROI Color Coder with Labels"{
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
-	headingsWithRange= newArray(headings.length);
-	for (i=0; i<headings.length; i++) {
+	headingsWithRange= newArray(lengthOf(headings));
+	for (i=0; i<lengthOf(headings); i++) {
 		resultsColumn = newArray(items);
 		for (j=0; j<items; j++)
 			resultsColumn[j] = getResult(headings[i], j);
@@ -129,7 +129,7 @@ macro "ROI Color Coder with Labels"{
 	else rampH = rampChoice;
 	
 	range = split(rangeS, "-");
-	if (range.length==1) {
+	if (lengthOf(range)==1) {
 		min= NaN; max= parseFloat(range[0]);
 	} else {
 		min= parseFloat(range[0]); max= parseFloat(range[1]);
@@ -534,10 +534,10 @@ if (minmaxIOR) {
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
 		/* A list of frequently used luts for the top of the list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
-		baseLuts = newArray(preferredLuts.length);
+		baseLuts = newArray(lengthOf(preferredLuts));
 		baseLutsCount = 0;
-		for (i=0; i<preferredLuts.length; i++) {
-			for (j=0; j<defaultLuts.length; j++) {
+		for (i=0; i<lengthOf(preferredLuts); i++) {
+			for (j=0; j<lengthOf(defaultLuts); j++) {
 				if (preferredLuts[i]==defaultLuts[j]) {
 					baseLuts[baseLutsCount] = preferredLuts[i];
 					baseLutsCount += 1;

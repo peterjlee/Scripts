@@ -71,8 +71,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	fontSize = rampH/28; /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
-	headingsWithRange= newArray(headings.length);
-	for (i=0; i<headings.length; i++) {
+	headingsWithRange= newArray(lengthOf(headings));
+	for (i=0; i<lengthOf(headings); i++) {
 		resultsColumn = newArray(items);
 		for (j=0; j<items; j++)
 			resultsColumn[j] = getResult(headings[i], j);
@@ -159,7 +159,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampChoice;
 	range = split(rangeS, "-");
-	if (range.length==1) {
+	if (lengthOf(range)==1) {
 		min= NaN; max= parseFloat(range[0]);
 	} else {
 		min= parseFloat(range[0]); max= parseFloat(range[1]);
@@ -957,7 +957,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		setResult("ROIctr_Y\(px\)", i, round(Ry + Rheight/2));
 		Roi.getContainedPoints(RPx, RPy); /* this includes holes when ROIs are used so no hole filling is needed */
 		newImage("Contained Points "+i,"8-bit black",Rwidth,Rheight,1); /* give each sub-image a unique name for debugging purposes */
-		for (j=0; j<RPx.length; j++)
+		for (j=0; j<lengthOf(RPx); j++)
 			setPixel(RPx[j]-Rx, RPy[j]-Ry, 255);
 		selectWindow("Contained Points "+i);
 		run("BinaryThin2 ", "kernel_a='0 2 2 0 1 1 0 0 2 ' kernel_b='0 0 2 0 1 1 0 2 2 ' rotations='rotate 45' iterations=-1 white");
@@ -1030,19 +1030,19 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		else {
 			pluginList = getFileList(pluginDir);
-			subFolderList = newArray(pluginList.length);
-			for (i=0; i<pluginList.length; i++) {
+			subFolderList = newArray(lengthOf(pluginList));
+			for (i=0; i<lengthOf(pluginList); i++) {
 				if (endsWith(pluginList[i], "/")) {
 					subFolderList[subFolderCount] = pluginList[i];
 					subFolderCount = subFolderCount +1;
 				}
 			}
 			subFolderList = Array.slice(subFolderList, 0, subFolderCount);
-			for (i=0; i<subFolderList.length; i++) {
+			for (i=0; i<lengthOf(subFolderList); i++) {
 				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
 					pluginCheck = true;
 					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-					i = subFolderList.length;
+					i = lengthOf(subFolderList);
 				}
 			}
 		}
@@ -1268,10 +1268,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
 		/* A list of frequently used luts for the top of the list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
-		baseLuts = newArray(preferredLuts.length);
+		baseLuts = newArray(lengthOf(preferredLuts));
 		baseLutsCount = 0;
-		for (i=0; i<preferredLuts.length; i++) {
-			for (j=0; j<defaultLuts.length; j++) {
+		for (i=0; i<lengthOf(preferredLuts); i++) {
+			for (j=0; j<lengthOf(defaultLuts); j++) {
 				if (preferredLuts[i]==defaultLuts[j]) {
 					baseLuts[baseLutsCount] = preferredLuts[i];
 					baseLutsCount += 1;

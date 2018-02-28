@@ -21,7 +21,10 @@
 	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
 	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
 	+ v180104 Updated functions to latest versions.
-	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.																					  
+	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
+	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
+	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
+	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -215,8 +218,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			/* The next steps add the top and bottom ticks */
 			rampWT = rampW + 2*rampLW;
 			run("Canvas Size...", "width="+ rampH +" height="+ rampWT +" position=Top-Center");
-			drawLine(0, rampW-1, 0,  rampW-1 + 2*rampLW); /* left/bottom tick - remember coordinate range is one less then max dimension because coordinates start at zero */
-			drawLine(rampH-1, rampW-1, rampH-1, rampW + 2*rampLW - 1); /* right/top tick */
+			setLineWidth(rampLW*1.5);
+			drawLine(0, 0, 0, rampW-1 + rampLW); /* Draw full width line at top an bottom */
+			drawLine(rampH-1, 0, rampH-1, rampW-1 + rampLW); /* Draw full width line at top an d bottom */
 		}
 		run("Rotate 90 Degrees Left");
 		run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
@@ -261,7 +265,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					setLineWidth(rampLW);
 					drawLine(0, yPos, tickL, yPos);					/* left tick */
 					drawLine(rampW-1-tickL, yPos, rampW, yPos);
-					setLineWidth(rampLW/2);
 					drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
 				}
 			}
@@ -271,7 +274,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			minorTickStep = step/minorTicks;
 			for (i=0; i<numLabels*minorTicks; i++) {
 				if (i > 0 && i < (((numLabels-1)*minorTicks))) {
-					yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starteding at zero */
+					yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 					setLineWidth(round(rampLW/4));
 					drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
 											  
@@ -330,7 +333,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
 				}
 			}
+			run("Duplicate...", "title=StatsText");										  
 			/* now use a mask to create black outline around white text to stand out against ramp colors */
+			selectWindow("label_mask");							  
 			rampOutlineStroke = maxOf(1,round(rampLW/2));
 			setThreshold(0, 128);
 			setOption("BlackBackground", false);
@@ -338,15 +343,27 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			selectWindow(tR);
 			run("Select None");
 			getSelectionFromMask("label_mask");
+			getSelectionBounds(maskX, maskY, null, null);
+			setSelectionLocation(maskX+rampOutlineStroke, maskY+rampOutlineStroke); /* offset selection to create shadow effect */
 			run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
 			setBackgroundColor(0, 0, 0);
 			run("Clear");
+			run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
+			run("Gaussian Blur...", "sigma=[rampOutlineStroke]");	
 			run("Select None");
 			getSelectionFromMask("label_mask");
 			setBackgroundColor(255, 255, 255);
 			run("Clear");
 			run("Select None");
+			/* The following steps smooths the interior of the text labels */
+			selectWindow("StatsText");
+			getSelectionFromMask("label_mask");
+			run("Make Inverse");
+			run("Invert");
+			run("Select None");
+			imageCalculator("Min",tR,"StatsText");
 			closeImageByTitle("label_mask");
+			closeImageByTitle("StatsText");
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
 			setColor(0,0,0);
@@ -419,7 +436,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/* First: set default label settings */
 		outlineStrokePC = 6; /* default outline stroke: % of font size */
 		shadowDropPC = 10;  /* default outer shadow drop: % of font size */
-		dIShOPC = 5; /* default inner shadow drop: % of font size */
+		dIShOPC = 4; /* default inner shadow drop: % of font size */
 		offsetX = maxOf(1, round(imageWidth/150)); /* default offset of label from edge */
 		offsetY = maxOf(1, round(imageHeight/150)); /* default offset of label from edge */
 		fontColor = "white";
@@ -450,7 +467,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of font size");
 			Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of font size");
 			Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
-			Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
+			Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 15,0,3,"%");
 			Dialog.setInsets(3, 0, 3);
 			if (isNaN(getResult("mc_X\(px\)",0))) {
 				Dialog.addChoice("Object labels at: ", newArray("ROI Center", "Morphological Center"), "ROI Center");
@@ -544,7 +561,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 																				  
 			fontArray[i] = lFontS;
 		}
+		run("Select None");
 		roiManager("show none");
+		selectWindow("label_mask");
+		run("Duplicate...", "title=object_labels");
+		selectWindow("label_mask");
 		setThreshold(0, 128);
 		setOption("BlackBackground", false);
 		run("Convert to Mask");
@@ -589,9 +610,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		selectWindow(flatImage);
 		/* Create outline around text */
 		getSelectionFromMask("label_mask");
+		getSelectionBounds(maskX, maskY, null, null);
+		setSelectionLocation(maskX+outlineStroke-1, maskY+outlineStroke-1); /* offset selection to create 3D effect */
 		run("Enlarge...", "enlarge=[outlineStroke] pixel");
 		setBackgroundFromColorName(outlineColor);
 		run("Clear");
+		run("Enlarge...", "enlarge=[outlineStroke] pixel");
+		run("Gaussian Blur...", "sigma=[rampOutlineStroke]");
 		run("Select None");
 		/* Create text */
 		getSelectionFromMask("label_mask");
@@ -604,9 +629,17 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (isOpen("inner_shadow") && innerShadowDarkness<0)		/* Glow */
 			imageCalculator("Add", flatImage,"inner_shadow");
 		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+		/* The following steps smooths the interior of the text labels */
+		selectWindow("object_labels");
+		getSelectionFromMask("label_mask");
+		run("Make Inverse");
+		run("Invert");
+		run("Select None");
+		imageCalculator("Min",flatImage,"object_labels");
 		closeImageByTitle("shadow");
 		closeImageByTitle("inner_shadow");
 		closeImageByTitle("label_mask");
+		closeImageByTitle("object_labels");
 		if (stroke>=0) flatImage = getTitle();
 	}
 	/*	
@@ -839,6 +872,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				paraLabelY += round(1.2 * statsLabFontSize);		
 			}
 		}
+		run("Duplicate...", "title=summary_text");
+		selectWindow("label_mask");
 		setThreshold(0, 128);
 		setOption("BlackBackground", false);
 		run("Convert to Mask");
@@ -857,9 +892,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		run("Select None");
 		/* Create outline around text */
 		getSelectionFromMask("label_mask");
+		getSelectionBounds(maskX, maskY, null, null);
+		setSelectionLocation(maskX+outlineStroke-1, maskY+outlineStroke-1); /* offset selection to create shadow effect */
 		run("Enlarge...", "enlarge=[outlineStroke] pixel");
 		setBackgroundFromColorName(outlineColor);
 		run("Clear");
+		run("Enlarge...", "enlarge=[outlineStroke] pixel");
+		run("Gaussian Blur...", "sigma=[rampOutlineStroke]");
 		run("Select None");
 		/* Create text */
 		getSelectionFromMask("label_mask");
@@ -870,10 +909,18 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (isOpen("inner_shadow") && summLabelInnerShadowDarkness>0)
 			imageCalculator("Subtract", flatImage,"inner_shadow");
 		if (isOpen("inner_shadow") && summLabelInnerShadowDarkness<0)	/* Glow */
-			imageCalculator("Add", flatImage,"inner_shadow");
+			imageCalculator("Add",flatImage,"inner_shadow");
+		/* The following steps smooths the interior of the text labels */
+		selectWindow("summary_text");
+		getSelectionFromMask("label_mask");
+		run("Make Inverse");
+		run("Invert");
+		run("Select None");
+		imageCalculator("Min",flatImage,"summary_text");
 		closeImageByTitle("shadow");
 		closeImageByTitle("inner_shadow");
 		closeImageByTitle("label_mask");
+		closeImageByTitle("summary_text");
 		}	
 /*	
 		End of Optional Summary section

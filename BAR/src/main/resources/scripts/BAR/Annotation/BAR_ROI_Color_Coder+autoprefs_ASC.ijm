@@ -14,12 +14,14 @@
 	 + v170315 (updates to AR v.5.4 version i.e. includes log option).
 	 + v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 	 + v180104 Updated functions to latest versions.
+	 + v180228 Fixed missing ramp labels.
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
 	saveSettings;
+   
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
-	// run("Remove Overlay");		   
+	// run("Remove Overlay");
 	if (nImages==0){
 		showMessageWithCancel("No images open or the ROI Manager is empty...\n"
         + "Run demo? (Results Table and ROI Manager will be cleared)");
@@ -31,8 +33,8 @@
 	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
 	setOption("BlackBackground", false);
 	run("Appearance...", " "); /* do not use Inverting LUT */
-	/*	The above should be the defaults but this makes sure (black particles on a white background)
-		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
+	if (is("Inverting LUT")==true) run("Invert LUT"); /* more effectively removes Inverting LUT */										   
+	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
@@ -117,23 +119,23 @@
 	Dialog.show;
 		parameterWithLabel= Dialog.getChoice;
 		parameter= substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
-		useLog = Dialog.getCheckbox;
+		useLog= Dialog.getCheckbox;
 		lut= Dialog.getChoice;
 		revLut= Dialog.getCheckbox;
 		stroke= Dialog.getNumber;
 		alpha= pad(toHex(255*Dialog.getNumber/100));
-		unitLabel = Dialog.getChoice();
-		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
-		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
-		dpChoice = Dialog.getChoice;
+		unitLabel= Dialog.getChoice();
+		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
+		numLabels= Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
+		dpChoice= Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
-		fontStyle = Dialog.getChoice;
+		fontStyle= Dialog.getChoice;
 			if (fontStyle=="unstyled") fontStyle="";
 		fontName= Dialog.getChoice;
-		fontSize = Dialog.getNumber;
+		fontSize= Dialog.getNumber;
 		ticks= Dialog.getCheckbox;
 		rotLegend= Dialog.getCheckbox;
-		minmaxLines = Dialog.getCheckbox;
+		minmaxLines= Dialog.getCheckbox;
 		statsRampLines= Dialog.getCheckbox;
 		statsRampTicks= Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
@@ -150,12 +152,10 @@
 		max= parseFloat(range[1]);
 	}
 	if (indexOf(rangeS, "-")==0) min = 0 - min; /* checks to see if min is a negative value (lets hope the max isn't). */
-	
-	fontSR2 = fontSize * thinLinesFontSTweak/100;
+		fontSR2 = fontSize * thinLinesFontSTweak/100;
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
-	
-	/* get values for chosen parameter */
+		/* get values for chosen parameter */
 	values= newArray(items);
 	if (parameter!="Object"){
 		for (i=0; i<items; i++) {
@@ -224,13 +224,11 @@
 	tickLR = round(tickL * statsRampTicks/100);
 	getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 	call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
-	
-	newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
+		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
 	/* ramp color/gray range is horizontal only so must be rotated later */
 	if (revLut) run("Flip Horizontally");
 	tR = getTitle; /* short variable label for ramp */
-	
-	roiColors= loadLutColors(lut); /* load the LUT as a hexColor array: requires function */
+		roiColors= loadLutColors(lut); /* load the LUT as a hexColor array: requires function */
 	/* continue the legend design */
 	setColor(0, 0, 0);
 	setBackgroundColor(255, 255, 255);
@@ -261,13 +259,13 @@
 	if (numLabels>2) step /= (numLabels-1);
     setLineWidth(rampLW);
 	/* now to see if the selected range values are within 98% of actual */
-	if (arrayMin-min>0.02*displayedRange) minIOR = true; /* true minimum is signficantly above ramp minimum */
+	if (arrayMin-min>0.02*displayedRange) minIOR = true; /* true minimum is significantly above ramp minimum */
 	else minIOR = false;
-	if (max-arrayMax>0.02*displayedRange) maxIOR = true; /* true maximum is signficantly below ramp maximum */
+	if (max-arrayMax>0.02*displayedRange) maxIOR = true; /* true maximum is significantly below ramp maximum */
 	else maxIOR = false;
-	if (min-arrayMin>0.02*displayedRange) minOOR = true; /* true minimum is signficantly below ramp minimum */
+	if (min-arrayMin>0.02*displayedRange) minOOR = true; /* true minimum is significantly below ramp minimum */
 	else minOOR = false;
-	if (arrayMax-max>0.02*displayedRange) maxOOR = true; /* true maximum is signficantly below ramp maximum */
+	if (arrayMax-max>0.02*displayedRange) maxOOR = true; /* true maximum is significantly below ramp maximum */
 	else maxOOR = false;
 	if (maxOOR && minOOR) minmaxLines = false;
 //
@@ -298,6 +296,8 @@
 				setLineWidth(rampLW/2);
 				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
 			}
+		}
+	}
 	/* now add lines and the true min and max and for stats if chosen in previous dialog */
 	rampVOffset = 2 * fontSize;
 	if (minmaxLines || statsRampLines) {
@@ -401,11 +401,9 @@
 	run("Auto Crop (guess background color)");
 	setBatchMode("true");
 	getDisplayedArea(null, null, canvasW, canvasH);
-	
-	canvasW += round(imageWidth/150); canvasH += round(imageHeight/150); /* add padding to legend box */
+		canvasW += round(imageWidth/150); canvasH += round(imageHeight/150); /* add padding to legend box */
 	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center");
-	
-	/*
+		/*
 		iterate through the ROI Manager list and colorize ROIs
 	*/
 	selectImage(id);
@@ -445,15 +443,13 @@
 			+ "Some values from the \""+ parameter +"\" column could not be retrieved.\n"
 			+ countNaN +" ROI(s) were labeled with a default color.");
 	roiManager("Show All without labels");
-	
-	Dialog.create("Combine Labeled Image and Legend?");
+		Dialog.create("Combine Labeled Image and Legend?");
 		if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
 		else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); /* 93% is close enough */
 		else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image");
 		Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
 	Dialog.show();
-	
-	createCombo = Dialog.getChoice();
+		createCombo = Dialog.getChoice();
 	if (createCombo!="No") {
 		selectWindow(tR);
 		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
@@ -481,8 +477,7 @@
 		closeImageByTitle("temp_combo");
 		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
 	}
-	
-	else run("Flatten");
+		else run("Flatten");
 	if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 	setBatchMode("exit & display");
 	restoreSettings;
@@ -737,13 +732,5 @@
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 		}
-  
-	   
-																
-																																					
-																																																																	 
-																																		  
-											
-							 
-  
-		return unitLabel;
+	return unitLabel;
+	}

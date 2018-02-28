@@ -15,7 +15,12 @@ macro "ROI Color Coder with Labels"{
 	requires("1.47r");
 	saveSettings;
 	/* Some cleanup */
-	close("*Ramp"); /* closes previous ramp windows */
+	close("*Ramp"); /* closes previous ramp windows */  
+	if (nImages==0){
+		showMessageWithCancel("No images open or the ROI Manager is empty...\n"
+        + "Run demo? (Results Table and ROI Manager will be cleared)");
+	    runDemo();
+	}		   
 	run("Select None");
 	/*
 	Set options for black objects on white background as this works better for publications */
@@ -28,17 +33,19 @@ macro "ROI Color Coder with Labels"{
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
+	getPixelSize(unit, pixelWidth, pixelHeight);										 
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
 	nRES = nResults;
+	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */	  
 	if (nRES!=nROIs) restoreExit("Exit: Results table \(" + nRES + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	
 	setBatchMode(true);
 	tN = stripExtensionsFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
-	tN = unCleanLabel(tN); /* remove special characters to might cause issues saving file */
+	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	fontSize = rampH/28; /* default fonts size based on imageHeight */
@@ -57,6 +64,7 @@ macro "ROI Color Coder with Labels"{
 		headingsWithRange[0] = "ID" + ":  1 - " + items; /* relabels ImageJ ID column */
 	/* create the dialog prompt */
 	Dialog.create("ROI Color Coder: " + tN);
+	if (menuLimit > 752) {  /* menu bloat allowed only for small screens */										 
 	Dialog.setInsets(6, 0, -15);
 	macroP = getInfo("macro.filepath");
 	/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
@@ -64,6 +72,7 @@ macro "ROI Color Coder with Labels"{
 	else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
 	Dialog.addMessage("Filename: " + tN);
 	Dialog.setInsets(6, 0, 6);
+	}						
 	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 	Dialog.addChoice("LUT:", luts, luts[0]);
@@ -75,7 +84,6 @@ macro "ROI Color Coder with Labels"{
 	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
 	Dialog.setInsets(12, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):______________");
-	getPixelSize(unit, pixelWidth, pixelHeight);
 	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 	Dialog.setInsets(-42, 197, -5);
@@ -83,8 +91,8 @@ macro "ROI Color Coder with Labels"{
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.addNumber("No. of labels:", 10, 0, 3, "(Defines major ticks interval)");
-	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2"), "Auto");
+	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
+	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
 	Dialog.setInsets(-38, 195, 0);
 	Dialog.addMessage(rampH + " pxls suggested\nby image height");
@@ -109,15 +117,15 @@ macro "ROI Color Coder with Labels"{
 		revLut= Dialog.getCheckbox;
 		stroke= Dialog.getNumber;
 		alpha= pad(toHex(255*Dialog.getNumber/100));
-		unitLabel = Dialog.getChoice();
-		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
-		numLabels = Dialog.getNumber;
+		unitLabel= Dialog.getChoice();
+		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
+		numLabels= Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice= Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
-		fontStyle = Dialog.getChoice;
+		fontStyle= Dialog.getChoice;
 			if (fontStyle=="unstyled") fontStyle="";
 		fontName= Dialog.getChoice;
-		fontSize = Dialog.getNumber;
+		fontSize= Dialog.getNumber;
 		ticks= Dialog.getCheckbox;
 		rotLegend= Dialog.getCheckbox;
 		minmaxLines = Dialog.getCheckbox;
@@ -125,7 +133,7 @@ macro "ROI Color Coder with Labels"{
 		statsRampTicks= Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
 	
-	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
+	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampChoice;
 	
 	range = split(rangeS, "-");
@@ -142,10 +150,16 @@ macro "ROI Color Coder with Labels"{
 	
 	/* get values for chosen parameter */
 	values= newArray(items);
-	for (i=0; i<items; i++) values[i]= getResult(parameter,i);
+	if (parameter!="Object"){
+		for (i=0; i<items; i++) {
+			values[i] = getResult(parameter,i);
+		}
+	}
+	else for (i=0; i<items; i++) values[i] = i+1;
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	if (isNaN(min)) min= arrayMin;
 	if (isNaN(max)) max= arrayMax;
+	displayedRange = max-min;
 	coeffVar = arraySD*100/arrayMean;
 	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
 	arrayMedian = sortedValues[round(items/2)];  /* you could extend this obviously to provide quartiles but at that point you might as well use Excel */

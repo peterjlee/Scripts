@@ -20,6 +20,7 @@
 	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
 	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
 	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
+	+ v180302 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.		  
  */
  
 macro "ROI Color Coder with Scaled Labels"{
@@ -337,6 +338,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			run("Select None");
 			getSelectionFromMask("label_mask");
 			getSelectionBounds(maskX, maskY, null, null);
+			if (rampOutlineStroke>0) rampOutlineOffset = maxOf(0, (rampOutlineStroke/2)-1);
 			setSelectionLocation(maskX+rampOutlineStroke, maskY+rampOutlineStroke); /* offset selection to create shadow effect */
 			run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
 			setBackgroundColor(0, 0, 0);
@@ -374,7 +376,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			getDisplayedArea(null, null, canvasW, canvasH);
 			run("Rotate 90 Degrees Left");
 			canvasW = getHeight + round(2.5*fontSize);
-			rampParameterLabel += ", " + rampUnitLabel;
+			if (rampUnitLabel!="") rampParameterLabel += ", " + rampUnitLabel;
 			rampParameterLabel = expandLabel(rampParameterLabel);
 			rampParameterLabel = replace(rampParameterLabel, fromCharCode(0x2009), " "); /* expand again now we have the space */
 			rampParameterLabel = replace(rampParameterLabel, "px", "pixels"); /* expand "px" used to keep Results columns narrower */
@@ -429,7 +431,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		/* First: set default label settings */
 		outlineStrokePC = 6; /* default outline stroke: % of font size */
 		shadowDropPC = 10;  /* default outer shadow drop: % of font size */
-		dIShOPC = 5; /* default inner shadow drop: % of font size */
+		dIShOPC = 4; /* default inner shadow drop: % of font size */
 		offsetX = maxOf(1, round(imageWidth/150)); /* default offset of label from edge */
 		offsetY = maxOf(1, round(imageHeight/150)); /* default offset of label from edge */
 		fontColor = "white";
@@ -460,7 +462,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of font size");
 			Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of font size");
 			Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
-			Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
+			Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 15,0,3,"%");
 			Dialog.setInsets(3, 0, 3);
 			if (isNaN(getResult("mc_X\(px\)",0))) {
 				Dialog.addChoice("Object labels at: ", newArray("ROI Center", "Morphological Center"), "ROI Center");
@@ -468,7 +470,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				Dialog.addMessage("If selected, morphological centers will be added to the results table.");
 			}
 			else Dialog.addChoice("Object Label At:", newArray("ROI Center", "Morphological Center"), "Morphological Center");
-			paraLocChoice = newArray("None", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
+			paraLocChoice = newArray("None", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
 			Dialog.addChoice("Location of Parameter Label \(\"None\" = No Parameter Title\):", paraLocChoice, paraLocChoice[1]);
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);			Dialog.show();
 			fontColor = Dialog.getChoice(); /* Object label color */
@@ -526,7 +528,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		}
 		flatImage = getTitle();
 		if (is("Batch Mode")==false) setBatchMode(true);
-		newImage("label_mask", "8-bit black", imageWidth, imageHeight, 1);
+		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 		// roiManager("show none");
 		/*
 		iterate through the ROI Manager list and draw scaled labels onto mask */
@@ -565,14 +567,6 @@ macro "ROI Color Coder with Scaled Labels"{
 			drawString(labelString, textOffset, textDrop);
 			fontArray[i] = lFontS;
 		}
-		run("Select None");
-		roiManager("show none");
-		selectWindow("label_mask");
-		run("Duplicate...", "title=object_labels");
-		selectWindow("label_mask");
-		setThreshold(0, 128);
-		setOption("BlackBackground", false);
-		run("Convert to Mask");
 		Array.getStatistics(fontArray, minFontSize, null, meanFontSize, null);
 			negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
 		if (shadowDrop<0) labelShadowDrop = round(shadowDrop * negAdj);
@@ -600,50 +594,10 @@ macro "ROI Color Coder with Scaled Labels"{
 		labelInnerShadowDrop = floor(minFontFactor * labelInnerShadowDrop);
 		labelInnerShadowDisp = floor(minFontFactor * labelInnerShadowDisp);
 		labelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
-		/*
-		Create drop labelShadow if desired */
-		if (labelShadowDrop!=0 || labelShadowDisp!=0)
-			createShadowDropFromMask5(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
-		/*	Create inner shadow if desired */
-		if (labelInnerShadowDrop!=0 || labelInnerShadowDisp!=0) 
-			createInnerShadowFromMask4(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
 		run("Select None");
-		/* Create outer shadow or glow */
-		if (isOpen("shadow") && shadowDarkness>0) imageCalculator("Subtract",flatImage,"shadow");
-		if (isOpen("shadow") && shadowDarkness<0) imageCalculator("Add", flatImage,"shadow");	/* Glow */
-		selectWindow(flatImage);
-		/* Create outline around text */
-		getSelectionFromMask("label_mask");
-		getSelectionBounds(maskX, maskY, null, null);
-		setSelectionLocation(maskX+outlineStroke-1, maskY+outlineStroke-1); /* offset selection to create 3D effect */
-		run("Enlarge...", "enlarge=[outlineStroke] pixel");
-		setBackgroundFromColorName(outlineColor);
-		run("Clear");
-		run("Enlarge...", "enlarge=[outlineStroke] pixel");
-		run("Gaussian Blur...", "sigma=[rampOutlineStroke]");
-		run("Select None");
-		/* Create text */
-		getSelectionFromMask("label_mask");
-		setBackgroundFromColorName(fontColor);
-		run("Clear");
-		run("Select None");
-		/* Create inner shadow if requested */
-		if (isOpen("inner_shadow") && innerShadowDarkness>0)
-			imageCalculator("Subtract",flatImage,"inner_shadow");
-		if (isOpen("inner_shadow") && innerShadowDarkness<0)		/* Glow */
-			imageCalculator("Add", flatImage,"inner_shadow");
-		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
-		/* The following steps smooths the interior of the text labels */
-		selectWindow("object_labels");
-		getSelectionFromMask("label_mask");
-		run("Make Inverse");
-		run("Invert");
-		run("Select None");
-		imageCalculator("Min",flatImage,"object_labels");
-		closeImageByTitle("shadow");
-		closeImageByTitle("inner_shadow");
-		closeImageByTitle("label_mask");
-		closeImageByTitle("object_labels");
+		roiManager("show none");
+		fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,shadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
+		closeImageByTitle("textImage");
 		if (stroke>=0) flatImage = getTitle();
 	/*	Now repeat with the Parameter Label over the top of the object labels */
 		negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
@@ -659,8 +613,8 @@ macro "ROI Color Coder with Scaled Labels"{
 		else labelInnerShadowDisp = innerShadowDisp;
 		if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
 		else labelInnerShadowBlur = innerShadowBlur;
-		/* convert font percentages to pixels */								  
-		fontFactor = meanFontSize/100;
+		/* convert font percentages to pixels */
+		fontFactor = paraLabFontSize/100;
 		outlineStroke = round(fontFactor * outlineStrokePC);
 		labelShadowDrop = floor(fontFactor * labelShadowDrop);
 		labelShadowDisp = floor(fontFactor * labelShadowDisp);
@@ -668,7 +622,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		labelInnerShadowDrop = floor(fontFactor * labelInnerShadowDrop);
 		labelInnerShadowDisp = floor(fontFactor * labelInnerShadowDisp);
 		labelInnerShadowBlur = floor(fontFactor * labelInnerShadowBlur);
-		newImage("label_mask", "8-bit black", imageWidth, imageHeight, 1);
+		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 		if (paraLabPos!="None") {				/* recombine units and labels that were used in Ramp */
 		if (unitLabel!="") label = parameterLabel + ", " + unitLabel;
 		else label = parameterLabel;
@@ -703,58 +657,8 @@ macro "ROI Color Coder with Scaled Labels"{
 		labelY = selEY;
 		setColorFromColorName("white");
 		drawString(label, labelX, labelY);
-		run("Duplicate...", "title=parameter_text");
-		selectWindow("label_mask");
-		setThreshold(0, 128);
-		setOption("BlackBackground", false);
-		run("Convert to Mask");
-		/*
-		Create parameter label drop shadow - no option dialog */
-			if (labelShadowDrop!=0 || labelShadowDisp!=0)
-				createShadowDropFromMask5(labelShadowDrop, labelShadowDisp, labelShadowBlur, shadowDarkness, outlineStroke);
-			/*	Create inner shadow if desired */
-			if (labelInnerShadowDrop!=0 || labelInnerShadowDisp!=0 || labelInnerShadowBlur!=0) 
-				createInnerShadowFromMask4(labelInnerShadowDrop, labelInnerShadowDisp, labelInnerShadowBlur, innerShadowDarkness);
-			/* Apply drop shadow or glow */
-			if (isOpen("shadow") && shadowDarkness>0)
-				imageCalculator("Subtract", flatImage,"shadow");
-			if (isOpen("shadow") && shadowDarkness<0)	/* Glow */
-				imageCalculator("Add", flatImage,"shadow");
-			run("Select None");
-			/* Create outline around text */
-			getSelectionFromMask("label_mask");
-			getSelectionBounds(maskX, maskY, null, null);
-			setSelectionLocation(maskX+outlineStroke-1, maskY+outlineStroke-1); /* offset selection to create shadow effect */
-			run("Enlarge...", "enlarge=[outlineStroke] pixel");
-			setBackgroundFromColorName(outlineColor);
-			run("Clear");
-			run("Enlarge...", "enlarge=[outlineStroke] pixel");
-			run("Gaussian Blur...", "sigma=[rampOutlineStroke]");
-			run("Select None");
-			/* Create text */
-			getSelectionFromMask("label_mask");
-			setBackgroundFromColorName(fontColor);
-			run("Clear");
-			run("Select None");
-			/* Create inner shadow or glow if requested */
-			if (isOpen("inner_shadow") && innerShadowDarkness>0)
-				imageCalculator("Subtract", flatImage,"inner_shadow");
-			if (isOpen("inner_shadow") && innerShadowDarkness<0)	/* Glow */
-				imageCalculator("Add", flatImage,"inner_shadow");
-			selectWindow(flatImage);
-			rename(tN + "_" + parameterLabel + "\+objectlabels");
-			flatImage = getTitle();
-			/* The following steps smooths the interior of the text labels */
-			selectWindow("parameter_text");
-			getSelectionFromMask("label_mask");
-			run("Make Inverse");
-			run("Invert");
-			run("Select None");
-			imageCalculator("Min",flatImage,"parameter_text");
-			closeImageByTitle("shadow");
-			closeImageByTitle("inner_shadow");
-			closeImageByTitle("label_mask");
-			closeImageByTitle("parameter_text");
+		fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,shadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
+		closeImageByTitle("textImage");
 		}
 		selectWindow(flatImage);
 	}
@@ -1088,6 +992,57 @@ macro "ROI Color Coder with Scaled Labels"{
 		string = replace(string, fromCharCode(0x00C2), ""); /* remove mystery Â */
 		string = replace(string, " ", fromCharCode(0x2009)); /* use this last so all spaces converted */
 		return string;
+	}
+	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* place text over image in a way that stands out, requires original flatImage and "textImage" */
+		selectWindow("textImage");
+		run("Duplicate...", "title=label_mask");
+		setThreshold(0, 128);
+		setOption("BlackBackground", false);
+		run("Convert to Mask");
+		/*
+		Create drop shadow if desired */
+		if (shadowDrop!=0 || shadowDisp!=0)
+			createShadowDropFromMask5(shadowDrop, shadowDisp, shadowBlur, shadowDarkness, outlineStroke);
+		/*	Create inner shadow if desired */
+		if (innerShadowDrop!=0 || innerShadowDisp!=0 || innerShadowBlur!=0) 
+			createInnerShadowFromMask4(innerShadowDrop, innerShadowDisp, innerShadowBlur, innerShadowDarkness);
+		/* Apply drop shadow or glow */
+		if (isOpen("shadow") && shadowDarkness>0)
+			imageCalculator("Subtract",flatImage,"shadow");
+		if (isOpen("shadow") && shadowDarkness<0)	/* Glow */
+			imageCalculator("Add",flatImage,"shadow");
+		run("Select None");
+		/* Create outline around text */
+		getSelectionFromMask("label_mask");
+		getSelectionBounds(maskX, maskY, null, null);
+		outlineStrokeOffset = maxOf(0,(outlineStroke/2)-1);
+		setSelectionLocation(maskX+outlineStrokeOffset, maskY+outlineStrokeOffset); /* offset selection to create shadow effect */
+		run("Enlarge...", "enlarge=[outlineStroke] pixel");
+		setBackgroundFromColorName(outlineColor);
+		run("Clear");
+		run("Enlarge...", "enlarge=[outlineStrokeOffset] pixel");
+		run("Gaussian Blur...", "sigma=[outlineStrokeOffset]");
+		run("Select None");
+		/* Create text */
+		getSelectionFromMask("label_mask");
+		setBackgroundFromColorName(fontColor);
+		run("Clear");
+		run("Select None");
+		/* Create inner shadow or glow if requested */
+		if (isOpen("inner_shadow") && innerShadowDarkness>0)
+			imageCalculator("Subtract", flatImage,"inner_shadow");
+		if (isOpen("inner_shadow") && innerShadowDarkness<0)	/* Glow */
+			imageCalculator("Add",flatImage,"inner_shadow");
+		/* The following steps smooths the interior of the text labels */
+		selectWindow("textImage");
+		getSelectionFromMask("label_mask");
+		run("Make Inverse");
+		run("Invert");
+		run("Select None");
+		imageCalculator("Min",flatImage,"textImage");
+		closeImageByTitle("shadow");
+		closeImageByTitle("inner_shadow");
+		closeImageByTitle("label_mask");
 	}
 /*
 	 Macro Color Functions

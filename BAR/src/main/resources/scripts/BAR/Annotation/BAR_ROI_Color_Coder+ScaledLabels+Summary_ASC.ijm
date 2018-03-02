@@ -25,14 +25,14 @@
 	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
 	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
 	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
-	+ v180301 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.
+	+ v180302 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
 	requires("1.47r");
 	saveSettings;
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
-	run("Remove Overlay");
+	// run("Remove Overlay");
 	if (nImages==0){
 		showMessageWithCancel("No images open or the ROI Manager is empty...\n"
         + "Run demo? (Results Table and ROI Manager will be cleared)");
@@ -278,8 +278,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 					setLineWidth(round(rampLW/4));
 					drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
-											  
-																																		  
 					drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
 					setLineWidth(rampLW); /* reset line width */
 				}
@@ -334,9 +332,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
 				}
 			}
-			run("Duplicate...", "title=StatsText");										  
+			run("Duplicate...", "title=stats_text");
 			/* now use a mask to create black outline around white text to stand out against ramp colors */
-			selectWindow("label_mask");							  
+			selectWindow("label_mask");
 			rampOutlineStroke = maxOf(1,round(rampLW/2));
 			setThreshold(0, 128);
 			setOption("BlackBackground", false);
@@ -358,14 +356,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			run("Clear");
 			run("Select None");
 			/* The following steps smooths the interior of the text labels */
-			selectWindow("StatsText");
+			selectWindow("stats_text");
 			getSelectionFromMask("label_mask");
 			run("Make Inverse");
 			run("Invert");
 			run("Select None");
-			imageCalculator("Min",tR,"StatsText");
+			imageCalculator("Min",tR,"stats_text");
 			closeImageByTitle("label_mask");
-			closeImageByTitle("StatsText");
+			closeImageByTitle("stats_text");
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
 			setColor(0,0,0);
@@ -484,7 +482,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.show();
 			fontColor = Dialog.getChoice(); /* Object label color */
 			fontSCorrection =  Dialog.getNumber()/100;
-			minLFontS = Dialog.getNumber(); 
+			minLFontS = Dialog.getNumber();
 			maxLFontS = Dialog.getNumber(); 
 			fontStyle = Dialog.getChoice();
 			fontName = Dialog.getChoice();
@@ -494,11 +492,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			shadowDrop = Dialog.getNumber();
 			shadowDisp = Dialog.getNumber();
 			shadowBlur = Dialog.getNumber();
-			labelShadowDarkness = Dialog.getNumber();
+			shadowDarkness = Dialog.getNumber();
 			innerShadowDrop = Dialog.getNumber();
 			innerShadowDisp = Dialog.getNumber();
 			innerShadowBlur = Dialog.getNumber();
-			labelInnerShadowDarkness = Dialog.getNumber();
+			innerShadowDarkness = Dialog.getNumber();
 			ctrChoice = Dialog.getChoice(); /* Choose ROI or morphological centers for object labels */
 			paraLabPos = Dialog.getChoice(); /* Parameter Label Position */
 			statsChoiceLines = Dialog.getNumber();
@@ -558,9 +556,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			textDrop = minOf(imageHeight,textDrop);
 			/* draw object label */
 			setColorFromColorName("white");
-							   
 			drawString(labelString, textOffset, textDrop);
-																				  
 			fontArray[i] = lFontS;
 		}
 		Array.getStatistics(fontArray, minFontSize, null, meanFontSize, null);
@@ -592,8 +588,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		labelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
 		run("Select None");
 		roiManager("show none");
-		
-		fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,labelShadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,labelInnerShadowDarkness); /* requires "textImage" and original flatImage */
+		fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,shadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
 		closeImageByTitle("textImage");
 		if (stroke>=0) flatImage = getTitle();
 	}
@@ -690,11 +685,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				shadowDrop = Dialog.getNumber();
 				shadowDisp = Dialog.getNumber();
 				shadowBlur = Dialog.getNumber();
-				summLabelShadowDarkness = Dialog.getNumber();
+				shadowDarkness = Dialog.getNumber();
 				innerShadowDrop = Dialog.getNumber();
 				innerShadowDisp = Dialog.getNumber();
 				innerShadowBlur = Dialog.getNumber();
-				summLabelInnerShadowDarkness = Dialog.getNumber();
+				innerShadowDarkness = Dialog.getNumber();
 			}
 		/* End optional paramater label dialog */
 		if (shadowDrop<0) summLabelShadowDrop = round(shadowDrop * negAdj);
@@ -827,7 +822,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				paraLabelY += round(1.2 * statsLabFontSize);		
 			}
 		}
-		fancyTextOverImage(summLabelShadowDrop,summLabelShadowDisp,summLabelShadowBlur,summLabelShadowDarkness,outlineStroke,summLabelInnerShadowDrop,summLabelInnerShadowDisp,summLabelInnerShadowBlur,summLabelInnerShadowDarkness); /* requires "textImage" and original flatImage */
+		fancyTextOverImage(summLabelShadowDrop,summLabelShadowDisp,summLabelShadowBlur,shadowDarkness,outlineStroke,summLabelInnerShadowDrop,summLabelInnerShadowDisp,summLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
 		closeImageByTitle("textImage");
 	}
 /*	

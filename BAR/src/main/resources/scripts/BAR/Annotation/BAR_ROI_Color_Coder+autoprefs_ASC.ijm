@@ -15,6 +15,7 @@
 	 + v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 	 + v180104 Updated functions to latest versions.
 	 + v180228 Fixed missing ramp labels.
+	 + v180316 Fixed min-max label issue, reordered 1st menu		
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
@@ -74,7 +75,8 @@
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
 		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels");
 		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
-		Dialog.addMessage("Filename: " + tN);
+		if (lengthOf(tN)<=47) Dialog.addMessage("Filename: " + tN);
+		else Dialog.addMessage("Filename: " + substring(tN, 0, 43) + "...");
 		Dialog.setInsets(6, 0, 6);
 	}
 	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
@@ -88,7 +90,7 @@
 	Dialog.addMessage("Color Coded Borders or Filled ROIs?");
 	Dialog.addNumber("Outlines or ROIs?", 0, 0, 3, " Width in pixels \(0 to fill ROIs\)");
 	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
-	Dialog.setInsets(12, 0, 6);
+	Dialog.setInsets(6, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):______________");
 	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
@@ -97,6 +99,8 @@
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
+	Dialog.setInsets(-4, 120, 4);
+	Dialog.addCheckbox("Add labels at min. and max. if inside range", true);
 	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
@@ -109,12 +113,14 @@
 	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
 	Dialog.setInsets(-25, 205, 0);
 	Dialog.addCheckbox("Draw tick marks", true);
-	Dialog.setInsets(4, 120, 0);
-	Dialog.addCheckbox("Force rotated legend label", false);
-	Dialog.addCheckbox("Add thin lines at true min. and max. if different", false);
-	Dialog.addCheckbox("Add thin lines at true mean and " + fromCharCode(0x00B1) + " SD", false);
-	Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
-	Dialog.addNumber("Thin line label font:", 100, 0, 3, "% of font size");
+	Dialog.setInsets(2, 120, 0);
+	Dialog.addCheckbox("Force clockwise rotated legend label", false);
+	Dialog.setInsets(-6, 0, -2);
+	Dialog.addMessage("Ramp Stats Labels:______________");
+	Dialog.setInsets(0, 120, 0);
+	Dialog.addCheckbox("Labels at Mean and " + fromCharCode(0x00B1) + " SD", false);
+	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also used for Min:Max");
+	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also used for Min:Max");
 	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel= Dialog.getChoice;
@@ -126,6 +132,7 @@
 		alpha= pad(toHex(255*Dialog.getNumber/100));
 		unitLabel= Dialog.getChoice();
 		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
+		minmaxLines= Dialog.getCheckbox;
 		numLabels= Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice= Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
@@ -135,7 +142,6 @@
 		fontSize= Dialog.getNumber;
 		ticks= Dialog.getCheckbox;
 		rotLegend= Dialog.getCheckbox;
-		minmaxLines= Dialog.getCheckbox;
 		statsRampLines= Dialog.getCheckbox;
 		statsRampTicks= Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
@@ -224,7 +230,7 @@
 	tickLR = round(tickL * statsRampTicks/100);
 	getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 	call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
-		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
+	newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
 	/* ramp color/gray range is horizontal only so must be rotated later */
 	if (revLut) run("Flip Horizontally");
 	tR = getTitle; /* short variable label for ramp */
@@ -259,66 +265,57 @@
 	if (numLabels>2) step /= (numLabels-1);
     setLineWidth(rampLW);
 	/* now to see if the selected range values are within 98% of actual */
-	if (arrayMin-min>0.02*displayedRange) minIOR = true; /* true minimum is significantly above ramp minimum */
-	else minIOR = false;
-	if (max-arrayMax>0.02*displayedRange) maxIOR = true; /* true maximum is significantly below ramp maximum */
-	else maxIOR = false;
-	if (min-arrayMin>0.02*displayedRange) minOOR = true; /* true minimum is significantly below ramp minimum */
-	else minOOR = false;
-	if (arrayMax-max>0.02*displayedRange) maxOOR = true; /* true maximum is significantly below ramp maximum */
-	else maxOOR = false;
-	if (maxOOR && minOOR) minmaxLines = false;
+	if (0.98*min>arrayMin || max<0.98*arrayMax) minmaxOOR = true;
+	else minmaxOOR = false;
+	if (min<0.98*arrayMin || 0.98*max>arrayMax) minmaxIOR = true;
+	else minmaxIOR = false;
+	if (minmaxIOR && minmaxLines) minmaxLines = true;
+	else minmaxLines = false;
 //
 	if (useLog) log10Incr = log10DisplayedRange/(numLabels-1);
 //
 	for (i=0; i<numLabels; i++) {
 		yPos = rampH + rampOffset - i*step -1; /* minus 1 corrects for coordinates starting at zero */
-		if (!useLog) rampLabel= min + (displayedRange)/(numLabels-1) * i;
-		else rampLabel= pow(10,(log10Min+(log10Incr * i)));
+		rampLabel = min + (max-min)/(numLabels-1) * i;
 		rampLabelString = removeTrailingZerosAndPeriod(d2s(rampLabel,decPlaces));
-		/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
-		if (minOOR && i==0) {
-			/*Now add overrun text labels at the bottom of the ramp if the true data extends below the ramp range */
-			rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
-			rampLabelString = rampExt + "-" + rampLabelString; 
+		if (minmaxIOR) {
+			/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
+			if (i==0 && min>arrayMin) {
+				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
+				rampLabelString = rampExt + "-" + rampLabelString; 
+			}if (i==numLabels-1 && max<arrayMax) {
+				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
+				rampLabelString += "-" + rampExt; 
+			}
 		}
-		if (maxOOR && i==numLabels-1) {
-			/*Now add overrun text labels at the top of the ramp if the true data extends above the ramp range */
-			rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
-			rampLabelString += "-" + rampExt; 
-		}
-		drawString(rampLabelString, rampW+4, round(yPos+fontSize/2));
+		drawString(rampLabelString, rampW+4*rampLW, round(yPos+fontSize/2));
 		if (ticks) {
 			if (i > 0 && i < numLabels-1) {
 				setLineWidth(rampLW);
 				drawLine(0, yPos, tickL, yPos);					/* left tick */
 				drawLine(rampW-1-tickL, yPos, rampW, yPos);
-				setLineWidth(rampLW/2);
 				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
 			}
 		}
 	}
 	/* now add lines and the true min and max and for stats if chosen in previous dialog */
-	rampVOffset = 2 * fontSize;
 	if (minmaxLines || statsRampLines) {
 		newImage("label_mask", "8-bit black", getWidth(), getHeight(), 1);
 		setColor("white");
 		setLineWidth(rampLW);
 		if (minmaxLines) {
 			if (min==max) restoreExit("Something terribly wrong with this range!");
-			if (!useLog) trueMaxFactor = (arrayMax-min)/(displayedRange);
-			else trueMaxFactor = (log10AMax-log10Min)/(log10DisplayedRange);
-			maxPos= round(rampVOffset + (rampH * (1 - trueMaxFactor)));
-			if (!useLog) trueMinFactor = (arrayMin-min)/(displayedRange);
-			else  trueMinFactor = (log10AMin-log10Min)/(log10DisplayedRange);
-			minPos= round(rampVOffset + (rampH * (1 - trueMinFactor)));
-			if (trueMaxFactor<0.98) {
+			trueMaxFactor = (arrayMax-min)/(max-min);
+			maxPos = round(fontSize/2 + (rampH * (1 - trueMaxFactor)) +1.5*fontSize)-1;
+			trueMinFactor = (arrayMin-min)/(max-min);
+			minPos = round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize)-1;
+			if (trueMaxFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
 				drawString("Max", round((rampW-getStringWidth("Max"))/2), round(maxPos+0.5*fontSR2));
 				drawLine(rampLW, maxPos, tickLR, maxPos);
 				drawLine(rampW-1-tickLR, maxPos, rampW-rampLW-1, maxPos);
 			}
-			if (trueMinFactor>0.02) {
+			if (trueMinFactor>0) {
 				setFont(fontName, fontSR2, fontStyle);
 				drawString("Min", round((rampW-getStringWidth("Min"))/2), round(minPos+0.5*fontSR2));
 				drawLine(rampLW, minPos, tickLR, minPos);
@@ -326,22 +323,16 @@
 			}
 		}
 		if (statsRampLines) {
-			if (!useLog) meanFactor = (arrayMean-min)/(displayedRange);
-			else meanFactor = (log10Mean-log10Min)/(log10DisplayedRange);
-			if (useLog) {
-				plusSDFactor = (log10PlusSD-log10Min)/(log10DisplayedRange);
-				minusSDFactor = (log10MinusSD-log10Min)/(log10DisplayedRange);
-			}else{
-				plusSDFactor = (arrayMean+arraySD-min)/(displayedRange);
-				minusSDFactor = (arrayMean-arraySD-min)/(displayedRange);
-			}
-			meanPos= round(rampVOffset + (rampH * (1 - meanFactor)));
-			plusSDPos= round(rampVOffset + (rampH * (1 - plusSDFactor)));
-			minusSDPos= round(rampVOffset + (rampH * (1 - minusSDFactor)));
+			meanFactor = (arrayMean-min)/(max-min);
+			plusSDFactor =  (arrayMean+arraySD-min)/(max-min);
+			minusSDFactor =  (arrayMean-arraySD-min)/(max-min);
+			meanPos = round(fontSize/2 + (rampH * (1 - meanFactor)) +1.5*fontSize)-1;
+			plusSDPos = round(fontSize/2 + (rampH * (1 - plusSDFactor)) +1.5*fontSize)-1;
+			minusSDPos = round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize)-1;
 			setFont(fontName, 0.9*fontSR2, fontStyle);
 			drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos+0.4*fontSR2));
 			drawLine(rampLW, meanPos, tickLR, meanPos);
-			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);	
+			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
 			if (plusSDFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
 				drawString("+SD", round((rampW-getStringWidth("+SD"))/2), round(plusSDPos+0.5*fontSR2));
@@ -355,23 +346,38 @@
 				drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
 			}
 		}
+		run("Duplicate...", "title=stats_text");
 		/* now use a mask to create black outline around white text to stand out against ramp colors */
-		rampOutlineStroke = round(rampLW/2);
+		selectWindow("label_mask");
+		rampOutlineStroke = maxOf(1,round(rampLW/2));
 		setThreshold(0, 128);
 		setOption("BlackBackground", false);
 		run("Convert to Mask");
 		selectWindow(tR);
 		run("Select None");
 		getSelectionFromMask("label_mask");
+		getSelectionBounds(maskX, maskY, null, null);
+		if (rampOutlineStroke>0) rampOutlineOffset = maxOf(0, (rampOutlineStroke/2)-1);
+		setSelectionLocation(maskX+rampOutlineStroke, maskY+rampOutlineStroke); /* offset selection to create shadow effect */
 		run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
 		setBackgroundColor(0, 0, 0);
 		run("Clear");
+		run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
+		run("Gaussian Blur...", "sigma=[rampOutlineStroke]");	
 		run("Select None");
 		getSelectionFromMask("label_mask");
 		setBackgroundColor(255, 255, 255);
 		run("Clear");
 		run("Select None");
+		/* The following steps smooths the interior of the text labels */
+		selectWindow("stats_text");
+		getSelectionFromMask("label_mask");
+		run("Make Inverse");
+		run("Invert");
+		run("Select None");
+		imageCalculator("Min",tR,"stats_text");
 		closeImageByTitle("label_mask");
+		closeImageByTitle("stats_text");
 		/* reset colors and font */
 		setFont(fontName, fontSize, fontStyle);
 		setColor(0,0,0);

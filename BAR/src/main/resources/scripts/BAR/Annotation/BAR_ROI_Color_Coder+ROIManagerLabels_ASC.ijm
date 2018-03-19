@@ -10,6 +10,7 @@
 	+ v161117 adds more decimal place control
 	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 	+ Update functions to latest versions.
+	+ v180316 Reordered 1st menu.								  
  */
 macro "ROI Color Coder with Labels"{
 	requires("1.47r");
@@ -91,6 +92,8 @@ macro "ROI Color Coder with Labels"{
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
+	Dialog.setInsets(-8, 120, 4);
+	Dialog.addCheckbox("Add labels at true min. and max. if inside range", true);
 	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
@@ -105,10 +108,10 @@ macro "ROI Color Coder with Labels"{
 	Dialog.addCheckbox("Draw tick marks", true);
 	Dialog.setInsets(4, 120, 0);
 	Dialog.addCheckbox("Force rotated legend label", false);
-	Dialog.addCheckbox("Add thin lines at true min. and max. if different", false);
-	Dialog.addCheckbox("Add thin lines at true mean and " + fromCharCode(0x00B1) + " SD", false);
-	Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
-	Dialog.addNumber("Thin line label font:", 100, 0, 3, "% of font size");
+	Dialog.setInsets(4, 120, 0);
+	Dialog.addCheckbox("Stats: Add labels at mean and " + fromCharCode(0x00B1) + " SD", false);
+	Dialog.addNumber("Stats line length:", 50, 0, 3, "\(% of major tick\). Also used for Min:Max");
+	Dialog.addNumber("Stats label font:", 100, 0, 3, "% of font size. Also used for Min:Max");
 	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel= Dialog.getChoice;
@@ -119,6 +122,7 @@ macro "ROI Color Coder with Labels"{
 		alpha= pad(toHex(255*Dialog.getNumber/100));
 		unitLabel= Dialog.getChoice();
 		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
+		minmaxLines = Dialog.getCheckbox;															 
 		numLabels= Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice= Dialog.getChoice;
 		rampChoice= parseFloat(Dialog.getChoice);
@@ -502,7 +506,7 @@ if (minmaxIOR) {
 		}
 	}
 	function cleanLabel(string) {
-		/* v161104 */
+		/* v180317 */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
@@ -516,6 +520,7 @@ if (minmaxIOR) {
 		string= replace(string, "px", "pixels"); /* expand pixel abbreviate*/
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
 		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
+		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */

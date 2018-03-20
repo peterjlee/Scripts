@@ -22,9 +22,10 @@
 	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
 	+ v180302 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.		  
 	+ v180316 Reordered 1st menu and added option of adding red ring around outliers.				  
+	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
+	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.							
  */
- 
-macro "ROI Color Coder with Scaled Labels"{
+ macro "ROI Color Coder with Scaled Labels"{
 	requires("1.47r");
 	saveSettings;
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
@@ -84,25 +85,27 @@ macro "ROI Color Coder with Scaled Labels"{
 	/* create the dialog prompt */
 	Dialog.create("ROI Color Coder: " + tN);
 	if (menuLimit > 752) {  /* menu bloat allowed only for small screens */
-		Dialog.setInsets(6, 0, -15);
+		Dialog.setInsets(6, 0, -10);
 		macroP = getInfo("macro.filepath");
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
 		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels");
 		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
+		Dialog.setInsets(6, 0, 0);
 		if (lengthOf(tN)<=47) Dialog.addMessage("Filename: " + tN);
 		else Dialog.addMessage("Filename: " + substring(tN, 0, 43) + "...");
-		Dialog.setInsets(6, 0, 6);
+		Dialog.setInsets(-2, 0, 2);
 	}
 	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
+	Dialog.setInsets(6, 0, 0);
 	Dialog.addChoice("LUT:", luts, luts[0]);
-	Dialog.setInsets(0, 120, 12);
+	Dialog.setInsets(0, 124, 10);
 	Dialog.addCheckbox("Reverse LUT?", false); 
 	Dialog.setInsets(-6, 0, -6);
 	Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
-	Dialog.addNumber("Outlines or Solid?", 0, 0, 3, " Width in pixels \(0 to fill ROIs, -1 to label only\)");
+	Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
 	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
-	Dialog.setInsets(6, 120, 0);
+	Dialog.setInsets(6, 124, 0);
 	Dialog.addCheckbox("Make copy of image with scaled labels?", true);
 	Dialog.setInsets(2, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):______________");
@@ -113,14 +116,14 @@ macro "ROI Color Coder with Scaled Labels"{
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.setInsets(-4, 120, -12);
-	Dialog.addCheckbox("Add ramp labels at min. and max. if inside range", true);
-	outlierOptions = newArray("No", "sigma", "2sigma","3sigma", "Range");
-	Dialog.setInsets(-6, 70, 8);
-	Dialog.addRadioButtonGroup("Outline outliers if outside:", outlierOptions, 1, 5, "No");
-	colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
+	Dialog.setInsets(-4, 124, -12);
+	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
+	outlierOptions = newArray("No", "1"+fromCharCode(0x03C3), "2"+fromCharCode(0x03C3),"3"+fromCharCode(0x03C3), "4"+fromCharCode(0x03C3), "Range");
+	Dialog.setInsets(-6, 0, 8);
+	Dialog.addRadioButtonGroup("Outline outliers if outside the following values:", outlierOptions, 1, 5, "No");
+	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
 	Dialog.setInsets(0, 0, 8);
-	Dialog.addChoice("Outlier outline color:", colorChoice, colorChoice[12]);
+	Dialog.addChoice("Outlier outline color:", colorChoice, colorChoice[0]);
 	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
@@ -134,14 +137,17 @@ macro "ROI Color Coder with Scaled Labels"{
 	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
 	Dialog.setInsets(-25, 205, 0);
 	Dialog.addCheckbox("Draw tick marks", true);
-	Dialog.setInsets(2, 120, 0);
+	Dialog.setInsets(2, 124, 0);
 	Dialog.addCheckbox("Force clockwise rotated legend label", false);
 	Dialog.setInsets(-6, 0, -2);
 	Dialog.addMessage("Ramp Stats Labels:______________");
-	Dialog.setInsets(4, 120, 0);
-	Dialog.addCheckbox("labels at Mean and " + fromCharCode(0x00B1) + " SD", false);
-	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also used for Min:Max");
-	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also used for Min:Max");
+	Dialog.setInsets(4, 124, 0);
+	rampStatsOptions = newArray("No", "Linear", "Ln");
+	Dialog.setInsets(-6, 0, 8);
+	Dialog.addRadioButtonGroup("Ramp Stats: Mean and " + fromCharCode(0x00B1) + fromCharCode(0x03C3) + " on ramp \(if \"Ln\" then outlier " + fromCharCode(0x03C3) + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "No");
+	/* will be used for sigma outlines too */
+	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
+	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel = Dialog.getChoice;
@@ -154,7 +160,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		unitLabel = Dialog.getChoice();
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		minmaxLines = Dialog.getCheckbox;
-		outlierChoice =  Dialog.getRadioButton;
+		outlierChoice =  unCleanLabel(Dialog.getRadioButton);
 		outlierColor = Dialog.getChoice(); /* Object label color */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
@@ -166,7 +172,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		fontSize = Dialog.getNumber;
 		ticks = Dialog.getCheckbox;
 		rotLegend = Dialog.getCheckbox;
-		statsRampLines = Dialog.getCheckbox;
+		statsRampLines = Dialog.getRadioButton;
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak = Dialog.getNumber;
 	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
@@ -191,6 +197,22 @@ macro "ROI Color Coder with Scaled Labels"{
 	coeffVar = arraySD*100/arrayMean;
 	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
 	arrayMedian = sortedValues[round(items/2)];  /* you could extend this obviously to provide quartiles but at that point you might as well use Excel */
+	meanPlusSDs = newArray(10);
+	meanMinusSDs = newArray(10);
+	for (s=0; s<10; s++) {
+		meanPlusSDs[s] = arrayMean+(s*arraySD);
+		meanMinusSDs[s] = arrayMean-(s*arraySD);
+	}
+	/* Calculate ln stats for summary and also ramp if requested */
+	lnValues = lnArray(values);
+	Array.getStatistics(lnValues, null, null, lnMean, lnSD);
+	expLnMeanPlusSDs = newArray(10);
+	expLnMeanMinusSDs = newArray(10);
+	expLnSD = exp(lnSD);
+	for (s=0; s<10; s++) {
+		expLnMeanPlusSDs[s] = exp(lnMean+s*lnSD);
+		expLnMeanMinusSDs[s] = exp(lnMean-s*lnSD);
+	}
 	/* Create the parameter label */
 	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
 	if (unitLabel=="Manual") {
@@ -208,7 +230,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	if (stroke>=0) {
 		/*	Create LUT-map legend	*/
 		rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
-		if (statsRampLines || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
+		if (statsRampLines!="No" || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
 		tickLR = round(tickL * statsRampTicks/100);
 		getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 		call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
@@ -287,7 +309,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		/* now add lines and the true min and max and for stats if chosen in previous dialog */
 		if (0.98*rampMin<arrayMin && 0.98*rampMax<arrayMax) minmaxLines = false;
 		if (rampMin>arrayMin) minmaxLines = false; /* Temporary fix for empty ramp issue */
-		if (minmaxLines || statsRampLines) {
+		if (minmaxLines || statsRampLines!="No") {
 			newImage("label_mask", "8-bit black", getWidth(), getHeight(), 1);
 			setColor("white");
 			setLineWidth(rampLW);
@@ -310,30 +332,51 @@ macro "ROI Color Coder with Scaled Labels"{
 					drawLine(rampW-1-tickLR, minPos, rampW-rampLW-1, minPos);
 				}
 			}
-			if (statsRampLines) {
-				meanFactor = (arrayMean-rampMin)/(rampMax-rampMin);
-				plusSDFactor =  (arrayMean+arraySD-rampMin)/(rampMax-rampMin);
-				minusSDFactor =  (arrayMean-arraySD-rampMin)/(rampMax-rampMin);
-				meanPos = round(fontSize/2 + (rampH * (1 - meanFactor)) +1.5*fontSize)-1;
-				plusSDPos = round(fontSize/2 + (rampH * (1 - plusSDFactor)) +1.5*fontSize)-1;
-				minusSDPos = round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize)-1;
+			if (statsRampLines!="No") {
+				rampMeanPlusSDFactors = newArray(10);
+				rampMeanMinusSDFactors = newArray(10);
+				plusSDPos = newArray(10);
+				minusSDPos = newArray(10);
+				if (statsRampLines=="Ln") {
+					rampSD = exp(lnSD);
+					rampMeanPlusSDs = expLnMeanPlusSDs;
+					rampMeanMinusSDs = expLnMeanMinusSDs;
+				}
+				else {
+					rampSD = arraySD;
+					rampMeanPlusSDs = meanPlusSDs;
+					rampMeanMinusSDs = meanMinusSDs;
+				}
+				rampRange = rampMax-rampMin;
+				for (s=0; s<10; s++) {
+					rampMeanPlusSDFactors[s] = (rampMeanPlusSDs[s]-rampMin)/rampRange;
+					rampMeanMinusSDFactors[s] = (rampMeanMinusSDs[s]-rampMin)/rampRange;
+					plusSDPos[s] = round(fontSize/2 + (rampH * (1 - rampMeanPlusSDFactors[s])) +1.5*fontSize)-1;
+					minusSDPos[s] = round(fontSize/2 + (rampH * (1 - rampMeanMinusSDFactors[s])) +1.5*fontSize)-1;
+				}
 				setFont(fontName, 0.9*fontSR2, fontStyle);
-				if (arrayMean>1.02*rampMin && arrayMean<0.98*rampMax) {
-					drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos+0.4*fontSR2));
-					drawLine(rampLW, meanPos, tickLR, meanPos);
-					drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
+				if (rampMeanPlusSDs[0]>1.02*rampMin && rampMeanPlusSDs[0]<0.92*rampMax) {
+					drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(plusSDPos[0]+0.4*fontSR2));
+					drawLine(rampLW, plusSDPos[0], tickLR, plusSDPos[0]);
+					drawLine(rampW-1-tickLR, plusSDPos[0], rampW-rampLW-1, plusSDPos[0]);
 				}
-				if (plusSDFactor<1 && arraySD+arrayMean<0.98*rampMax && arraySD+arrayMean>1.02*rampMin) {
-					setFont(fontName, fontSR2, fontStyle);
-					drawString("+SD", round((rampW-getStringWidth("+SD"))/2), round(plusSDPos+0.5*fontSR2));
-					drawLine(rampLW, plusSDPos, tickLR, plusSDPos);
-					drawLine(rampW-1-tickLR, plusSDPos, rampW-rampLW-1, plusSDPos);
+				for (s=1; s<10; s++) {
+					if (rampMeanPlusSDFactors[s]<1 && rampMeanPlusSDs[s]<0.95*rampMax && rampMeanPlusSDs[s]<0.95*arrayMax) {
+						setFont(fontName, fontSR2, fontStyle);
+						drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
+						drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
+						drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
+						if (rampMeanPlusSDFactors[minOf(9,s+1)]>0.93) s = 10;
+					}
 				}
-				if (minusSDFactor>0 && arrayMean-arraySD>1.02*rampMin && arraySD-arrayMean<0.98*rampMax) {
-					setFont(fontName, fontSR2, fontStyle);
-					drawString("-SD", round((rampW-getStringWidth("-SD"))/2), round(minusSDPos+0.5*fontSR2));
-					drawLine(rampLW, minusSDPos, tickLR, minusSDPos);
-					drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
+				for (s=1; s<10; s++) {
+					if (rampMeanMinusSDFactors[s]>0 && rampMeanMinusSDs[s]>1.02*rampMin && rampMeanMinusSDs[s]>1.08*arrayMin) {
+						setFont(fontName, fontSR2, fontStyle);
+						drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
+						drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
+						drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
+						if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
+					}
 				}
 			}
 			run("Duplicate...", "title=stats_text");
@@ -370,11 +413,12 @@ macro "ROI Color Coder with Scaled Labels"{
 			closeImageByTitle("stats_text");
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
-			setColor(0,0,0);		
+			setColor(0,0,0);
 		}
 		/*	parse symbols in unit and draw final label below ramp */
 		selectWindow(tR);
 		rampParameterLabel= cleanLabel(parameterLabel);
+		if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
 		rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
 		if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
 			if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
@@ -438,6 +482,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		roiManager("Show All without labels");
 		/* Now to add scaled object labels */
 		/* First: set default label settings */
+		outlierStrokePC = 9; /* default outline stroke: % of font size */
 		outlineStrokePC = 6; /* default outline stroke: % of font size */
 		shadowDropPC = 10;  /* default outer shadow drop: % of font size */
 		dIShOPC = 4; /* default inner shadow drop: % of font size */
@@ -450,7 +495,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		/* Feature Label Formatting Options Dialog . . . */
 		Dialog.create("Feature Label Formatting Options");
 			if (lut!="Grays")
-				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern"); 
+				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern", "red", "green", "blue", "cyan", "yellow", "magenta"); 
 			else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
 			Dialog.addNumber("Font scaling:", 60,0,3,"% of Auto");
@@ -461,9 +506,10 @@ macro "ROI Color Coder with Scaled Labels"{
 			Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
 			fontNameChoice = newArray("SansSerif", "Serif", "Monospaced");
 			Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
+			Dialog.addNumber("Outlier object outline stroke:", outlierStrokePC,0,3,"% of font size");
 			Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2"), dpChoice); /* reuse previous dpChoice as default */
-			Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of font size");
-			Dialog.addChoice("Outline (background) color:", colorChoice, colorChoice[1]);
+			Dialog.addNumber("Label outline stroke:", outlineStrokePC,0,3,"% of font size");
+			Dialog.addChoice("Label Outline (background) color:", colorChoice, colorChoice[1]);
 			Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of font size");
 			Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of font size");
 			Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of font size");
@@ -482,14 +528,14 @@ macro "ROI Color Coder with Scaled Labels"{
 			paraLocChoice = newArray("None", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
 			Dialog.addChoice("Location of Parameter Label \(\"None\" = No Parameter Title\):", paraLocChoice, paraLocChoice[1]);
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);
-	
-			Dialog.show();
+				Dialog.show();
 			fontColor = Dialog.getChoice(); /* Object label color */
 			fontSCorrection =  Dialog.getNumber()/100;
 			minLFontS = Dialog.getNumber();
 			maxLFontS = Dialog.getNumber(); 
 			fontStyle = Dialog.getChoice();
 			fontName = Dialog.getChoice();
+			outlierStrokePC = Dialog.getNumber();
 			dpChoice = Dialog.getChoice();
 			outlineStrokePC = Dialog.getNumber();
 			outlineColor = Dialog.getChoice();
@@ -540,25 +586,33 @@ macro "ROI Color Coder with Scaled Labels"{
 		flatImage = getTitle();
 		if (is("Batch Mode")==false) setBatchMode(true);
 		if (outlierChoice!="No")  {
+			sigmaR = (parseInt(substring(outlierChoice,0,1)));
 			setForegroundColorFromName(outlierColor);
+			outlierStroke = maxOf(1,round(fontSize/100 * outlierStrokePC));
+			run("Line Width...", "line=[outlierStroke]");
+			outlierCounter = 0;
 			for (countNaN=0, i=0; i<items; i++) {
 				roiManager("select", i);
-				if (outlierChoice=="Outside Range") {
+				if (outlierChoice=="Range") {
 					if (values[i]<rampMin || values[i]>rampMax) {
-						roiManager("Set Line Width", stroke);
-						roiManager("Set Color", "red");
+						run("Draw", "slice");
+						outlierCounter +=1;
 					}
 				}
-				if (outlierChoice=="sigma") {
-					if (values[i]<(arrayMean-arraySD) || values[i]>(arraySD+arrayMean)) run("Draw", "slice");
-				}
-				if (outlierChoice=="2sigma") {
-					if (values[i]<(arrayMean-2*arraySD) || values[i]>(2*arraySD+arrayMean)) run("Draw", "slice");
-				}
-				if (outlierChoice=="3sigma") {
-					if (values[i]<(arrayMean-3*arraySD) || values[i]>(3*arraySD+arrayMean)) run("Draw", "slice");
+				if (sigmaR>=1) {
+					if (statsRampLines=="Ln") {
+						if (values[i]<(expLnMeanMinusSDs[sigmaR]) || values[i]>(expLnMeanPlusSDs[sigmaR])) {
+							run("Draw", "slice");
+							outlierCounter +=1;
+						}
+					}
+					else if (values[i]<(meanMinusSDs[sigmaR]) || values[i]>(meanPlusSDs[sigmaR])) {
+						run("Draw", "slice");
+						outlierCounter +=1;
+					}
 				}
 			}
+			run("Line Width...", "line=1"); /* Rest line width to ImageJ default */
 		}
 		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 		// roiManager("show none");
@@ -828,7 +882,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	run("Collect Garbage"); 
 	}
  	function autoCalculateDecPlaces(dP,min,max,numberOfLabels){
-		/* v180316 */
+		/* v180316 4 input version */
 		step = (max-min)/numberOfLabels;
 		stepSci = d2s(step, -1);
 		iExp = indexOf(stepSci, "E");
@@ -953,7 +1007,8 @@ macro "ROI Color Coder with Scaled Labels"{
 		}
 	}
 	function cleanLabel(string) {
-		/* v180316 */
+		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ascii characters may vary: hence the need to always use fromCharCode instead of special characters
+		v180317 */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
@@ -967,7 +1022,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		string= replace(string, "px", "pixels"); /* expand pixel abbreviate*/
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
 		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
-		string= replace(string, "sigma", fromCharCode(0x03C3));
+		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */
@@ -1104,6 +1159,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	 Macro Color Functions
  */
 	function getColorArrayFromColorName(colorName) {
+		/* Corrected yellow and reordered v180317 */
 		cA = newArray(255,255,255);
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1111,21 +1167,23 @@ macro "ROI Color Coder with Scaled Labels"{
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "red") cA = newArray(255,0,0);
-		else if (colorName == "pink") cA = newArray(255, 192, 203);
-		else if (colorName == "green") cA = newArray(255,255,0);
+		else if (colorName == "green") cA = newArray(0,255,0);
 		else if (colorName == "blue") cA = newArray(0,0,255);
+		else if (colorName == "cyan") cA = newArray(0,255,255);
+		else if (colorName == "magenta") cA = newArray(255,0,255);		
 		else if (colorName == "yellow") cA = newArray(255,255,0);
-		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120,47,64);
-		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198);
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189);
 		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);
 		else if (colorName == "blue_modern") cA = newArray(58,93,174);
+		else if (colorName == "garnet") cA = newArray(120,47,64);
+		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "gray_modern") cA = newArray(83,86,90);
 		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);
 		else if (colorName == "green_modern") cA = newArray(155,187,89);
+		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "orange_modern") cA = newArray(247,150,70);
+		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "pink_modern") cA = newArray(255,105,180);
 		else if (colorName == "purple_modern") cA = newArray(128,100,162);
 		else if (colorName == "red_N_modern") cA = newArray(227,24,55);
@@ -1204,6 +1262,12 @@ macro "ROI Color Coder with Scaled Labels"{
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* return to original batch mode */
 	}
+	function lnArray(arrayName) {
+	/* 1st version: v180318 */
+	outputArray = Array.copy(arrayName);
+	for (i=0; i<lengthOf(arrayName); i++)
+		  outputArray[i] = log(arrayName[i]);
+	return outputArray;
 	function removeTrailingZerosAndPeriod(string) { /* removes trailing zeros after period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
@@ -1251,7 +1315,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	}
 	function unCleanLabel(string) {
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
-	/* mod 041117 to remove spaces as well */
+	/* mod 041117 to remove spaces as well, and v180320 for sigma */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
@@ -1264,6 +1328,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
 		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
 		string= replace(string, "__", "_"); /* clean up autofilenames */
+		string= replace(string, fromCharCode(0x03C3), "sigma"); /* remove sigma symbol used for tight spaces */
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {

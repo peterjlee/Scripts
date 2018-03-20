@@ -111,7 +111,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.addCheckbox("Reverse LUT?", false); 
 	Dialog.setInsets(-6, 0, -6);
 	Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
-	Dialog.addNumber("Outlines or Solid?", 0, 0, 3, " Width in pixels \(0 to fill ROIs, -1 to label only\)");
+	Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
 	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
 	Dialog.setInsets(6, 120, 0);
 	Dialog.addCheckbox("Make copy of image with scaled labels?", true);
@@ -125,7 +125,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.setInsets(-4, 120, -12);
-	Dialog.addCheckbox("Add ramp labels at min. and max. if inside Range", true);
+	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
 	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "4sigma", "Range");
 	Dialog.setInsets(-6, 0, 8);
 	Dialog.addRadioButtonGroup("Outline outliers if outside the following values:", outlierOptions, 1, 5, "No");
@@ -154,8 +154,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.setInsets(-6, 0, 8);
 	Dialog.addRadioButtonGroup("Ramp Stats: Mean and " + fromCharCode(0x00B1) + fromCharCode(0x03C3) + " on ramp \(if \"Ln\" then outlier " + fromCharCode(0x03C3) + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "No");
 	/* will be used for sigma outlines too */
-	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also used for Min:Max");
-	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also used for Min:Max");
+	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
+	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel = Dialog.getChoice;

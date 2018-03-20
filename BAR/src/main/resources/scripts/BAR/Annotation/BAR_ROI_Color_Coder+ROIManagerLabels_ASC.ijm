@@ -93,7 +93,7 @@ macro "ROI Color Coder with Labels"{
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.setInsets(-8, 120, 4);
-	Dialog.addCheckbox("Add labels at true min. and max. if inside range", true);
+	Dialog.addCheckbox("Add labels at true Min. & Max. if inside range", true);
 	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
@@ -110,8 +110,8 @@ macro "ROI Color Coder with Labels"{
 	Dialog.addCheckbox("Force rotated legend label", false);
 	Dialog.setInsets(4, 120, 0);
 	Dialog.addCheckbox("Stats: Add labels at mean and " + fromCharCode(0x00B1) + " SD", false);
-	Dialog.addNumber("Stats line length:", 50, 0, 3, "\(% of major tick\). Also used for Min:Max");
-	Dialog.addNumber("Stats label font:", 100, 0, 3, "% of font size. Also used for Min:Max");
+	Dialog.addNumber("Stats line length:", 50, 0, 3, "\(% of major tick\). Also Min. & Max. Lines");
+	Dialog.addNumber("Stats label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel= Dialog.getChoice;

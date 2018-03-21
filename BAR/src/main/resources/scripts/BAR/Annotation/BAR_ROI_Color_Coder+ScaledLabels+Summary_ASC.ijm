@@ -30,6 +30,7 @@
 	+ v180316 added option of adding colored outline around outliers.
 	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
 	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
+	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -156,6 +157,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	/* will be used for sigma outlines too */
 	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
 	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
+	// Dialog.addCheckbox("Add Frequency Distribution to Ramp - not yet implemented", false);
 	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel = Dialog.getChoice;
@@ -183,6 +185,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		statsRampLines = Dialog.getRadioButton;
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak = Dialog.getNumber;
+		// freqDistRamp = Dialog.getCheckbox();
+		freqDistRamp = false;
 	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampChoice;
 	range = split(rangeS, "-");
@@ -202,9 +206,31 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
 	if (isNaN(rampMin)) rampMin= arrayMin;
 	if (isNaN(rampMax)) rampMax= arrayMax;
+	arrayRange = arrayMax-arrayMin;
 	coeffVar = arraySD*100/arrayMean;
 	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
-	arrayMedian = sortedValues[round(items/2)];  /* you could extend this obviously to provide quartiles but at that point you might as well use Excel */
+	arrayQuartile = newArray(3);
+	for (q=0; q<3; q++) arrayQuartile[q] = sortedValues[round((q+1)*items/4)];
+	IQR = arrayQuartile[2] - arrayQuartile[0];
+	if (IQR==0) restoreExit("Too little data");
+	
+	/* The following section produces frequency/distribution data for possible graphical use */
+	autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarised in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
+	autoDistWCount = round(arrayRange/autoDistW);
+	arrayDistInt = newArray(autoDistWCount);
+	arrayDistFreq =  newArray(autoDistWCount);
+	modalBin = 0;
+	freqMax = 0;
+	for (f=0; f<autoDistWCount; f++) {
+		arrayDistInt[f] = arrayMin + (f * autoDistW);
+		for (i=0; i<items; i++) if (values[i] >= arrayDistInt[f] && values[i]<(arrayDistInt[f]+autoDistW)) arrayDistFreq[f] +=1;
+		if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
+	}
+	/* use adjacent bin estimate for mode */
+	mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
+	Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
+	/* End of frequency/distribution section */
+	
 	meanPlusSDs = newArray(10);
 	meanMinusSDs = newArray(10);
 	for (s=0; s<10; s++) {
@@ -242,12 +268,39 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		tickLR = round(tickL * statsRampTicks/100);
 		getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 		call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
-		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1);
+		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1); /* Height and width swapped for later rotation */
 		/* ramp color/gray range is horizontal only so must be rotated later */
 		if (revLut) run("Flip Horizontally");
 		tR = getTitle; /* short variable label for ramp */
 		roiColors= loadLutColors(lut); /* load the LUT as a hexColor array: requires function */
 		/* continue the legend design */
+		/* Frequency line if requested */
+		if (freqDistRamp) {
+			rampRXF = rampH/(rampMax-rampMin); /* RXF short for Range X Factor */
+			rampRYF = (rampW-2*rampLW)/(freqMax-freqMin);
+			distFreqPosX = newArray(autoDistWCount);
+			distFreqPosY = newArray(autoDistWCount);
+			for (f=0; f<(autoDistWCount); f++) {
+				distFreqPosX[f] = rampH - (arrayDistInt[f]-rampMin)*rampRXF;
+				distFreqPosY[f] = arrayDistFreq[f]*rampRYF;
+			}
+			freqDLW = rampLW*1.5;
+			setLineWidth(freqDLW);
+			for (f=0; f<(autoDistWCount-1); f++) {
+				if (arrayDistInt[f]>=rampMin && arrayDistInt[f]<=rampMax) {
+					if (distFreqPosY[f]>11) { /* Draw Shadow First */
+						setColor(55, 55, 55);
+						drawLine(distFreqPosX[f]-freqDLW, freqDLW, distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW);
+						drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
+						drawLine(distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f+1]-freqDLW); /* Draw bar side */
+					}
+					setColor(255, 255, 255);
+					drawLine(distFreqPosX[f], rampLW, distFreqPosX[f], distFreqPosY[f]);
+					drawLine(distFreqPosX[f], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f]); /* Draw bar top */
+					drawLine(distFreqPosX[f+1], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f+1]); /* Draw bar side */
+				}
+			}
+		}
 		setColor(0, 0, 0);
 		setBackgroundColor(255, 255, 255);
 		setFont(fontName, fontSize, fontStyle);
@@ -536,7 +589,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (selectionExists) paraLocChoice = newArray("None", "Current Selection", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
 			else paraLocChoice = newArray("None", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
 			Dialog.addChoice("Summary table Location \(\"None\" = No table\):", paraLocChoice, paraLocChoice[1]);
-			Dialog.addNumber("How many rows in table?", 6, 0, 2, "");
+			Dialog.addNumber("How many rows in table?", 10, 0, 2, "");
 			Dialog.show();
 			fontColor = Dialog.getChoice(); /* Object label color */
 			fontSCorrection =  Dialog.getNumber()/100;
@@ -608,6 +661,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			}
 			run("Line Width...", "line=1"); /* Rest line width to ImageJ default */
 		}
+		else outlierCounter="No"; 
 		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 		// roiManager("show none");
 		/*
@@ -695,31 +749,35 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		arraySD = d2s(arraySD,summaryDP);
 		arrayMin = d2s(arrayMin,summaryDP);
 		arrayMax = d2s(arrayMax,summaryDP);
-		sortedValues = Array.copy(values);
-		sortedValues = Array.sort(sortedValues);
-		median = d2s((sortedValues[round(items/2)]),summaryDP);
+		median = d2s(arrayQuartile[1],summaryDP);
+		mode = d2s(mode,summaryDP);
 		titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
 		/* Then Statistics Summary Options Dialog . . . */
 		Dialog.create("Statistics Summary Options");
 			Dialog.addCheckbox("Add parameter label to top line of summary?", true);
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);	
 			Dialog.addNumber("Statistics summary font size:", statsLabFontSize);				
-			statsChoice = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items,
-			"Outlines:  " + outlierCounter + " objects outside " + outlierChoiceAbbrev + " in " + outlierColor,			
+			statsChoice1 = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items);
+			statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects outside " + outlierChoiceAbbrev + " in " + outlierColor);
+			statsChoice3 = newArray(			
 			"Mean:  " + arrayMean + " " +unitLabel,
-			"Median:  " + median + " " +unitLabel, "StdDev:  " + arraySD + " " +unitLabel,
+			"Median:  " + median + " " +unitLabel, "Mode:  " + mode + " " + unitLabel + " \(" +freqMax+ "\)", "StdDev:  " + arraySD + " " +unitLabel,
 			"CoeffVar:  " + coeffVar + "%", "Min-Max:  " + arrayMin + " - " + arrayMax + " " +unitLabel,
-			"Minimum:  " + arrayMin, "Maximum:  " + arrayMax,
-			"ln Stats Mean:  " + expLnMeanPlusSDs[0] + " " +unitLabel,
-			"ln Stats +SD:  " + (expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]) + " " +unitLabel,
-			"ln Stats +2SD:  " + (expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]) + " " +unitLabel,
-			"ln Stats +3SD:  " + (expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]) + " " +unitLabel,
-			"ln Stats -SD:  " + (expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]) + " " +unitLabel,
-			"ln Stats -2SD:  " + (expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]) + " " +unitLabel,
-			"ln Stats -3SD:  " + (expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]) + " " +unitLabel,
+			"Minimum:  " + arrayMin, "Maximum:  " + arrayMax);
+			statsChoice4 = newArray(
+			"ln Stats Mean:  " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " +unitLabel,
+			"ln Stats +SD:  " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+			"ln Stats +2SD:  " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+			"ln Stats +3SD:  " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+			"ln Stats -SD:  " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+			"ln Stats -2SD:  " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+			"ln Stats -3SD:  " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			statsChoice5 = newArray(
 			"Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "User Text",
 			"Long Underline:  ___","Blank line");
 			textChoiceLines = 3;
+			if (outlierChoice!="no") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice4,statsChoice5);
+			else statsChoice = Array.concat(statsChoice1, statsChoice3,statsChoice4,statsChoice5);
 			userInput = newArray(textChoiceLines);
 			for (i=0; i<statsChoiceLines; i++) {
 				if (i<6) Dialog.addChoice("Statistics label line "+(i+1)+":", statsChoice, statsChoice[i+2]);
@@ -768,7 +826,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			}
 			else {
 				Dialog.create("Statistics Summary Options Tweaks");
-									Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of font size");
+				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of font size");
 				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of font size");
 				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of font size");
 				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of font size");
@@ -822,13 +880,17 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			arraySD = d2s(arraySD,summaryDP);
 			arrayMin = d2s(arrayMin,summaryDP);
 			arrayMax = d2s(arrayMax,summaryDP);
-			median = d2s((sortedValues[round(items/2)]),summaryDP);
+			median = d2s(arrayQuartile[1],summaryDP);
+			mode = d2s(mode,summaryDP);
 		}
 		statsLines = 0;
 		statsLabLineText = newArray(statsChoiceLines);
 		setFont(fontName, statsLabFontSize, fontStyle);
 		longestStringWidth = 0;
 		userTextLine=0;
+		if (lengthOf(t)>round(imageWidth/(1.5*fontSize)))
+			titleShort = substring(t, 0, round(imageWidth/(1.5*fontSize))) + "...";
+		else titleShort = t;
 		for (i=0; i<statsChoiceLines; i++) {
 			if (statsLabLine[i]!="None") {
 				statsLines = i + 1;
@@ -837,21 +899,22 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				else if (statsLabLine[i]=="Number of objects") statsLabLineText[i] = "Objects = " + items;
 				else if (statsLabLine[i]=="Outlines") statsLabLineText[i] = "Outlined: " + outlierCounter + " objects outside " + outlierChoiceAbbrev + " in " + outlierColor;
 				else if (statsLabLine[i]=="Mean") statsLabLineText[i] = "Mean = " + arrayMean + " " + unitLabel;
+				else if (statsLabLine[i]=="Mode") statsLabLineText[i] = "Mode = " + mode + " " + unitLabel + " \(" +freqMax+ "\)";
 				else if (statsLabLine[i]=="Median") statsLabLineText[i] = "Median = " + median + " " + unitLabel;
 				else if (statsLabLine[i]=="StdDev") statsLabLineText[i] = "Std.Dev.: " + arraySD + " " + unitLabel;
 				else if (statsLabLine[i]=="CoeffVar") statsLabLineText[i] = "Coeff.Var.: " + coeffVar + "%";
 				else if (statsLabLine[i]=="Min-Max") statsLabLineText[i] = "Range: " + arrayMin + " - " + arrayMax + " " + unitLabel;
 				else if (statsLabLine[i]=="Minimum") statsLabLineText[i] = "Minimum: " + arrayMin + " " + unitLabel;
 				else if (statsLabLine[i]=="Maximum") statsLabLineText[i] = "Maximum: " + arrayMax + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats Mean") statsLabLineText[i] = "ln Stats Mean: " + expLnMeanPlusSDs[0] + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +SD") statsLabLineText[i] = "ln Stats +SD: " + (expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats +2SD: " + (expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats +3SD: " + (expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats -SD") statsLabLineText[i] = "ln Stats -SD: " + (expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats -2SD: " + (expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats -3SD: " + (expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats Mean") statsLabLineText[i] = "ln Stats Mean: " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats +SD") statsLabLineText[i] = "ln Stats +SD: " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats +2SD: " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats +3SD: " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats -SD") statsLabLineText[i] = "ln Stats -SD: " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats -2SD: " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+				else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats -3SD: " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
 				else if (statsLabLine[i]=="Pixel Size") statsLabLineText[i] = "Scale: 1 pixel = " + lcf + " " + unit;
-				else if (statsLabLine[i]=="Image Title") statsLabLineText[i] = "Image: " + t;
+				else if (statsLabLine[i]=="Image Title") statsLabLineText[i] = "Image: " + titleShort;
 				else if (statsLabLine[i]=="User Text"){
 					 if (textInputLines[userTextLine]!="None") statsLabLineText[i] = textInputLines[userTextLine];
 					 else statsLabLineText[i] = "";

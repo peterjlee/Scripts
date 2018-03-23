@@ -32,6 +32,7 @@
 	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
 	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
 	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
+	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -561,6 +562,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		statsLabFontSize = round((imageHeight+imageWidth)/60);
 		/* Feature Label Formatting Options Dialog . . . */
 		Dialog.create("Feature Label Formatting Options");
+			Dialog.setInsets(0, 150, 6);
+			Dialog.addCheckbox("Add feature labels to each ROI?", true);
 			if (lut!="Grays")
 				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern", "red", "green", "blue", "cyan", "yellow", "magenta"); 
 			else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
@@ -598,6 +601,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (menuLimit > 752)	Dialog.addNumber("How many rows in table?", 12, 0, 2, "");
 			else Dialog.addNumber("How many rows in table?", 6, 0, 2, "");
 			Dialog.show();
+			
+			addLabels = Dialog.getCheckbox;
 			fontColor = Dialog.getChoice(); /* Object label color */
 			fontSCorrection =  Dialog.getNumber()/100;
 			minLFontS = Dialog.getNumber();
@@ -669,81 +674,83 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			run("Line Width...", "line=1"); /* Rest line width to ImageJ default */
 		}
 		else outlierCounter="No"; 
-		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 		// roiManager("show none");
-		/*
-		iterate through the ROI Manager list and draw scaled labels onto mask */
-		fontArray = newArray(items);
-		for (i=0; i<items; i++) {
-			showStatus("Creating labels for object " + i + ", " + (roiManager("count")-i) + " more to go");
-			roiManager("Select", i);
-			labelValue = values[i];
-			if (dpChoice=="Auto")
-				decPlaces = autoCalculateDecPlaces(labelValue,rampMin,rampMax,numLabels);
-			labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
-			Roi.getBounds(roiX, roiY, roiWidth, roiHeight);
-			if (roiWidth>=roiHeight) roiMin = roiHeight;
-			else roiMin = roiWidth;
-			lFontS = fontSize; /* initial estimate */
-			setFont(fontName,lFontS,fontStyle);
-			lFontS = fontSCorrection * fontSize * roiMin/(getStringWidth(labelString));
-			if (lFontS>maxLFontS) lFontS = maxLFontS; 
-			if (lFontS<minLFontS) lFontS = minLFontS;
-			setFont(fontName,lFontS,fontStyle);
-			if (ctrChoice=="ROI Center") {
-				textOffset = roiX + ((roiWidth) - getStringWidth(labelString))/2;
-				textDrop = roiY+roiHeight/2 + lFontS/2;
-			} else {
-				textOffset = getResult("mc_X\(px\)",i) - getStringWidth(labelString)/2;
-				textDrop = getResult("mc_Y\(px\)",i) + lFontS/2;
+		if (addLabels) {
+			newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
+			/*
+			iterate through the ROI Manager list and draw scaled labels onto mask */
+			fontArray = newArray(items);
+			for (i=0; i<items; i++) {
+				showStatus("Creating labels for object " + i + ", " + (roiManager("count")-i) + " more to go");
+				roiManager("Select", i);
+				labelValue = values[i];
+				if (dpChoice=="Auto")
+					decPlaces = autoCalculateDecPlaces(labelValue,rampMin,rampMax,numLabels);
+				labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
+				Roi.getBounds(roiX, roiY, roiWidth, roiHeight);
+				if (roiWidth>=roiHeight) roiMin = roiHeight;
+				else roiMin = roiWidth;
+				lFontS = fontSize; /* initial estimate */
+				setFont(fontName,lFontS,fontStyle);
+				lFontS = fontSCorrection * fontSize * roiMin/(getStringWidth(labelString));
+				if (lFontS>maxLFontS) lFontS = maxLFontS; 
+				if (lFontS<minLFontS) lFontS = minLFontS;
+				setFont(fontName,lFontS,fontStyle);
+				if (ctrChoice=="ROI Center") {
+					textOffset = roiX + ((roiWidth) - getStringWidth(labelString))/2;
+					textDrop = roiY+roiHeight/2 + lFontS/2;
+				} else {
+					textOffset = getResult("mc_X\(px\)",i) - getStringWidth(labelString)/2;
+					textDrop = getResult("mc_Y\(px\)",i) + lFontS/2;
+				}
+				/* Now make sure label is not out of the canvas */
+				lFontFactor = lFontS/100;
+				textOffset = maxOf(lFontFactor*shadowDisp,textOffset);
+				textOffset = minOf(imageWidth-getStringWidth(labelString)-lFontFactor*shadowDisp,textOffset);
+				textDrop = maxOf(0, textDrop);
+				textDrop = minOf(imageHeight,textDrop);
+				/* draw object label */
+				setColorFromColorName("white");
+				drawString(labelString, textOffset, textDrop);
+				fontArray[i] = lFontS;
 			}
-			/* Now make sure label is not out of the canvas */
-			lFontFactor = lFontS/100;
-			textOffset = maxOf(lFontFactor*shadowDisp,textOffset);
-			textOffset = minOf(imageWidth-getStringWidth(labelString)-lFontFactor*shadowDisp,textOffset);
-			textDrop = maxOf(0, textDrop);
-			textDrop = minOf(imageHeight,textDrop);
-			/* draw object label */
-			setColorFromColorName("white");
-			drawString(labelString, textOffset, textDrop);
-			fontArray[i] = lFontS;
+			Array.getStatistics(fontArray, minFontSize, null, meanFontSize, null);
+				negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
+			if (shadowDrop<0) labelShadowDrop = round(shadowDrop * negAdj);
+			else labelShadowDrop = shadowDrop;
+			if (shadowDisp<0) labelShadowDisp = round(shadowDisp * negAdj);
+			else labelShadowDisp = shadowDisp;
+			if (shadowBlur<0) labelShadowBlur = round(shadowBlur *negAdj);
+			else labelShadowBlur = shadowBlur;
+			if (innerShadowDrop<0) labelInnerShadowDrop = round(innerShadowDrop * negAdj);
+			else labelInnerShadowDrop = innerShadowDrop;
+			if (innerShadowDisp<0) labelInnerShadowDisp = round(innerShadowDisp * negAdj);
+			else labelInnerShadowDisp = innerShadowDisp;
+			if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
+			else labelInnerShadowBlur = innerShadowBlur;
+			fontFactor = meanFontSize/100;
+			minFontFactor = minFontSize/100;
+			outlineStroke = round(fontFactor * outlineStrokePC);
+			if (outlineStrokePC>0) outlineStroke = maxOf(1,outlineStroke); /* set a minimum stroke */
+			labelShadowDrop = floor(fontFactor * labelShadowDrop);
+			if (shadowDrop>0) labelShadowDrop = maxOf(1+outlineStroke, labelShadowDrop);
+			labelShadowDisp = floor(fontFactor * labelShadowDisp);
+			if (shadowDisp>0) labelShadowDisp = maxOf(1+outlineStroke, labelShadowDisp);
+			labelShadowBlur = floor(fontFactor * labelShadowBlur);
+			if (shadowBlur>0) labelShadowBlur = maxOf(outlineStroke, labelShadowBlur);
+			labelInnerShadowDrop = floor(minFontFactor * labelInnerShadowDrop);
+			labelInnerShadowDisp = floor(minFontFactor * labelInnerShadowDisp);
+			labelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
+			run("Select None");
+			roiManager("show none");
+			fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,shadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
+			closeImageByTitle("textImage");
+			if (stroke>=0) flatImage = getTitle();
 		}
-		Array.getStatistics(fontArray, minFontSize, null, meanFontSize, null);
-			negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
-		if (shadowDrop<0) labelShadowDrop = round(shadowDrop * negAdj);
-		else labelShadowDrop = shadowDrop;
-		if (shadowDisp<0) labelShadowDisp = round(shadowDisp * negAdj);
-		else labelShadowDisp = shadowDisp;
-		if (shadowBlur<0) labelShadowBlur = round(shadowBlur *negAdj);
-		else labelShadowBlur = shadowBlur;
-		if (innerShadowDrop<0) labelInnerShadowDrop = round(innerShadowDrop * negAdj);
-		else labelInnerShadowDrop = innerShadowDrop;
-		if (innerShadowDisp<0) labelInnerShadowDisp = round(innerShadowDisp * negAdj);
-		else labelInnerShadowDisp = innerShadowDisp;
-		if (innerShadowBlur<0) labelInnerShadowBlur = round(innerShadowBlur * negAdj);
-		else labelInnerShadowBlur = innerShadowBlur;
-		fontFactor = meanFontSize/100;
-		minFontFactor = minFontSize/100;
-		outlineStroke = round(fontFactor * outlineStrokePC);
-		if (outlineStrokePC>0) outlineStroke = maxOf(1,outlineStroke); /* set a minimum stroke */
-		labelShadowDrop = floor(fontFactor * labelShadowDrop);
-		if (shadowDrop>0) labelShadowDrop = maxOf(1+outlineStroke, labelShadowDrop);
-		labelShadowDisp = floor(fontFactor * labelShadowDisp);
-		if (shadowDisp>0) labelShadowDisp = maxOf(1+outlineStroke, labelShadowDisp);
-		labelShadowBlur = floor(fontFactor * labelShadowBlur);
-		if (shadowBlur>0) labelShadowBlur = maxOf(outlineStroke, labelShadowBlur);
-		labelInnerShadowDrop = floor(minFontFactor * labelInnerShadowDrop);
-		labelInnerShadowDisp = floor(minFontFactor * labelInnerShadowDisp);
-		labelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
-		run("Select None");
-		roiManager("show none");
-		fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,shadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
-		closeImageByTitle("textImage");
-		if (stroke>=0) flatImage = getTitle();
+		/*	
+			End of optional parameter label section
+		*/
 	}
-	/*	
-		End of optional parameter label section
-	*/
 	/*	
 		Start of Optional Summary section
 	*/
@@ -1021,33 +1028,69 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		tNC = getTitle();
 		/* Image and Ramp combination dialog */
 		Dialog.create("Combine Labeled Image and Legend?");
-			if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
-			else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); /* 93% is close enough */
-			else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image");
-			Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
+			if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Scaled Ramp with New Crop of Image");
+			else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Mnaual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image"); /* 93% is close enough */
+			else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Mnaual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image");
+			Dialog.addRadioButtonGroup("Combine Labeled Image and Legend?", comboChoice, 5, 1,  comboChoice[2]) ;
 			Dialog.show();
-		createCombo = Dialog.getChoice();
+		createCombo = Dialog.getRadioButton;
 		if (createCombo!="No") {
-			selectWindow(tR);
-			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
-				rampScale = imageHeight/canvasH;
+			if (createCombo=="Combine Scaled Ramp with New Mnaual Crop of Image" || createCombo=="Combine Scaled Ramp with New Auto Crop of Image") {
+				if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
+				selectWindow(tNC);
+				run("Duplicate...", "title=tempCrop");
+				run("Select None");
+				if (createCombo=="Combine Scaled Ramp with New Mnaual Crop of Image") {
+					setTool("rectangle");
+					title="Crop Location for Combined Image";
+					msg = "Select the Crop Area";
+					waitForUser(title, msg);
+					run("Crop");
+					run("Select None");
+				}
+				else run("Auto Crop (guess background color)");
+				croppedImageHeight = getHeight(); croppedImageWidth = getWidth();
+				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+				selectWindow(tR);
+				rampScale = croppedImageHeight/canvasH;
 				run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
 				canvasH = getHeight(); /* update ramp height */
+				srW = getWidth + maxOf(2,croppedImageWidth/500);
+				comboW = srW + croppedImageWidth + maxOf(2,croppedImageWidth/500);
+				selectWindow("tempCrop");
+				run("Canvas Size...", "width="+comboW+" height="+croppedImageHeight+" position=Top-Left");
+				makeRectangle(croppedImageWidth + maxOf(2,croppedImageWidth/500), round((croppedImageHeight-canvasH)/2), srW, croppedImageHeight);
+				run("Image to Selection...", "image=scaled_ramp opacity=100");
+				run("Flatten");
+				if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+				rename(tNC + "_crop+ramp");
+				closeImageByTitle("scaled_ramp");
+				closeImageByTitle("temp_combo");	
+				closeImageByTitle("tempCrop");				
 			}
-			srW = getWidth + maxOf(2,imageWidth/500);
-			comboW = srW + imageWidth + maxOf(2,imageWidth/500);
-			selectWindow(tNC);
-			if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
-			run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
-			makeRectangle(imageWidth + maxOf(2,imageWidth/500), round((imageHeight-canvasH)/2), srW, imageHeight);
-			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
-			else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
-			run("Flatten");
-			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
-			rename(tNC + "+ramp");
-			closeImageByTitle("scaled_ramp");
-			closeImageByTitle("temp_combo");
-			if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
+			else {
+				selectWindow(tR);
+				if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
+					rampScale = imageHeight/canvasH;
+					run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
+					canvasH = getHeight(); /* update ramp height */
+				}
+				srW = getWidth + maxOf(2,imageWidth/500);
+				comboW = srW + imageWidth + maxOf(2,imageWidth/500);
+				selectWindow(tNC);
+				if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
+				run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
+				makeRectangle(imageWidth + maxOf(2,imageWidth/500), round((imageHeight-canvasH)/2), srW, imageHeight);
+				if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image")
+					run("Image to Selection...", "image=scaled_ramp opacity=100");
+				else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
+				run("Flatten");
+				if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+				rename(tNC + "+ramp");
+				closeImageByTitle("scaled_ramp");
+				closeImageByTitle("temp_combo");
+				if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
+			}
 		}
 	}
 	setBatchMode("exit & display");
@@ -1055,6 +1098,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	showStatus("ROI Color Coder with Scaled Labels and Summary Macro Finished");
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage");
+	}
 	/*
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
    */
@@ -1613,4 +1657,3 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		return unitLabel;
 	}
-}

@@ -31,6 +31,7 @@
 	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
 	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
 	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
+	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -226,7 +227,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
 	}
 	/* use adjacent bin estimate for mode */
-	mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
+	if (modalBin > 0) 
+		mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
+	else mode = modalBin + autoDistW/2; /* Yes I did find an example with a modalBin of zero! */
 	Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
 	/* End of frequency/distribution section */
 	
@@ -285,20 +288,22 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			}
 			freqDLW = rampLW;  /* Left in for tweaking appearance */
 			setLineWidth(freqDLW);
-			for (f=0; f<(autoDistWCount-1); f++) { /* Draw All Shadows First */
+			for (f=0; f<(autoDistWCount); f++) { /* Draw All Shadows First */
 				setColor(0, 0, 0); /* Note that this color will be converted to LUT equivalent */
-				if (arrayDistInt[f]>=rampMin && arrayDistInt[f]<=rampMax && distFreqPosY[f]>freqDLW) {
+				fNext = minOf(maxOf(0,f+1),autoDistWCount-1);
+				if ((arrayDistInt[f]+autoDistW)>=rampMin && arrayDistInt[f]<=rampMax) {
 					drawLine(distFreqPosX[f]-freqDLW, freqDLW, distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW);
-					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
-					drawLine(distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f+1]-freqDLW); /* Draw bar side */
+					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[fNext]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
+					drawLine(distFreqPosX[fNext]-freqDLW, freqDLW, distFreqPosX[fNext]-freqDLW, maxOf(distFreqPosY[f]-freqDLW,distFreqPosY[fNext]-freqDLW)); /* Draw bar side */
 				}
 			}
 			for (f=0; f<(autoDistWCount-1); f++) {
 				setColor(255, 255, 255); /* Note that this color will be converted to LUT equivalent */
-				if (arrayDistInt[f]>=rampMin && arrayDistInt[f]<=rampMax) {
-					drawLine(distFreqPosX[f], rampLW, distFreqPosX[f], distFreqPosY[f]);
-					drawLine(distFreqPosX[f], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f]); /* Draw bar top */
-					drawLine(distFreqPosX[f+1], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f+1]); /* Draw bar side */
+				fNext = minOf(maxOf(0,f+1),autoDistWCount-1);
+				if ((arrayDistInt[f]+autoDistW)>=rampMin && arrayDistInt[f]<=rampMax) {
+					drawLine(distFreqPosX[f], freqDLW, distFreqPosX[f], distFreqPosY[f]);  /* Draw bar side - right/bottom */
+					drawLine(distFreqPosX[f], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f]); /* Draw bar cap */
+					drawLine(distFreqPosX[fNext], freqDLW, distFreqPosX[fNext], maxOf(distFreqPosY[f],distFreqPosY[fNext])); /* Draw bar side - left/top */
 				}
 			}
 		}

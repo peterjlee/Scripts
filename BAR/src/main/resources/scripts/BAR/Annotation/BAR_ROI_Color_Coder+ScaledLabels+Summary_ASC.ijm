@@ -216,7 +216,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (IQR==0) restoreExit("Too little data");
 	
 	/* The following section produces frequency/distribution data for possible graphical use */
-	autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarised in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
+	autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
 	autoDistWCount = round(arrayRange/autoDistW);
 	arrayDistInt = newArray(autoDistWCount);
 	arrayDistFreq =  newArray(autoDistWCount);
@@ -866,7 +866,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				innerShadowBlur = Dialog.getNumber();
 				innerShadowDarkness = Dialog.getNumber();
 			}
-		/* End optional paramater label dialog */
+		/* End optional parameter label dialog */
 		if (shadowDrop<0) summLabelShadowDrop = round(shadowDrop * negAdj);
 		else summLabelShadowDrop = shadowDrop;
 		if (shadowDisp<0) summLabelShadowDisp = round(shadowDisp * negAdj);
@@ -1029,18 +1029,18 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/* Image and Ramp combination dialog */
 		Dialog.create("Combine Labeled Image and Legend?");
 			if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Scaled Ramp with New Crop of Image");
-			else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Mnaual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image"); /* 93% is close enough */
-			else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Mnaual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image");
+			else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Manual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image"); /* 93% is close enough */
+			else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Manual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image");
 			Dialog.addRadioButtonGroup("Combine Labeled Image and Legend?", comboChoice, 5, 1,  comboChoice[2]) ;
 			Dialog.show();
 		createCombo = Dialog.getRadioButton;
 		if (createCombo!="No") {
-			if (createCombo=="Combine Scaled Ramp with New Mnaual Crop of Image" || createCombo=="Combine Scaled Ramp with New Auto Crop of Image") {
+			if (createCombo=="Combine Scaled Ramp with New Manual Crop of Image" || createCombo=="Combine Scaled Ramp with New Auto Crop of Image") {
 				if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
 				selectWindow(tNC);
 				run("Duplicate...", "title=tempCrop");
 				run("Select None");
-				if (createCombo=="Combine Scaled Ramp with New Mnaual Crop of Image") {
+				if (createCombo=="Combine Scaled Ramp with New Manual Crop of Image") {
 					setTool("rectangle");
 					title="Crop Location for Combined Image";
 					msg = "Select the Crop Area";
@@ -1279,7 +1279,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			roiManager("reset");
 			Dialog.create("Analysis check");
 			Dialog.addCheckbox("Run Analyze-particles to generate new roiManager values?", true);
-			Dialog.addMessage("This macro requires that all objects have been loaded into the roi manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires that all objects have been loaded into the ROI Manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
 			Dialog.show();
 			analyzeNow = Dialog.getCheckbox();
 			if (analyzeNow) {
@@ -1310,7 +1310,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 	}
 	function cleanLabel(string) {
-		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ascii characters may vary: hence the need to always use fromCharCode instead of special characters
+		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters
 		v180317 */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
@@ -1591,7 +1591,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
 	    run("Blobs (25K)");
 		setThreshold(126, 255);
-		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitray scale to demonstrate unit usage. */
+		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
 		run("Convert to Mask");
 		run("Analyze Particles...", "display clear add");
 		resetThreshold();

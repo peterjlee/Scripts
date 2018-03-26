@@ -34,6 +34,7 @@
 	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
 	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
 	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
+	+ v180326 Restored missing frequency distribution column.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -288,24 +289,24 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				distFreqPosX[f] = (arrayDistInt[f]-rampMin)*rampRXF;
 				distFreqPosY[f] = arrayDistFreq[f]*rampRYF;
 			}
+			distFreqPosXIncr = distFreqPosX[autoDistWCount-1] - distFreqPosX[autoDistWCount-2];
+			fLastX = newArray(distFreqPosX[autoDistWCount-1]+distFreqPosXIncr,"");
+			distFreqPosX = Array.concat(distFreqPosX,fLastX);
 			freqDLW = rampLW;  /* Left in for tweaking appearance */
-			setLineWidth(freqDLW);
 			for (f=0; f<(autoDistWCount); f++) { /* Draw All Shadows First */
 				setColor(0, 0, 0); /* Note that this color will be converted to LUT equivalent */
-				fNext = minOf(maxOf(0,f+1),autoDistWCount-1);
-				if ((arrayDistInt[f]+autoDistW)>=rampMin && arrayDistInt[f]<=rampMax) {
+				if (arrayDistFreq[f] > 0) {
 					drawLine(distFreqPosX[f]-freqDLW, freqDLW, distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW);
-					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[fNext]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
-					drawLine(distFreqPosX[fNext]-freqDLW, freqDLW, distFreqPosX[fNext]-freqDLW, maxOf(distFreqPosY[f]-freqDLW,distFreqPosY[fNext]-freqDLW)); /* Draw bar side */
+					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
+					drawLine(distFreqPosX[f+1]-freqDLW, freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar side */
 				}
 			}
-			for (f=0; f<(autoDistWCount-1); f++) {
+			for (f=0; f<autoDistWCount; f++) {
 				setColor(255, 255, 255); /* Note that this color will be converted to LUT equivalent */
-				fNext = minOf(maxOf(0,f+1),autoDistWCount-1);
-				if ((arrayDistInt[f]+autoDistW)>=rampMin && arrayDistInt[f]<=rampMax) {
+				if (arrayDistFreq[f] > 0) {
 					drawLine(distFreqPosX[f], freqDLW, distFreqPosX[f], distFreqPosY[f]);  /* Draw bar side - right/bottom */
 					drawLine(distFreqPosX[f], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f]); /* Draw bar cap */
-					drawLine(distFreqPosX[fNext], freqDLW, distFreqPosX[fNext], maxOf(distFreqPosY[f],distFreqPosY[fNext])); /* Draw bar side - left/top */
+					drawLine(distFreqPosX[f+1], freqDLW, distFreqPosX[f+1],distFreqPosY[f]); /* Draw bar side - left/top */
 				}
 			}
 		}

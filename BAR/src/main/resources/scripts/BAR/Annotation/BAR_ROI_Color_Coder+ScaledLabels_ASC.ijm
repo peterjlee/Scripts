@@ -28,6 +28,8 @@
 	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
 	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
 	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
+	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
+	+ v180326 Restored missing frequency distribution column.
  */
  
 macro "ROI Color Coder with Scaled Labels"{
@@ -124,7 +126,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.setInsets(-4, 120, -12);
 	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
-	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "4sigma", "Range");
+	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
 	Dialog.setInsets(-6, 0, 8);
 	Dialog.addRadioButtonGroup("Outline outliers if outside the following values:", outlierOptions, 1, 5, "No");
 	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
@@ -282,24 +284,24 @@ macro "ROI Color Coder with Scaled Labels"{
 				distFreqPosX[f] = (arrayDistInt[f]-rampMin)*rampRXF;
 				distFreqPosY[f] = arrayDistFreq[f]*rampRYF;
 			}
+			distFreqPosXIncr = distFreqPosX[autoDistWCount-1] - distFreqPosX[autoDistWCount-2];
+			fLastX = newArray(distFreqPosX[autoDistWCount-1]+distFreqPosXIncr,"");
+			distFreqPosX = Array.concat(distFreqPosX,fLastX);
 			freqDLW = rampLW;  /* Left in for tweaking appearance */
-			setLineWidth(freqDLW);
 			for (f=0; f<(autoDistWCount); f++) { /* Draw All Shadows First */
 				setColor(0, 0, 0); /* Note that this color will be converted to LUT equivalent */
-				fNext = minOf(maxOf(0,f+1),autoDistWCount-1);
-				if ((arrayDistInt[f]+autoDistW)>=rampMin && arrayDistInt[f]<=rampMax) {
+				if (arrayDistFreq[f] > 0) {
 					drawLine(distFreqPosX[f]-freqDLW, freqDLW, distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW);
-					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[fNext]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
-					drawLine(distFreqPosX[fNext]-freqDLW, freqDLW, distFreqPosX[fNext]-freqDLW, maxOf(distFreqPosY[f]-freqDLW,distFreqPosY[fNext]-freqDLW)); /* Draw bar side */
+					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
+					drawLine(distFreqPosX[f+1]-freqDLW, freqDLW, distFreqPosX[f+1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar side */
 				}
 			}
-			for (f=0; f<(autoDistWCount-1); f++) {
+			for (f=0; f<autoDistWCount; f++) {
 				setColor(255, 255, 255); /* Note that this color will be converted to LUT equivalent */
-				fNext = minOf(maxOf(0,f+1),autoDistWCount-1);
-				if ((arrayDistInt[f]+autoDistW)>=rampMin && arrayDistInt[f]<=rampMax) {
+				if (arrayDistFreq[f] > 0) {
 					drawLine(distFreqPosX[f], freqDLW, distFreqPosX[f], distFreqPosY[f]);  /* Draw bar side - right/bottom */
 					drawLine(distFreqPosX[f], distFreqPosY[f], distFreqPosX[f+1], distFreqPosY[f]); /* Draw bar cap */
-					drawLine(distFreqPosX[fNext], freqDLW, distFreqPosX[fNext], maxOf(distFreqPosY[f],distFreqPosY[fNext])); /* Draw bar side - left/top */
+					drawLine(distFreqPosX[f+1], freqDLW, distFreqPosX[f+1],distFreqPosY[f]); /* Draw bar side - left/top */
 				}
 			}
 		}
@@ -364,7 +366,7 @@ macro "ROI Color Coder with Scaled Labels"{
 					setLineWidth(round(rampLW/4));
 					drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
 					drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
-					setLineWidth(rampLW); /* Rest line width */
+					setLineWidth(rampLW); /* reset line width */
 				}
 			}
 		}
@@ -651,6 +653,27 @@ macro "ROI Color Coder with Scaled Labels"{
 		if (is("Batch Mode")==false) setBatchMode(true);
 		if (outlierChoice!="No")  {
 			sigmaR = (parseInt(substring(outlierChoice,0,1)));
+			if (outlierChoice=="Select") {
+				Dialog.create("Input Outlier Limits");
+				Dialog.addString("Outlier Limits:", "Low-High", 16);
+				Dialog.addMessage("Alternatively enter 4sigma, 5sigma etc. \(up to 9\).");
+				Dialog.show();
+				outlierLimit = Dialog.getString();
+				sigmaTest = split(outlierLimit,"sig");
+				if (lengthOf(sigmaTest)>1) {
+					sigmaR = (parseInt(substring(outlierLimit,0,1)));
+					outlierChoice = "" + sigmaR + "sigma";
+				}
+				else {
+					outlierLimits = split(outlierLimit, "-");
+					if (lengthOf(outlierLimits)==1) {
+						outlierMin= NaN; outlierMax= parseFloat(range[0]);
+					} else {
+						outlierMin= parseFloat(outlierLimits[0]); outlierMax= parseFloat(outlierLimits[1]);
+					}
+					if (indexOf(outlierChoice, "-")==0) outlierMin = 0 - outlierMin; /* checks to see if rampMin is a negative value (lets hope the rampMax isn't). */
+				}
+			}
 			setForegroundColorFromName(outlierColor);
 			outlierStroke = maxOf(1,round(fontSize/100 * outlierStrokePC));
 			run("Line Width...", "line=[outlierStroke]");
@@ -663,7 +686,13 @@ macro "ROI Color Coder with Scaled Labels"{
 						outlierCounter +=1;
 					}
 				}
-				if (sigmaR>=1) {
+				else if (outlierChoice=="Select") {
+					if (values[i]<outlierMin || values[i]>outlierMax) {
+						run("Draw", "slice");
+						outlierCounter +=1;
+					}
+				}
+				else if (sigmaR>=1) {
 					if (statsRampLines=="Ln") {
 						if (values[i]<(expLnMeanMinusSDs[sigmaR]) || values[i]>(expLnMeanPlusSDs[sigmaR])) {
 							run("Draw", "slice");
@@ -675,8 +704,9 @@ macro "ROI Color Coder with Scaled Labels"{
 						outlierCounter +=1;
 					}
 				}
+				else { outlierChoice = "No"; i = items;} /* there seems to be a coding malfunction */
 			}
-			run("Line Width...", "line=1"); /* Rest line width to ImageJ default */
+			run("Line Width...", "line=1"); /* Reset line width to ImageJ default */
 		}
 		else outlierCounter="No"; 
 		// roiManager("show none");
@@ -1370,12 +1400,14 @@ macro "ROI Color Coder with Scaled Labels"{
 		exit(message);
 	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
+	/* v180104 */
 	    run("Blobs (25K)");
-		setThreshold(126, 255);
-		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
+		run("Auto Threshold", "method=Default");
 		run("Convert to Mask");
-		run("Analyze Particles...", "display clear add");
+		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
+		run("Analyze Particles...", "display exclude clear add");
 		resetThreshold();
+		if (is("Inverting LUT")==true) run("Invert LUT");
 	}
 	function stripExtensionsFromString(string) {
 		while (lastIndexOf(string, ".")!=-1) {

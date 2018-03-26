@@ -33,6 +33,7 @@
 	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
 	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
 	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
+	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -129,7 +130,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.setInsets(-4, 120, -12);
 	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
-	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "4sigma", "Range");
+	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
 	Dialog.setInsets(-6, 0, 8);
 	Dialog.addRadioButtonGroup("Outline outliers if outside the following values:", outlierOptions, 1, 5, "No");
 	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
@@ -646,6 +647,27 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (is("Batch Mode")==false) setBatchMode(true);
 		if (outlierChoice!="No")  {
 			sigmaR = (parseInt(substring(outlierChoice,0,1)));
+			if (outlierChoice=="Select") {
+				Dialog.create("Input Outlier Limits");
+				Dialog.addString("Outlier Limits:", "Low-High", 16);
+				Dialog.addMessage("Alternatively enter 4sigma, 5sigma etc. \(up to 9\).");
+				Dialog.show();
+				outlierLimit = Dialog.getString();
+				sigmaTest = split(outlierLimit,"sig");
+				if (lengthOf(sigmaTest)>1) {
+					sigmaR = (parseInt(substring(outlierLimit,0,1)));
+					outlierChoice = "" + sigmaR + "sigma";
+				}
+				else {
+					outlierLimits = split(outlierLimit, "-");
+					if (lengthOf(outlierLimits)==1) {
+						outlierMin= NaN; outlierMax= parseFloat(range[0]);
+					} else {
+						outlierMin= parseFloat(outlierLimits[0]); outlierMax= parseFloat(outlierLimits[1]);
+					}
+					if (indexOf(outlierChoice, "-")==0) outlierMin = 0 - outlierMin; /* checks to see if rampMin is a negative value (lets hope the rampMax isn't). */
+				}
+			}
 			setForegroundColorFromName(outlierColor);
 			outlierStroke = maxOf(1,round(fontSize/100 * outlierStrokePC));
 			run("Line Width...", "line=[outlierStroke]");
@@ -658,7 +680,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 						outlierCounter +=1;
 					}
 				}
-				if (sigmaR>=1) {
+				else if (outlierChoice=="Select") {
+					if (values[i]<outlierMin || values[i]>outlierMax) {
+						run("Draw", "slice");
+						outlierCounter +=1;
+					}
+				}
+				else if (sigmaR>=1) {
 					if (statsRampLines=="Ln") {
 						if (values[i]<(expLnMeanMinusSDs[sigmaR]) || values[i]>(expLnMeanPlusSDs[sigmaR])) {
 							run("Draw", "slice");
@@ -670,8 +698,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 						outlierCounter +=1;
 					}
 				}
+				else { outlierChoice = "No"; i = items;} /* there seems to be a coding malfunction */
 			}
-			run("Line Width...", "line=1"); /* Rest line width to ImageJ default */
+			run("Line Width...", "line=1"); /* Reset line width to ImageJ default */
 		}
 		else outlierCounter="No"; 
 		// roiManager("show none");
@@ -758,6 +787,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	/* Reduce decimal places - but not as much as ramp labels */
 		summaryDP = decPlaces + 2;
 		outlierChoiceAbbrev = cleanLabel(outlierChoice);
+		if (outlierChoice=="Select") 	outlierChoiceAbbrev = "<" + outlierMin + " >" + outlierMax + " " + unitLabel;
+		else if (outlierChoice=="Range") 	outlierChoiceAbbrev = "<" + rampMin + " >" + rampMax + " " + unitLabel;
+		else outlierChoiceAbbrev = "outside " + outlierChoiceAbbrev;
 		arrayMean = d2s(arrayMean,summaryDP);
 		coeffVar = d2s((100/arrayMean)*arraySD,summaryDP);
 		arraySD = d2s(arraySD,summaryDP);
@@ -772,7 +804,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);	
 			Dialog.addNumber("Statistics summary font size:", statsLabFontSize);				
 			statsChoice1 = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items);
-			statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects outside " + outlierChoiceAbbrev + " in " + outlierColor);
+			statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
 			statsChoice3 = newArray(			
 			"Mean:  " + arrayMean + " " +unitLabel,
 			"Median:  " + median + " " +unitLabel,
@@ -917,7 +949,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				if (indexOf(statsLabLine[i], ":  ")>0) statsLabLine[i] = substring(statsLabLine[i], 0, indexOf(statsLabLine[i], ":  "));
 				if (statsLabLine[i]=="Dashed Line:  ---") statsLabLineText[i] = "----------";
 				else if (statsLabLine[i]=="Number of objects") statsLabLineText[i] = "Objects = " + items;
-				else if (statsLabLine[i]=="Outlines") statsLabLineText[i] = "Outlined: " + outlierCounter + " objects outside " + outlierChoiceAbbrev + " in " + outlierColor;
+				else if (statsLabLine[i]=="Outlines") statsLabLineText[i] = "Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor;
 				else if (statsLabLine[i]=="Mean") statsLabLineText[i] = "Mean = " + arrayMean + " " + unitLabel;
 				else if (statsLabLine[i]=="Median") statsLabLineText[i] = "Median = " + median + " " + unitLabel;
 				else if (statsLabLine[i]=="StdDev") statsLabLineText[i] = "Std.Dev.: " + arraySD + " " + unitLabel;
@@ -1589,12 +1621,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		exit(message);
 	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
+	/* v180104 */
 	    run("Blobs (25K)");
-		setThreshold(126, 255);
-		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
+		run("Auto Threshold", "method=Default");
 		run("Convert to Mask");
-		run("Analyze Particles...", "display clear add");
+		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
+		run("Analyze Particles...", "display exclude clear add");
 		resetThreshold();
+		if (is("Inverting LUT")==true) run("Invert LUT");
 	}
 	function stripExtensionsFromString(string) {
 		while (lastIndexOf(string, ".")!=-1) {

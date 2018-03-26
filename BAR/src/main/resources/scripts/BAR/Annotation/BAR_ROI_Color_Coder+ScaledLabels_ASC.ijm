@@ -364,7 +364,7 @@ macro "ROI Color Coder with Scaled Labels"{
 					setLineWidth(round(rampLW/4));
 					drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
 					drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
-					setLineWidth(rampLW); /* reset line width */
+					setLineWidth(rampLW); /* Rest line width */
 				}
 			}
 		}

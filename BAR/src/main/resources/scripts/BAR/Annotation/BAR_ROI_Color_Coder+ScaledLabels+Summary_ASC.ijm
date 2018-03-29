@@ -217,7 +217,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	IQR = arrayQuartile[2] - arrayQuartile[0];
 	if (IQR==0) restoreExit("Too little data");
 	
-	/* The following section produces frequency/distribution data for possible graphical use */
+	/* The following section produces frequency/distribution data for option distribution plot on ramp and for the summary */
 	autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
 	autoDistWCount = round(arrayRange/autoDistW);
 	arrayDistInt = newArray(autoDistWCount);
@@ -292,7 +292,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			distFreqPosXIncr = distFreqPosX[autoDistWCount-1] - distFreqPosX[autoDistWCount-2];
 			fLastX = newArray(distFreqPosX[autoDistWCount-1]+distFreqPosXIncr,"");
 			distFreqPosX = Array.concat(distFreqPosX,fLastX);
-			freqDLW = rampLW;  /* Left in for tweaking appearance */
+			freqDLW = maxOf(1,round(rampLW/2));
+			setLineWidth(freqDLW);
 			for (f=0; f<(autoDistWCount); f++) { /* Draw All Shadows First */
 				setColor(0, 0, 0); /* Note that this color will be converted to LUT equivalent */
 				if (arrayDistFreq[f] > 0) {

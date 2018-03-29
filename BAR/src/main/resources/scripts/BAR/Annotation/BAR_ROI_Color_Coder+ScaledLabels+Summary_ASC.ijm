@@ -35,6 +35,7 @@
 	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
 	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
 	+ v180326 Restored missing frequency distribution column.
+	+ v180329 Changed line width for frequency plot to work better for very large images.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{

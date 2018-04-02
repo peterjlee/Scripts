@@ -36,6 +36,7 @@
 	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
 	+ v180326 Restored missing frequency distribution column.
 	+ v180329 Changed line width for frequency plot to work better for very large images.
+	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -130,14 +131,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
 	Dialog.setInsets(-35, 235, 0);
 	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.setInsets(-4, 120, -12);
+	Dialog.setInsets(-4, 120, -6);
 	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
 	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
-	Dialog.setInsets(-6, 0, 8);
-	Dialog.addRadioButtonGroup("Outline outliers if outside the following values:", outlierOptions, 1, 5, "No");
-	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
-	Dialog.setInsets(0, 0, 8);
-	Dialog.addChoice("Outlier outline color:", colorChoice, colorChoice[0]);
+	Dialog.addRadioButtonGroup("Outline outliers if outside the following values \(format in next dialog\):", outlierOptions, 1, 5, "No");
+	Dialog.setInsets(8, 0, 0);
 	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
@@ -176,7 +174,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		minmaxLines = Dialog.getCheckbox;
 		outlierChoice =  Dialog.getRadioButton;
-		outlierColor = Dialog.getChoice(); /* Object label color */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice = Dialog.getChoice;
@@ -572,7 +569,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern", "red", "green", "blue", "cyan", "yellow", "magenta"); 
 			else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
-			Dialog.addNumber("Font scaling:", 60,0,3,"% of Auto");
+			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
 			Dialog.addNumber("Restrict label font size:", round(imageWidth/90),0,4, "Min to ");
 			Dialog.setInsets(-28, 90, 0);
 			Dialog.addNumber("Max", round(imageWidth/16), 0, 4, "Max");
@@ -580,16 +577,21 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
 			fontNameChoice = newArray("SansSerif", "Serif", "Monospaced");
 			Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-			Dialog.addNumber("Outlier object outline stroke:", outlierStrokePC,0,3,"% of font size");
+			if (outlierChoice!="No") {
+				colorChoice2 = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
+				Dialog.setInsets(0, 0, 8);
+				Dialog.addChoice("Outlier outline color:", colorChoice2, colorChoice2[0]);
+				Dialog.addNumber("Outlier object outline stroke:", outlierStrokePC,0,3,"% of auto font size");
+			}
 			Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2"), dpChoice); /* reuse previous dpChoice as default */
-			Dialog.addNumber("Label outline stroke:", outlineStrokePC,0,3,"% of font size");
+			Dialog.addNumber("Label outline stroke:", outlineStrokePC,0,3,"% of auto mean size");
 			Dialog.addChoice("Label Outline (background) color:", colorChoice, colorChoice[1]);
-			Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of font size");
-			Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of font size");
-			Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of font size");
+			Dialog.addNumber("Shadow drop: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
+			Dialog.addNumber("Shadow displacement Right: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
+			Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of mean font size");
 			Dialog.addNumber("Shadow darkness \(darkest = 100%\):", 50,0,3,"%, neg.= glow");
-			Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of font size");
-			Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of font size");
+			Dialog.addNumber("Inner shadow drop: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
+			Dialog.addNumber("Inner displacement right: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
 			Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
 			Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 15,0,3,"%");
 			Dialog.setInsets(3, 0, 3);
@@ -613,7 +615,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			maxLFontS = Dialog.getNumber(); 
 			fontStyle = Dialog.getChoice();
 			fontName = Dialog.getChoice();
-			outlierStrokePC = Dialog.getNumber();
+			if (outlierChoice!="No") {
+				outlierColor = Dialog.getChoice(); /* Outlier object outline color */
+				outlierStrokePC = Dialog.getNumber(); /* Outlier object outline thickness */
+			}
 			dpChoice = Dialog.getChoice();
 			outlineStrokePC = Dialog.getNumber();
 			outlineColor = Dialog.getChoice();
@@ -807,7 +812,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addNumber("Parameter label font size:", paraLabFontSize);	
 			Dialog.addNumber("Statistics summary font size:", statsLabFontSize);				
 			statsChoice1 = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items);
-			statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
+			if (outlierChoice!="No") statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
 			statsChoice3 = newArray(			
 			"Mean:  " + arrayMean + " " +unitLabel,
 			"Median:  " + median + " " +unitLabel,
@@ -829,9 +834,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			"Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "User Text",
 			"Long Underline:  ___","Blank line");
 			if (freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4);
-			if (outlierChoice!="no") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6);
+			if (outlierChoice!="No") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6);
 			else statsChoice = Array.concat(statsChoice1,statsChoice3,statsChoice5,statsChoice6);
-			if (menuLimit > 752)	textChoiceLines = 3;
+			if (menuLimit > 796)	textChoiceLines = 3;
 			else textChoiceLines = 1;
 			userInput = newArray(textChoiceLines);
 			for (i=0; i<statsChoiceLines; i++) {
@@ -844,13 +849,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addChoice("Summary and parameter font color:", colorChoice, "white");
 			Dialog.addChoice("Summary and parameter outline color:", colorChoice, "black");
 			if (menuLimit>=796) { /* room to show full dialog */
-				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of font size");
-				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of font size");
-				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of font size");
-				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of font size");
+				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of stats label font size");
 				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
-				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of font size");
-				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of font size");
+				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of stats label font size");
 				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
 				Dialog.show();
@@ -881,13 +886,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			}
 			else {
 				Dialog.create("Statistics Summary Options Tweaks");
-				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of font size");
-				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of font size");
-				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of font size");
-				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of font size");
+				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of stats label font size");
 				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
-				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of font size");
-				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of font size");
+				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of stats label font size");
 				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
 				Dialog.show();
@@ -915,7 +920,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (innerShadowBlur<0) summLabelInnerShadowBlur = round(innerShadowBlur * negAdj);
 		else summLabelInnerShadowBlur = innerShadowBlur;
 		/* convert font percentages to pixels */
-		fontFactor = paraLabFontSize/100;
+		fontFactor = statsLabFontSize/100;
 		outlineStroke = round(fontFactor * outlineStrokePC);
 		summLabelShadowDrop = floor(fontFactor * summLabelShadowDrop);
 		summLabelShadowDisp = floor(fontFactor * summLabelShadowDisp);
@@ -1361,6 +1366,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
 		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
+		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */

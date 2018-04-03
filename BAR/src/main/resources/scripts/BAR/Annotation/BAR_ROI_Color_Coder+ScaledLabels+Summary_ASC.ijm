@@ -37,6 +37,7 @@
 	+ v180326 Restored missing frequency distribution column.
 	+ v180329 Changed line width for frequency plot to work better for very large images.
 	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
+	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -382,19 +383,20 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			newImage("label_mask", "8-bit black", getWidth(), getHeight(), 1);
 			setColor("white");
 			setLineWidth(rampLW);
+			minPos = 0; maxPos = rampH; /* to be used in later sd overlap if statement */
 			if (minmaxLines) {
 				if (rampMin==rampMax) restoreExit("Something terribly wrong with this range!");
 				trueMaxFactor = (arrayMax-rampMin)/(rampMax-rampMin);
 				maxPos = round(fontSize/2 + (rampH * (1 - trueMaxFactor)) +1.5*fontSize)-1;
 				trueMinFactor = (arrayMin-rampMin)/(rampMax-rampMin);
 				minPos = round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize)-1;
-				if (trueMaxFactor<1) {
+				if (trueMaxFactor<1 && && maxPos<(rampH - 0.5*fontSR2)) {
 					setFont(fontName, fontSR2, fontStyle);
 					drawString("Max", round((rampW-getStringWidth("Max"))/2), round(maxPos+0.5*fontSR2));
 					drawLine(rampLW, maxPos, tickLR, maxPos);
 					drawLine(rampW-1-tickLR, maxPos, rampW-rampLW-1, maxPos);
 				}
-				if (trueMinFactor>0) {
+				if (trueMinFactor>0 && minPos>(0.5*fontSR2)) {
 					setFont(fontName, fontSR2, fontStyle);
 					drawString("Min", round((rampW-getStringWidth("Min"))/2), round(minPos+0.5*fontSR2));
 					drawLine(rampLW, minPos, tickLR, minPos);
@@ -430,20 +432,24 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					drawLine(rampW-1-tickLR, plusSDPos[0], rampW-rampLW-1, plusSDPos[0]);
 				}
 				for (s=1; s<10; s++) {
-					if (rampMeanPlusSDFactors[s]<1 && rampMeanPlusSDs[s]<0.96*rampMax && rampMeanPlusSDs[s]<0.96*arrayMax) {
+					if (rampMeanPlusSDFactors[s]<1 && plusSDPos[s]<(rampH - fontSR2) && abs(plusSDPos[s]-plusSDPos[s-1])>fontSR2) {
 						setFont(fontName, fontSR2, fontStyle);
-						drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
-						drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
-						drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
+						if (minmaxLines && plusSDPos<(maxPos-fontSR2)) { /* prevent overlap with max line */
+							drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
+							drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
+							drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
+						}
 						if (rampMeanPlusSDFactors[minOf(9,s+1)]>0.93) s = 10;
 					}
 				}
 				for (s=1; s<10; s++) {
-					if (rampMeanMinusSDFactors[s]>0 && rampMeanMinusSDs[s]>1.02*rampMin && rampMeanMinusSDs[s]>1.08*arrayMin) {
+					if (rampMeanMinusSDFactors[s]>0 && minusSDPos[s]>fontSR2 && abs(minusSDPos[s]-plusSDPos[s-1])>fontSR2) {
 						setFont(fontName, fontSR2, fontStyle);
-						drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
-						drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
-						drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
+						if (minmaxLines && minusSDPos<(minPos+fontSR2)) { /* prevent overlap with max line */
+							drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
+							drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
+							drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
+						}
 						if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
 					}
 				}
@@ -836,7 +842,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4);
 			if (outlierChoice!="No") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6);
 			else statsChoice = Array.concat(statsChoice1,statsChoice3,statsChoice5,statsChoice6);
-			if (menuLimit > 796)	textChoiceLines = 3;
+			if (menuLimit > 752)	textChoiceLines = 3;
 			else textChoiceLines = 1;
 			userInput = newArray(textChoiceLines);
 			for (i=0; i<statsChoiceLines; i++) {

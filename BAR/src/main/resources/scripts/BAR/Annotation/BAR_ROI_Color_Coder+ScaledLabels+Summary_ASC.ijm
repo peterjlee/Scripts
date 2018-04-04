@@ -38,6 +38,7 @@
 	+ v180329 Changed line width for frequency plot to work better for very large images.
 	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
 	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
+	+ v180404 Fixed above.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -390,7 +391,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				maxPos = round(fontSize/2 + (rampH * (1 - trueMaxFactor)) +1.5*fontSize)-1;
 				trueMinFactor = (arrayMin-rampMin)/(rampMax-rampMin);
 				minPos = round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize)-1;
-				if (trueMaxFactor<1 && && maxPos<(rampH - 0.5*fontSR2)) {
+				if (trueMaxFactor<1 && maxPos<(rampH - 0.5*fontSR2)) {
 					setFont(fontName, fontSR2, fontStyle);
 					drawString("Max", round((rampW-getStringWidth("Max"))/2), round(maxPos+0.5*fontSR2));
 					drawLine(rampLW, maxPos, tickLR, maxPos);
@@ -432,9 +433,16 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					drawLine(rampW-1-tickLR, plusSDPos[0], rampW-rampLW-1, plusSDPos[0]);
 				}
 				for (s=1; s<10; s++) {
-					if (rampMeanPlusSDFactors[s]<1 && plusSDPos[s]<(rampH - fontSR2) && abs(plusSDPos[s]-plusSDPos[s-1])>fontSR2) {
+					if (rampMeanPlusSDFactors[s]<1 && plusSDPos[s]<(rampH - fontSR2) && abs(plusSDPos[s]-plusSDPos[s-1])>0.75*fontSR2) {
 						setFont(fontName, fontSR2, fontStyle);
-						if (minmaxLines && plusSDPos<(maxPos-fontSR2)) { /* prevent overlap with max line */
+						if (minmaxLines) {
+							if (plusSDPos[s]<(maxPos-0.75*fontSR2) || plusSDPos[s]>(maxPos+0.75*fontSR2)) { /* prevent overlap with max line */
+								drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
+								drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
+								drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
+							}
+						}
+						else {
 							drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
 							drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
 							drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
@@ -443,9 +451,16 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					}
 				}
 				for (s=1; s<10; s++) {
-					if (rampMeanMinusSDFactors[s]>0 && minusSDPos[s]>fontSR2 && abs(minusSDPos[s]-plusSDPos[s-1])>fontSR2) {
+					if (rampMeanMinusSDFactors[s]>0 && minusSDPos[s]>fontSR2 && abs(minusSDPos[s]-plusSDPos[s-1])>0.75*fontSR2) {
 						setFont(fontName, fontSR2, fontStyle);
-						if (minmaxLines && minusSDPos<(minPos+fontSR2)) { /* prevent overlap with max line */
+						if (minmaxLines) {
+							if (minusSDPos[s]<(minPos-0.75*fontSR2) || minusSDPos[s]>(minPos+0.75*fontSR2)) { /* prevent overlap with min line */
+								drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
+								drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
+								drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
+							}
+						}
+						else {
 							drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
 							drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
 							drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);

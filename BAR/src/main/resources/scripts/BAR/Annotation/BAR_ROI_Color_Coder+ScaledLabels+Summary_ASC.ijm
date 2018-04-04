@@ -432,38 +432,44 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					drawLine(rampLW, plusSDPos[0], tickLR, plusSDPos[0]);
 					drawLine(rampW-1-tickLR, plusSDPos[0], rampW-rampLW-1, plusSDPos[0]);
 				}
+				lastDrawnPlusSDPos = plusSDPos[0];
 				for (s=1; s<10; s++) {
-					if (rampMeanPlusSDFactors[s]<1 && plusSDPos[s]<(rampH - fontSR2) && abs(plusSDPos[s]-plusSDPos[s-1])>0.75*fontSR2) {
+					if (rampMeanPlusSDFactors[s]<1 && plusSDPos[s]<(rampH - fontSR2) && abs(plusSDPos[s]-lastDrawnPlusSDPos)>0.75*fontSR2) {
 						setFont(fontName, fontSR2, fontStyle);
 						if (minmaxLines) {
 							if (plusSDPos[s]<(maxPos-0.75*fontSR2) || plusSDPos[s]>(maxPos+0.75*fontSR2)) { /* prevent overlap with max line */
 								drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
 								drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
 								drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
+								lastDrawnPlusSDPos = plusSDPos[s];
 							}
 						}
 						else {
 							drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.5*fontSR2));
 							drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
 							drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
+							lastDrawnPlusSDPos = plusSDPos[s];
 						}
 						if (rampMeanPlusSDFactors[minOf(9,s+1)]>0.93) s = 10;
 					}
 				}
+				lastDrawnMinusSDPos = minusSDPos[0];
 				for (s=1; s<10; s++) {
-					if (rampMeanMinusSDFactors[s]>0 && minusSDPos[s]>fontSR2 && abs(minusSDPos[s]-plusSDPos[s-1])>0.75*fontSR2) {
+					if (rampMeanMinusSDFactors[s]>0 && minusSDPos[s]>fontSR2 && abs(minusSDPos[s]-lastDrawnMinusSDPos)>0.75*fontSR2) {
 						setFont(fontName, fontSR2, fontStyle);
 						if (minmaxLines) {
 							if (minusSDPos[s]<(minPos-0.75*fontSR2) || minusSDPos[s]>(minPos+0.75*fontSR2)) { /* prevent overlap with min line */
 								drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
 								drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
 								drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
+								lastDrawnMinusSDPos = minusSDPos[s];
 							}
 						}
 						else {
 							drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
 							drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
 							drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
+							lastDrawnMinusSDPos = minusSDPos[s];
 						}
 						if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
 					}
@@ -1699,6 +1705,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
+	/* v180404 added Feret_MinDAngle_Offset */
 		if (endsWith(string,"\)")) { /* label with units from string string if available */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
@@ -1715,7 +1722,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
 			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
 			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90") unitLabel = fromCharCode(0x00B0);
+			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90" || string=="Feret_MinDAngle_Offset" || string=="MinDistAngle") unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 		}

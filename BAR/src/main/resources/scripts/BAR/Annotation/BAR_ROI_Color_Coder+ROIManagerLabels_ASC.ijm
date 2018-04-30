@@ -25,10 +25,10 @@ macro "ROI Color Coder with Labels"{
 	run("Select None");
 	/*
 	Set options for black objects on white background as this works better for publications */
-	run("Options...", "iterations=1 white count=1"); /* set white background */
-	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
+	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
+	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* do not use Inverting LUT */
+	run("Appearance...", " "); /* Do not use Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background)
 		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
@@ -252,7 +252,7 @@ if (minmaxIOR) {
 				drawLine(rampW-1-tickL, yPos, rampW, yPos);
 				setLineWidth(rampLW/2);
 				drawLine(rampW, yPos, rampW+rampLW, yPos); /* right tick extends over border slightly as subtle cross-tick */
-				setLineWidth(rampLW); /* reset line width */
+				setLineWidth(rampLW); /* Rest line width */
 			}
 		}
 	}
@@ -380,8 +380,8 @@ if (minmaxIOR) {
 		} else
 			roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
 		labelValue = values[i];
-		labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
-		labelString = removeTrailingZerosAndPeriod(labelString); /* remove trailing characters */
+		labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
+		labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
 		roiManager("Rename", labelString); /* label roi with feature value */
 	}
 	
@@ -454,14 +454,14 @@ if (minmaxIOR) {
 			Dialog.addCheckbox("Run Analyze-particles to generate table?", true);
 			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRES +"   results.\nThere are    " + nROIs +"   ROIs.");
 			Dialog.show();
-			analyzeNow = Dialog.getCheckbox(); /* if (analyzeNow==true) ImageJ analyze particles will be performed, otherwise exit; */
+			analyzeNow = Dialog.getCheckbox(); /* If (analyzeNow==true), ImageJ Analyze Particles will be performed, otherwise exit */
 			if (analyzeNow==true) {
 				if (roiManager("count")!=0) {
 					roiManager("deselect")
 					roiManager("delete"); 
 				}
 				setOption("BlackBackground", false);
-				run("Analyze Particles..."); /* let user select settings */
+				run("Analyze Particles..."); /* Let user select settings */
 			}
 			else restoreExit("Goodbye");
 		}
@@ -478,20 +478,20 @@ if (minmaxIOR) {
 			roiManager("reset");
 			Dialog.create("Analysis check");
 			Dialog.addCheckbox("Run Analyze-particles to generate new roiManager values?", true);
-			Dialog.addMessage("This macro requires that all objects have been loaded into the roi manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
 			Dialog.show();
 			analyzeNow = Dialog.getCheckbox();
 			if (analyzeNow) {
 				setOption("BlackBackground", false);
 				if (nResults==0)
 					run("Analyze Particles...", "display add");
-				else run("Analyze Particles..."); /* let user select settings */
+				else run("Analyze Particles..."); /* Let user select settings */
 				if (nResults!=roiManager("count"))
 					restoreExit("Results and ROI Manager counts do not match!");
 			}
 			else restoreExit("Goodbye, your previous setting will be restored.");
 		}
-		return roiManager("count"); /* returns the new count of entries */
+		return roiManager("count"); /* Returns the new count of entries */
 	}
 	function checkForUnits() {  /* 
 		/* v161108 (adds inches to possible reasons for checking calibration)
@@ -511,25 +511,25 @@ if (minmaxIOR) {
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
-		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /*	superscript -1 */
-		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /*	superscript -2 */
-		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micrometer units*/
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* angstrom symbol*/
-		string= replace(string, "  ", " "); /* double spaces*/
-		string= replace(string, "_", fromCharCode(0x2009)); /* replace underlines with thin spaces*/
-		string= replace(string, "px", "pixels"); /* expand pixel abbreviate*/
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
-		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
+		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
+		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
+		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
+		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		return string;
 	}
-	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */
+	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
 		if (isOpen(windowTitle)) {
 		selectWindow(windowTitle);
 		close();
 		}
 	}
-	function expandLabel(string) {  /* mostly for better looking summary tables */
+	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
@@ -540,10 +540,10 @@ if (minmaxIOR) {
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
 		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* put this here as an exception to the above */
-		string = replace(string, "°, degrees", "°"); /* that would be otherwise too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* remove mystery Â */
-		string = replace(string, " ", fromCharCode(0x2009)); /* use this last so all spaces converted */
+		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
+		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
 	function getLutsList() {
@@ -551,7 +551,7 @@ if (minmaxIOR) {
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
-		/* A list of frequently used luts for the top of the list . . . */
+		/* A list of frequently used LUTs for the top of the menu list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		baseLuts = newArray(lengthOf(preferredLuts));
 		baseLutsCount = 0;
@@ -565,18 +565,18 @@ if (minmaxIOR) {
 		}
 		baseLuts=Array.trim(baseLuts, baseLutsCount);
 		lutsList=Array.concat(baseLuts, defaultLuts);
-		return lutsList; /* required to return new array */
+		return lutsList; /* Required to return new array */
 	}
 	function getSelectionFromMask(selection_Mask){
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
 		tempTitle = getTitle();
 		selectWindow(selection_Mask);
-		run("Create Selection"); /* selection inverted perhaps because mask has inverted lut? */
+		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
 		run("Make Inverse");
 		selectWindow(tempTitle);
 		run("Restore Selection");
-		if (!batchMode) setBatchMode(false); /* return to original batch mode */
+		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
 	function loadLutColors(lut) {
 		run(lut);
@@ -591,7 +591,7 @@ if (minmaxIOR) {
 	function pad(n) {
 		n= toString(n); if (lengthOf(n)==1) n= "0"+n; return n;
 	}
-	function removeTrailingZerosAndPeriod(string) { /* removes trailing zeros after period */
+	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
 		}
@@ -600,10 +600,10 @@ if (minmaxIOR) {
 		}
 		return string;
 	}
-	function restoreExit(message){ /* clean up before aborting macro then exit */
+	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
-		restoreSettings(); /* clean up before exiting */
-		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		restoreSettings(); /* Restore previous settings before exiting */
+		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
 		run("Collect Garbage"); 
 		exit(message);
 	}
@@ -615,12 +615,12 @@ if (minmaxIOR) {
 		return string;
 	}
 	function stripUnitFromString(string) {
-		if (endsWith(string,"\)")) { /* label with units from string string if available */
+		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
 				stringLabel = substring(string, 0, unitIndexStart);
 			}
 			else stringLabel = string;
@@ -635,23 +635,23 @@ if (minmaxIOR) {
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
-		string= replace(string, fromCharCode(181), "u"); /* micrometer units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* angstrom symbol */
+		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
-		string= replace(string, fromCharCode(0x2009), "_"); /* replace thin spaces  */
-		string= replace(string, " ", "_"); /* replace spaces - these can be a problem with image combination */
-		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
-		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
-		string= replace(string, "__", "_"); /* clean up autofilenames */
+		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
+		string= replace(string, "\\+\\+", "\\+"); /* Clean up autofilenames */
+		string= replace(string, "__", "_"); /* Clean up autofilenames */
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
-	if (endsWith(string,"\)")) { /* label with units from string string if available */
+	if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 		unitIndexStart = lastIndexOf(string, "\(");
 		unitIndexEnd = lastIndexOf(string, "\)");
 		stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 		unitCheck = matches(stringUnit, ".*[0-9].*");
-		if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+		if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
 			unitLabel = stringUnit;
 		}
 		else {

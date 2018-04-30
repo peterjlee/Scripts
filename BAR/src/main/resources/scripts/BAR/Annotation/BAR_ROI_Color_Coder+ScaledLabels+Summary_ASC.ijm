@@ -59,10 +59,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	run("Select None");
 	/*
 	Set options for black objects on white background as this works better for publications */
-	run("Options...", "iterations=1 white count=1"); /* set white background */
-	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
+	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
+	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* do not use Inverting LUT */
+	run("Appearance...", " "); /* Do not use Inverting LUT */
 	if (is("Inverting LUT")==true) run("Invert LUT"); /* more effectively removes Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background)
 		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
@@ -487,7 +487,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			getSelectionFromMask("label_mask");
 			getSelectionBounds(maskX, maskY, null, null);
 			if (rampOutlineStroke>0) rampOutlineOffset = maxOf(0, (rampOutlineStroke/2)-1);
-			setSelectionLocation(maskX+rampOutlineStroke, maskY+rampOutlineStroke); /* offset selection to create shadow effect */
+			setSelectionLocation(maskX+rampOutlineStroke, maskY+rampOutlineStroke); /* Offset selection to create shadow effect */
 			run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
 			setBackgroundColor(0, 0, 0);
 			run("Clear");
@@ -498,7 +498,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			setBackgroundColor(255, 255, 255);
 			run("Clear");
 			run("Select None");
-			/* The following steps smooths the interior of the text labels */
+			/* The following steps smooth the interior of the text labels */
 			selectWindow("stats_text");
 			getSelectionFromMask("label_mask");
 			run("Make Inverse");
@@ -562,8 +562,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			} else
 				roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
 			labelValue = values[i];
-			labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
-			labelString = removeTrailingZerosAndPeriod(labelString); /* remove trailing characters */
+			labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
+			labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
 			// roiManager("Rename", labelString); /* label roi with feature value: not necessary if creating new labels */
 			Overlay.show;		
 		}
@@ -750,11 +750,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				labelValue = values[i];
 				if (dpChoice=="Auto")
 					decPlaces = autoCalculateDecPlaces(labelValue,rampMin,rampMax,numLabels);
-				labelString = d2s(labelValue,decPlaces); /* Reduce Decimal places for labeling - move these two lines to below the labels you prefer */
+				labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
 				Roi.getBounds(roiX, roiY, roiWidth, roiHeight);
 				if (roiWidth>=roiHeight) roiMin = roiHeight;
 				else roiMin = roiWidth;
-				lFontS = fontSize; /* initial estimate */
+				lFontS = fontSize; /* Initial estimate */
 				setFont(fontName,lFontS,fontStyle);
 				lFontS = fontSCorrection * fontSize * roiMin/(getStringWidth(labelString));
 				if (lFontS>maxLFontS) lFontS = maxLFontS; 
@@ -1049,7 +1049,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				run("Select None");
 				selEX = newSelEX + round((newSelEWidth - longestStringWidth)/2);
 				selEY = newSelEY + round((newSelEHeight - linesSpace)/2);
-				if (batchOn) setBatchMode(true); /* return to original batch mode */
+				if (batchOn) setBatchMode(true); /* Return to original batch mode setting */
 			} else if (paraLabPos == "Current Selection"){
 				selEX = originalSelEX + round((originalSelEWidth/2) - longestStringWidth/2);
 				selEY = originalSelEY + round((originalSelEHeight/2) - (linesSpace/2));
@@ -1170,12 +1170,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
    */
 	function AddMCsToResultsTable () {
-/* 	Based on "MCentroids.txt" Morphological centroids by thinning assumes white particles: G.Landini
+/* 	Based on "MCentroids.txt" Morphological centroids by thinning assumes white particles: G. Landini
 	http://imagejdocu.tudor.lu/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
 	http://www.mecourse.com/landinig/software/software.html
 	Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
-	v180102	fixed typos and updated functions.
-	v180104 removed unnecessary changes to settings.
+	v180102	Fixed typos and updated functions.
+	v180104 Removed unnecessary changes to settings.
 	v180312 Add minimum and maximum morphological radii.
 */
 	workingTitle = getTitle();
@@ -1201,8 +1201,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Roi.getBounds(Rx, Ry, Rwidth, Rheight);
 		setResult("ROIctr_X\(px\)", i, Rx + Rwidth/2);
 		setResult("ROIctr_Y\(px\)", i, Ry + Rheight/2);
-		Roi.getContainedPoints(RPx, RPy); /* this includes holes when ROIs are used so no hole filling is needed */
-		newImage("Contained Points","8-bit black",Rwidth,Rheight,1); /* give each sub-image a unique name for debugging purposes */
+		Roi.getContainedPoints(RPx, RPy); /* This includes holes when ROIs are used, so no hole filling is needed */
+		newImage("Contained Points","8-bit black",Rwidth,Rheight,1); /* Give each sub-image a unique name for debugging purposes */
 		for (j=0; j<lengthOf(RPx); j++)
 			setPixel(RPx[j]-Rx, RPy[j]-Ry, 255);
 		selectWindow("Contained Points");
@@ -1264,7 +1264,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (stepExp>=5) dP = -1; /* Scientific Notation */
 		return dP;
 	}
-	function binaryCheck(windowTitle) { /* for black objects on white background */
+	function binaryCheck(windowTitle) { /* For black objects on a white background */
 		/* v180104 added line to remove inverting LUT and changed to auto default threshold */
 		selectWindow(windowTitle);
 		if (is("binary")==0) run("8-bit");
@@ -1322,14 +1322,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addCheckbox("Run Analyze-particles to generate table?", true);
 			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRES +"   results.\nThere are    " + nROIs +"   ROIs.");
 			Dialog.show();
-			analyzeNow = Dialog.getCheckbox(); /* if (analyzeNow==true) ImageJ analyze particles will be performed, otherwise exit; */
+			analyzeNow = Dialog.getCheckbox(); /* If (analyzeNow==true), ImageJ Analyze Particles will be performed, otherwise exit */
 			if (analyzeNow==true) {
 				if (roiManager("count")!=0) {
 					roiManager("deselect")
 					roiManager("delete"); 
 				}
 				setOption("BlackBackground", false);
-				run("Analyze Particles..."); /* let user select settings */
+				run("Analyze Particles..."); /* Let user select settings */
 			}
 			else restoreExit("Goodbye, your previous setting will be restored.");
 		}
@@ -1353,13 +1353,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				setOption("BlackBackground", false);
 				if (nResults==0)
 					run("Analyze Particles...", "display add");
-				else run("Analyze Particles..."); /* let user select settings */
+				else run("Analyze Particles..."); /* Let user select settings */
 				if (nResults!=roiManager("count"))
 					restoreExit("Results and ROI Manager counts do not match!");
 			}
 			else restoreExit("Goodbye, your previous setting will be restored.");
 		}
-		return roiManager("count"); /* returns the new count of entries */
+		return roiManager("count"); /* Returns the new count of entries */
 	}
 	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)
@@ -1383,27 +1383,27 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
-		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /*	superscript -1 */
-		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /*	superscript -2 */
-		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micrometer units*/
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* angstrom symbol*/
-		string= replace(string, "  ", " "); /* double spaces*/
-		string= replace(string, "_", fromCharCode(0x2009)); /* replace underlines with thin spaces*/
-		string= replace(string, "px", "pixels"); /* expand pixel abbreviate*/
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
-		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
+		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
+		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
+		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
+		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
-	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */
+	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
         if (isOpen(windowTitle)) {
 		selectWindow(windowTitle);
         close();
 		}
 	}
 	function createInnerShadowFromMask4(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
-		/* requires previous run of:  originalImageDepth = bitDepth();
+		/* Requires previous run of: originalImageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls four variables: drop, displacement blur and darkness */
 		showStatus("Creating inner shadow for labels . . . ");
@@ -1425,12 +1425,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/* The following are needed for different bit depths */
 		if (originalImageDepth==16 || originalImageDepth==32) run(originalImageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
-		run("Invert");  /* create an image that can be subtracted - works better for color than min */
+		run("Invert");  /* Create an image that can be subtracted - this works better for color than Min */
 		divider = (100 / abs(iShadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
 	function createShadowDropFromMask5(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
-		/* requires previous run of:  originalImageDepth = bitDepth();
+		/* Requires previous run of: originalImageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls five variables: drop, displacement blur and darkness */
 		showStatus("Creating drop shadow for labels . . . ");
@@ -1439,14 +1439,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		getSelectionBounds(selMaskX, selMaskY, selMaskWidth, selMaskHeight);
 		setSelectionLocation(selMaskX + oShadowDisp, selMaskY + oShadowDrop);
 		setBackgroundColor(255,255,255);
-		if (oStroke>0) run("Enlarge...", "enlarge=[oStroke] pixel"); /* adjust so shadow extends beyond stroke thickness */
+		if (oStroke>0) run("Enlarge...", "enlarge=[oStroke] pixel"); /* Adjust shadow size so that shadow extends beyond stroke thickness */
 		run("Clear");
 		run("Select None");
 		if (oShadowBlur>0) {
 			run("Gaussian Blur...", "sigma=[oShadowBlur]");
 			// run("Unsharp Mask...", "radius=[oShadowBlur] mask=0.4"); /* Make Gaussian shadow edge a little less fuzzy */
 		}
-		/* Now make sure shadow of glow does not impact outline */
+		/* Now make sure shadow or glow does not impact outline */
 		getSelectionFromMask("label_mask");
 		if (oStroke>0) run("Enlarge...", "enlarge=[oStroke] pixel");
 		setBackgroundColor(0,0,0);
@@ -1458,7 +1458,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		divider = (100 / abs(oShadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
-	function expandLabel(string) {  /* mostly for better looking summary tables */
+	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
@@ -1469,13 +1469,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
 		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* put this here as an exception to the above */
-		string = replace(string, "°, degrees", "°"); /* that would be otherwise too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* remove mystery Â */
-		string = replace(string, " ", fromCharCode(0x2009)); /* use this last so all spaces converted */
+		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
+		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
-	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* place text over image in a way that stands out, requires original flatImage and "textImage" */
+	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* Place text over image in a way that stands out; requires original "flatImage" and "textImage" */
 		selectWindow("textImage");
 		run("Duplicate...", "title=label_mask");
 		setThreshold(0, 128);
@@ -1498,7 +1498,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		getSelectionFromMask("label_mask");
 		getSelectionBounds(maskX, maskY, null, null);
 		outlineStrokeOffset = maxOf(0,(outlineStroke/2)-1);
-		setSelectionLocation(maskX+outlineStrokeOffset, maskY+outlineStrokeOffset); /* offset selection to create shadow effect */
+		setSelectionLocation(maskX+outlineStrokeOffset, maskY+outlineStrokeOffset); /* Offset selection to create shadow effect */
 		run("Enlarge...", "enlarge=[outlineStroke] pixel");
 		setBackgroundFromColorName(outlineColor);
 		run("Clear");
@@ -1515,7 +1515,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			imageCalculator("Subtract", flatImage,"inner_shadow");
 		if (isOpen("inner_shadow") && innerShadowDarkness<0)	/* Glow */
 			imageCalculator("Add",flatImage,"inner_shadow");
-		/* The following steps smooths the interior of the text labels */
+		/* The following steps smooth the interior of the text labels */
 		selectWindow("textImage");
 		getSelectionFromMask("label_mask");
 		run("Make Inverse");
@@ -1593,7 +1593,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
-		/* A list of frequently used luts for the top of the list . . . */
+		/* A list of frequently used LUTs for the top of the menu list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		baseLuts = newArray(lengthOf(preferredLuts));
 		baseLutsCount = 0;
@@ -1607,7 +1607,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		baseLuts=Array.trim(baseLuts, baseLutsCount);
 		lutsList=Array.concat(baseLuts, defaultLuts);
-		return lutsList; /* required to return new array */
+		return lutsList; /* Required to return new array */
 	}
 	function loadLutColors(lut) {
 		run(lut);
@@ -1627,11 +1627,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
 		tempTitle = getTitle();
 		selectWindow(selection_Mask);
-		run("Create Selection"); /* selection inverted perhaps because mask has inverted lut? */
+		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
 		run("Make Inverse");
 		selectWindow(tempTitle);
 		run("Restore Selection");
-		if (!batchMode) setBatchMode(false); /* return to original batch mode */
+		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
 	function lnArray(arrayName) {
 	/* 1st version: v180318 */
@@ -1640,7 +1640,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		  outputArray[i] = log(arrayName[i]);
 	return outputArray;
 	}
-	function removeTrailingZerosAndPeriod(string) { /* removes trailing zeros after period */
+	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
 		}
@@ -1649,10 +1649,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		return string;
 	}
-	function restoreExit(message){ /* clean up before aborting macro then exit */
+	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
-		restoreSettings(); /* clean up before exiting */
-		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		restoreSettings(); /* Restore previous settings before exiting */
+		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
 		run("Collect Garbage");
 		exit(message);
 	}
@@ -1674,12 +1674,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return string;
 	}
 	function stripUnitFromString(string) {
-		if (endsWith(string,"\)")) { /* label with units from string string if available */
+		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
 				stringLabel = substring(string, 0, unitIndexStart);
 			}
 			else stringLabel = string;
@@ -1694,24 +1694,24 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
-		string= replace(string, fromCharCode(181), "u"); /* micrometer units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* angstrom symbol */
+		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
-		string= replace(string, fromCharCode(0x2009), "_"); /* replace thin spaces  */
-		string= replace(string, " ", "_"); /* replace spaces - these can be a problem with image combination */
-		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
-		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
-		string= replace(string, "__", "_"); /* clean up autofilenames */
+		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
+		string= replace(string, "\\+\\+", "\\+"); /* Clean up autofilenames */
+		string= replace(string, "__", "_"); /* Clean up autofilenames */
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
 	/* v180404 added Feret_MinDAngle_Offset */
-		if (endsWith(string,"\)")) { /* label with units from string string if available */
+		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
 				unitLabel = stringUnit;
 			}
 			else {

@@ -16,10 +16,10 @@ macro "Line Color Coder with Labels"{
 	run("Select None");
 	/*
 	Set options for black objects on white background as this works better for publications */
-	run("Options...", "iterations=1 white count=1"); /* set white background */
-	run("Colors...", "foreground=black background=white selection=yellow"); /* set colors */
+	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
+	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* do not use Inverting LUT */
+	run("Appearance...", " "); /* Do not use Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background)
 		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
@@ -277,7 +277,7 @@ macro "Line Color Coder with Labels"{
 										  
 																																	  
 				drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
-				setLineWidth(rampLW); /* reset line width */
+				setLineWidth(rampLW); /* Rest line width */
 			}
 		}
 	}
@@ -593,24 +593,24 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
-		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /*	superscript -1 */
-		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /*	superscript -2 */
-		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micrometer units*/
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* angstrom symbol*/
-		string= replace(string, "  ", " "); /* double spaces*/
-		string= replace(string, "_", fromCharCode(0x2009)); /* replace underlines with thin spaces*/
-		string= replace(string, "px", "pixels"); /* expand pixel abbreviate*/
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /*	remove space before degree symbol */
-		string= replace(string, " °", fromCharCode(0x2009)+"°"); /*	remove space before degree symbol */
+		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
+		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
+		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
+		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
 		return string;
 	}
-	function closeImageByTitle(windowTitle) {  /* cannot be used with tables */
+	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
         if (isOpen(windowTitle)) {
 		selectWindow(windowTitle);
         close();
 		}
 	}
-	function expandLabel(string) {  /* mostly for better looking summary tables */
+	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
@@ -621,10 +621,10 @@ macro "Line Color Coder with Labels"{
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
 		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* put this here as an exception to the above */
-		string = replace(string, "°, degrees", "°"); /* that would be otherwise too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* remove mystery Â */
-		string = replace(string, " ", fromCharCode(0x2009)); /* use this last so all spaces converted */
+		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
+		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
 	function closeNonImageByTitle(windowTitle) { /* obviously */
@@ -634,11 +634,11 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	function filterArrayByContents(inputArray,filterString1,filterString2) {
-		arrayLengthCounter = 0; /* reset row counter */
+		arrayLengthCounter = 0; /* Reset row counter */
 		outputArray = newArray(lengthOf(inputArray));
 		pointsRowCounter = 0;
 		for (a=0; a<lengthOf(outputArray); a++){
-			if((indexOf(inputArray[a], filterString1))>= 0 || (indexOf(inputArray[a], filterString2))>= 0) {  /* filter by intensity label */
+			if((indexOf(inputArray[a], filterString1))>= 0 || (indexOf(inputArray[a], filterString2))>= 0) {  /* Filter by intensity label */
 					outputArray[pointsRowCounter] = inputArray[a];
 					pointsRowCounter += 1;
 			}
@@ -656,7 +656,7 @@ macro "Line Color Coder with Labels"{
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "red") cA = newArray(255,0,0);
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
-		else if (colorName == "green") cA = newArray(255,255,0);
+		else if (colorName == "green") cA = newArray(0,255,0);
 		else if (colorName == "blue") cA = newArray(0,0,255);
 		else if (colorName == "yellow") cA = newArray(255,255,0);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
@@ -697,7 +697,7 @@ macro "Line Color Coder with Labels"{
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
-		/* A list of frequently used luts for the top of the list . . . */
+		/* A list of frequently used LUTs for the top of the menu list . . . */
 		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		baseLuts = newArray(lengthOf(preferredLuts));
 		baseLutsCount = 0;
@@ -711,7 +711,7 @@ macro "Line Color Coder with Labels"{
 		}
 		baseLuts=Array.trim(baseLuts, baseLutsCount);
 		lutsList=Array.concat(baseLuts, defaultLuts);
-		return lutsList; /* required to return new array */
+		return lutsList; /* Required to return new array */
 	}
 	function loadLutColors(lut) {
 		run(lut);
@@ -731,11 +731,11 @@ macro "Line Color Coder with Labels"{
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
 		tempTitle = getTitle();
 		selectWindow(selection_Mask);
-		run("Create Selection"); /* selection inverted perhaps because mask has inverted lut? */
+		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
 		run("Make Inverse");
 		selectWindow(tempTitle);
 		run("Restore Selection");
-		if (!batchMode) setBatchMode(false); /* return to original batch mode */
+		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
 	function hideResultsAs(deactivatedResults) {
 		if (isOpen("Results")) {  /* This swapping of tables does not increase run time significantly */
@@ -743,7 +743,7 @@ macro "Line Color Coder with Labels"{
 			IJ.renameResults(deactivatedResults);
 		}
 	}
-	function removeTrailingZerosAndPeriod(string) { /* removes trailing zeros after period */
+	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
 		}
@@ -752,10 +752,10 @@ macro "Line Color Coder with Labels"{
 		}
 		return string;
 	}
-	function restoreExit(message){ /* clean up before aborting macro then exit */
+	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
-		restoreSettings(); /* clean up before exiting */
-		setBatchMode("exit & display"); /* not sure if this does anything useful if exiting gracefully but otherwise harmless */
+		restoreSettings(); /* Restore previous settings before exiting */
+		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
 		run("Collect Garbage");
 		exit(message);
 	}
@@ -773,12 +773,12 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function stripUnitFromString(string) {
-		if (endsWith(string,"\)")) { /* label with units from string string if available */
+		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
 				stringLabel = substring(string, 0, unitIndexStart);
 			}
 			else stringLabel = string;
@@ -793,23 +793,23 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
-		string= replace(string, fromCharCode(181), "u"); /* micrometer units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* angstrom symbol */
-		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
-		string= replace(string, fromCharCode(0x2009), "_"); /* replace thin spaces  */
-		string= replace(string, " ", "_"); /* replace spaces - these can be a problem with image combination */
-		string= replace(string, "_\\+", "\\+"); /* clean up autofilenames */
-		string= replace(string, "\\+\\+", "\\+"); /* clean up autofilenames */
-		string= replace(string, "__", "_"); /* clean up autofilenames */
+		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
+		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
+		string= replace(string, "\\+\\+", "\\+"); /* Clean up autofilenames */
+		string= replace(string, "__", "_"); /* Clean up autofilenames */
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
-	if (endsWith(string,"\)")) { /* label with units from string string if available */
+	if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 		unitIndexStart = lastIndexOf(string, "\(");
 		unitIndexEnd = lastIndexOf(string, "\)");
 		stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 		unitCheck = matches(stringUnit, ".*[0-9].*");
-		if (unitCheck==0) {  /* if it contains a number it probably isn't a unit */
+		if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
 			unitLabel = stringUnit;
 		}
 		else {

@@ -38,7 +38,8 @@
 	+ v180329 Changed line width for frequency plot to work better for very large images.
 	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
 	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
-	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset
+	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
+	+ v180716 Fixed unnecessary bailout for small distributions.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -223,27 +224,26 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	arrayQuartile = newArray(3);
 	for (q=0; q<3; q++) arrayQuartile[q] = sortedValues[round((q+1)*items/4)];
 	IQR = arrayQuartile[2] - arrayQuartile[0];
-	if (IQR==0) restoreExit("Too little data");
-	
-	/* The following section produces frequency/distribution data for option distribution plot on ramp and for the summary */
-	autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
-	autoDistWCount = round(arrayRange/autoDistW);
-	arrayDistInt = newArray(autoDistWCount);
-	arrayDistFreq =  newArray(autoDistWCount);
-	modalBin = 0;
-	freqMax = 0;
-	for (f=0; f<autoDistWCount; f++) {
-		arrayDistInt[f] = arrayMin + (f * autoDistW);
-		for (i=0; i<items; i++) if (values[i] >= arrayDistInt[f] && values[i]<(arrayDistInt[f]+autoDistW)) arrayDistFreq[f] +=1;
-		if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
+	if (IQR!=0) {	
+		/* The following section produces frequency/distribution data for the optional distribution plot on the ramp and for the summary */
+		autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
+		autoDistWCount = round(arrayRange/autoDistW);
+		arrayDistInt = newArray(autoDistWCount);
+		arrayDistFreq =  newArray(autoDistWCount);
+		modalBin = 0;
+		freqMax = 0;
+		for (f=0; f<autoDistWCount; f++) {
+			arrayDistInt[f] = arrayMin + (f * autoDistW);
+			for (i=0; i<items; i++) if (values[i] >= arrayDistInt[f] && values[i]<(arrayDistInt[f]+autoDistW)) arrayDistFreq[f] +=1;
+			if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
+		}
+		/* use adjacent bin estimate for mode */
+		if (modalBin > 0) 
+			mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
+		else mode = modalBin + autoDistW/2; /* Yes I did find an example with a modalBin of zero! */
+		Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
+		/* End of frequency/distribution section */
 	}
-	/* use adjacent bin estimate for mode */
-	if (modalBin > 0) 
-		mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
-	else mode = modalBin + autoDistW/2; /* Yes I did find an example with a modalBin of zero! */
-	Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
-	/* End of frequency/distribution section */
-	
 	meanPlusSDs = newArray(10);
 	meanMinusSDs = newArray(10);
 	for (s=0; s<10; s++) {
@@ -839,7 +839,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		arrayMin = d2s(arrayMin,summaryDP);
 		arrayMax = d2s(arrayMax,summaryDP);
 		median = d2s(arrayQuartile[1],summaryDP);
-		mode = d2s(mode,summaryDP);
+		if (IQR!=0) mode = d2s(mode,summaryDP);
 		titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
 		/* Then Statistics Summary Options Dialog . . . */
 		Dialog.create("Statistics Summary Options");
@@ -868,7 +868,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			statsChoice6 = newArray(
 			"Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "User Text",
 			"Long Underline:  ___","Blank line");
-			if (freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4);
+			if (IQR!=0 && freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4);
 			if (outlierChoice!="No") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6);
 			else statsChoice = Array.concat(statsChoice1,statsChoice3,statsChoice5,statsChoice6);
 			if (menuLimit > 752)	textChoiceLines = 3;
@@ -976,7 +976,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			arrayMin = d2s(arrayMin,summaryDP);
 			arrayMax = d2s(arrayMax,summaryDP);
 			median = d2s(arrayQuartile[1],summaryDP);
-			mode = d2s(mode,summaryDP);
+			if (IQR!=0) mode = d2s(mode,summaryDP);
 		}
 		statsLines = 0;
 		statsLabLineText = newArray(statsChoiceLines);

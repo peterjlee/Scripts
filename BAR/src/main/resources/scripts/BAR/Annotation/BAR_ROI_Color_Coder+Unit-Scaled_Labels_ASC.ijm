@@ -30,7 +30,8 @@
 	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
 	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
 	+ v180326 Restored missing frequency distribution column.
-	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset
+	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
+	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
  */
  
 macro "ROI Color Coder with Scaled Labels"{
@@ -220,27 +221,26 @@ macro "ROI Color Coder with Scaled Labels"{
 	arrayQuartile = newArray(3);
 	for (q=0; q<3; q++) arrayQuartile[q] = sortedValues[round((q+1)*items/4)];
 	IQR = arrayQuartile[2] - arrayQuartile[0];
-	if (IQR==0) restoreExit("Too little data");
-	
-	/* The following section produces frequency/distribution data for possible graphical use */
-	autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
-	autoDistWCount = round(arrayRange/autoDistW);
-	arrayDistInt = newArray(autoDistWCount);
-	arrayDistFreq =  newArray(autoDistWCount);
-	modalBin = 0;
-	freqMax = 0;
-	for (f=0; f<autoDistWCount; f++) {
-		arrayDistInt[f] = arrayMin + (f * autoDistW);
-		for (i=0; i<items; i++) if (values[i] >= arrayDistInt[f] && values[i]<(arrayDistInt[f]+autoDistW)) arrayDistFreq[f] +=1;
-		if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
+	if (IQR!=0) {	
+		/* The following section produces frequency/distribution data for possible graphical use */
+		autoDistW = 2 * IQR * exp((-1/3)*log(items));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
+		autoDistWCount = round(arrayRange/autoDistW);
+		arrayDistInt = newArray(autoDistWCount);
+		arrayDistFreq =  newArray(autoDistWCount);
+		modalBin = 0;
+		freqMax = 0;
+		for (f=0; f<autoDistWCount; f++) {
+			arrayDistInt[f] = arrayMin + (f * autoDistW);
+			for (i=0; i<items; i++) if (values[i] >= arrayDistInt[f] && values[i]<(arrayDistInt[f]+autoDistW)) arrayDistFreq[f] +=1;
+			if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
+		}
+		/* use adjacent bin estimate for mode */
+		if (modalBin > 0) 
+			mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
+		else mode = modalBin + autoDistW/2; /* Yes I did find an example with a modalBin of zero! */
+		Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
+		/* End of frequency/distribution section */
 	}
-	/* use adjacent bin estimate for mode */
-	if (modalBin > 0) 
-		mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
-	else mode = modalBin + autoDistW/2; /* Yes I did find an example with a modalBin of zero! */
-	Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
-	/* End of frequency/distribution section */
-	
 	meanPlusSDs = newArray(10);
 	meanMinusSDs = newArray(10);
 	for (s=0; s<10; s++) {
@@ -1148,6 +1148,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
 		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
+		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -1459,6 +1460,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
+	/* v180404 added Feret_MinDAngle_Offset */
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
@@ -1475,9 +1477,8 @@ macro "ROI Color Coder with Scaled Labels"{
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
 			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
 			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90") unitLabel = fromCharCode(0x00B0);
+			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90" || string=="Feret_MinDAngle_Offset" || string=="MinDistAngle") unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 		}
 		return unitLabel;
-	}

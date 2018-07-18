@@ -41,6 +41,7 @@
 	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
 	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
 	+ v180717 More fixes for small distributions that do not produce an interquartile range.
+	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -79,6 +80,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	nRES = nResults;
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
+	numLabels = 10; /* default number of ramp labels */
 	if (nRES!=nROIs) restoreExit("Exit: Results table \(" + nRES + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
@@ -86,7 +88,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	tN = stripExtensionsFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
 	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
-	rampH = round(0.90 * imageHeight); /* suggest ramp slightly small to allow room for labels */
+	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	fontSize = rampH/28; /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
@@ -101,77 +103,33 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (headingsWithRange[0]==" :  Infinity - -Infinity")
 		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	imageList = getList("image.titles");
-	/* create the dialog prompt */
+	/* Create initial dialog prompt to determine parameters */
 	Dialog.create("ROI Color Coder: " + tN);
-	if (menuLimit > 752) {  /* menu bloat allowed only for small screens */
-		Dialog.setInsets(6, 0, -10);
+		// Dialog.setInsets(6, 0, -10);
 		macroP = getInfo("macro.filepath");
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
 		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
 		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
-		Dialog.setInsets(6, 0, -2);
+		Dialog.setInsets(6, 0, 0);
 		if (lengthOf(tN)<=47) Dialog.addMessage("Filename: " + tN);
 		else Dialog.addMessage("Filename: " + substring(tN, 0, 43) + "...");
-		Dialog.setInsets(-2, 0, -8);
+		// Dialog.setInsets(-2, 0, -8);
 		Dialog.addMessage("Image has " + nROIs + " ROIs that will be color coded.");
-		Dialog.setInsets(8, 0, 2);
-	}
-	Dialog.addChoice("Image for Coloring", imageList, t);
-	Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
+		Dialog.setInsets(10, 0, 10);
+		Dialog.addChoice("Image for Coloring", imageList, t);
+		Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[1]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
-	Dialog.addChoice("LUT:", luts, luts[0]);
-	Dialog.setInsets(0, 120, 12);
-	Dialog.addCheckbox("Reverse LUT?", false); 
-	Dialog.setInsets(-6, 0, -6);
-	Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
-	Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
-	Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
-	Dialog.setInsets(6, 120, 0);
-	Dialog.addCheckbox("Make copy of image with scaled labels?", true);
-	Dialog.setInsets(2, 0, 6);
-	Dialog.addMessage("Legend \(ramp\):______________");
-	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
-	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
-	Dialog.setInsets(-42, 197, -5);
-	Dialog.addMessage("Auto based on\nselected parameter");
-	Dialog.addString("Range:", "AutoMin-AutoMax", 11);
-	Dialog.setInsets(-35, 235, 0);
-	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.setInsets(-4, 120, -12);
-	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
-	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
-	Dialog.setInsets(-6, 0, 8);
-	Dialog.addRadioButtonGroup("Outline outliers if outside the following values:", outlierOptions, 1, 5, "No");
-	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
-	Dialog.setInsets(0, 0, 8);
-	Dialog.addChoice("Outlier outline color:", colorChoice, colorChoice[0]);
-	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
-	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
-	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
-	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
-	Dialog.setInsets(-38, 195, 0);
-	Dialog.addMessage(rampH + " pxls suggested\nby image height");
-	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
-	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
-	fontNameChoice = newArray("SansSerif", "Serif", "Monospaced");
-	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
-	Dialog.setInsets(-25, 205, 0);
-	Dialog.addCheckbox("Draw tick marks", true);
-	Dialog.setInsets(2, 120, 0);
-	Dialog.addCheckbox("Force clockwise rotated legend label", false);
-	Dialog.setInsets(-6, 0, -2);
-	Dialog.addMessage("Ramp Stats Labels:______________");
-	Dialog.setInsets(4, 120, 0);
-	rampStatsOptions = newArray("No", "Linear", "Ln");
-	Dialog.setInsets(-6, 0, 8);
-	Dialog.addRadioButtonGroup("Ramp Stats: Mean and " + fromCharCode(0x00B1) + fromCharCode(0x03C3) + " on ramp \(if \"Ln\" then outlier " + fromCharCode(0x03C3) + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "No");
-	/* will be used for sigma outlines too */
-	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
-	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
-	Dialog.addCheckbox("Add Frequency Distribution to Ramp", false);
-	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
-	Dialog.show;
+		Dialog.addChoice("LUT:", luts, luts[0]);
+		Dialog.setInsets(0, 120, 12);
+		Dialog.addCheckbox("Reverse LUT?", false); 
+		// Dialog.setInsets(-6, 0, -6);
+		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
+		Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
+		Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
+		Dialog.setInsets(6, 120, 0);
+		Dialog.addCheckbox("Make copy of image with scaled labels?", true);
+		Dialog.show;
+		
 		imageChoice = Dialog.getChoice;
 		parameterWithLabel = Dialog.getChoice;
 		parameter = substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
@@ -180,6 +138,70 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		stroke = Dialog.getNumber;
 		alpha = pad(toHex(255*Dialog.getNumber/100));
 		addLabels = Dialog.getCheckbox();
+		
+	unitLabel = unitLabelFromString(parameter, unit);
+	/* get values for chosen parameter */
+	values= newArray(items);
+	if (parameter=="Object") for (i=0; i<items; i++) values[i]= i+1;
+	else for (i=0; i<items; i++) values[i]= getResult(parameter,i);
+	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
+	arrayRange = arrayMax-arrayMin;	
+	rampMin= arrayMin;
+	rampMax= arrayMax;
+	decPlaces = autoCalculateDecPlaces(decPlaces,rampMin,rampMax,numLabels);
+	
+	/* Create dialog prompt to determine look */
+	Dialog.create("ROI Color Coder: Ramp options");		
+
+	Dialog.setInsets(2, 0, 6);
+	Dialog.addMessage("Legend \(ramp\) options:");
+	Dialog.addString("Parameter label", parameter, 24);
+	Dialog.setInsets(-42, 315, -5);
+	Dialog.addMessage("Edit for\nramp label");
+	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
+	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[2]);
+	Dialog.setInsets(-42, 215, -5);
+	Dialog.addMessage("Auto based on\nselected parameter");
+	Dialog.addMessage("Original data range: "+rampMin+"-"+rampMax+" \("+(rampMax-rampMin)+" "+unit+"\)");
+	Dialog.addString("Ramp data range:", rampMin+"-"+rampMax, 11);
+	Dialog.setInsets(-35, 240, 0);
+	Dialog.addMessage("(e.g., 10-100)");
+	Dialog.setInsets(-4, 120, 0);
+	Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
+	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
+	Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values \("+fromCharCode(0x03C3)+" = "+arraySD+"\):", outlierOptions, 1, 5, "No");
+	Dialog.setInsets(3, 0, 15);
+	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
+	Dialog.addChoice("Outliers: Outline:", colorChoice, colorChoice[0]);
+	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
+	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
+	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
+	Dialog.addChoice("Ramp height \(pxls\):", newArray(d2s(rampH,0), 128, 256, 512, 1024, 2048, 4096), rampH);
+	Dialog.setInsets(-38, 235, 0);
+	Dialog.addMessage(rampH + " pxls suggested\nby image height");
+	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
+	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
+	fontNameChoice = newArray("SansSerif", "Serif", "Monospaced");
+	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
+	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
+	Dialog.setInsets(-25, 235, 0);
+	Dialog.addCheckbox("Draw tick marks", true);
+	Dialog.setInsets(2, 120, 0);
+	Dialog.addCheckbox("Force clockwise rotated legend label", false);
+	Dialog.setInsets(6, 0, -2);
+	Dialog.addMessage("Ramp Stats Labels:");
+	Dialog.setInsets(4, 120, 0);
+	rampStatsOptions = newArray("No", "Linear", "Ln");
+	Dialog.setInsets(-6, 15, 18);
+	Dialog.addRadioButtonGroup("Ramp Stats:\n Mean and " + fromCharCode(0x00B1) + fromCharCode(0x03C3) + " on ramp \(if \"Ln\" then outlier " + fromCharCode(0x03C3) + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "No");
+	/* will be used for sigma outlines too */
+	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
+	Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
+	Dialog.setInsets(4, 120, 0);
+	Dialog.addCheckbox("Add Frequency Distribution Plot to Ramp", false);
+	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
+	Dialog.show;
+		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		minmaxLines = Dialog.getCheckbox;
@@ -216,14 +238,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	fontSR2 = fontSize * thinLinesFontSTweak/100;
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
-	/* get values for chosen parameter */
-	values= newArray(items);
-	if (parameter=="Object") for (i=0; i<items; i++) values[i]= i+1;
-	else for (i=0; i<items; i++) values[i]= getResult(parameter,i);
-	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
+	
 	if (isNaN(rampMin)) rampMin= arrayMin;
 	if (isNaN(rampMax)) rampMax= arrayMax;
-	arrayRange = arrayMax-arrayMin;
 	coeffVar = arraySD*100/arrayMean;
 	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
 	arrayQuartile = newArray(3);
@@ -278,7 +295,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			unitLabel = Dialog.getString();
 	}
 	if (unitLabel=="None") unitLabel = ""; 
-	parameterLabel = stripUnitFromString(parameter);
+	// parameterLabel = stripUnitFromString(parameter);
 	unitLabel= cleanLabel(unitLabel);
 	/* Begin object color coding if stroke set */
 	if (stroke>=0) {

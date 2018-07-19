@@ -42,6 +42,7 @@
 	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
 	+ v180717 More fixes for small distributions that do not produce an interquartile range.
 	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
+	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -105,7 +106,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	imageList = getList("image.titles");
 	/* Create initial dialog prompt to determine parameters */
 	Dialog.create("ROI Color Coder: " + tN);
-		// Dialog.setInsets(6, 0, -10);
 		macroP = getInfo("macro.filepath");
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
 		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
@@ -113,7 +113,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.setInsets(6, 0, 0);
 		if (lengthOf(tN)<=47) Dialog.addMessage("Filename: " + tN);
 		else Dialog.addMessage("Filename: " + substring(tN, 0, 43) + "...");
-		// Dialog.setInsets(-2, 0, -8);
 		Dialog.addMessage("Image has " + nROIs + " ROIs that will be color coded.");
 		Dialog.setInsets(10, 0, 10);
 		Dialog.addChoice("Image for Coloring", imageList, t);
@@ -122,7 +121,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.addChoice("LUT:", luts, luts[0]);
 		Dialog.setInsets(0, 120, 12);
 		Dialog.addCheckbox("Reverse LUT?", false); 
-		// Dialog.setInsets(-6, 0, -6);
 		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
 		Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
 		Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
@@ -152,14 +150,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	
 	/* Create dialog prompt to determine look */
 	Dialog.create("ROI Color Coder: Ramp options");		
-
 	Dialog.setInsets(2, 0, 6);
 	Dialog.addMessage("Legend \(ramp\) options:");
 	Dialog.addString("Parameter label", parameter, 24);
 	Dialog.setInsets(-42, 315, -5);
 	Dialog.addMessage("Edit for\nramp label");
-	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
-	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[2]);
+	autoUnit = unitLabelFromString(parameter, unit);
+	unitChoice = newArray(autoUnit, "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
+	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 	Dialog.setInsets(-42, 215, -5);
 	Dialog.addMessage("Auto based on\nselected parameter");
 	Dialog.addMessage("Original data range: "+rampMin+"-"+rampMax+" \("+(rampMax-rampMin)+" "+unit+"\)");
@@ -221,6 +219,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak = Dialog.getNumber;
 		freqDistRamp = Dialog.getCheckbox();
+	
 	if (imageChoice!=t) {
 		t = imageChoice;
 		tN = stripExtensionsFromString(t);
@@ -238,7 +237,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	fontSR2 = fontSize * thinLinesFontSTweak/100;
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
-	
 	if (isNaN(rampMin)) rampMin= arrayMin;
 	if (isNaN(rampMax)) rampMax= arrayMax;
 	coeffVar = arraySD*100/arrayMean;
@@ -285,7 +283,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		expLnMeanMinusSDs[s] = exp(lnMean-s*lnSD);
 	}
 	/* Create the parameter label */
-	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
 	if (unitLabel=="Manual") {
 		unitLabel = unitLabelFromString(parameter, unit);
 			Dialog.create("Manual unit input");
@@ -295,7 +292,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			unitLabel = Dialog.getString();
 	}
 	if (unitLabel=="None") unitLabel = ""; 
-	// parameterLabel = stripUnitFromString(parameter);
 	unitLabel= cleanLabel(unitLabel);
 	/* Begin object color coding if stroke set */
 	if (stroke>=0) {
@@ -602,6 +598,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		// roiManager("Show All without labels");
 	}
 	/* End of object coloring */
+	
+	/* recombine units and labels that were used in Ramp */
+	if (unitLabel!="") paraLabel = parameterLabel + ", " + unitLabel;
+	else paraLabel = parameterLabel;
 	if (!addLabels) {
 		roiManager("show all with labels");
 		run("Flatten"); /* creates an RGB copy of the image with color coded objects or not */
@@ -665,9 +665,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				Dialog.addMessage("Morphology plugin not available to find morphological centers");
 			}
 			else Dialog.addChoice("Object Label At:", newArray("ROI Center", "Morphological Center"), "Morphological Center");
-			if (selectionExists) paraLocChoice = newArray("None", "Current Selection", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
-			else paraLocChoice = newArray("None", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
-			Dialog.addChoice("Summary table Location \(\"None\" = No table\):", paraLocChoice, paraLocChoice[1]);
+			Dialog.addCheckbox("Add Parameter Label Title \("+paraLabel+"\)?", true);
+			Dialog.addCheckbox("Add Summary Table", true);
+			if (selectionExists) paraLocChoice = newArray("Current Selection", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
+			else paraLocChoice = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
+			Dialog.addChoice("Title and Summary table Location:", paraLocChoice, paraLocChoice[0]);
 			if (menuLimit > 752)	Dialog.addNumber("How many rows in table?", 12, 0, 2, "");
 			else Dialog.addNumber("How many rows in table?", 6, 0, 2, "");
 			Dialog.show();
@@ -695,6 +697,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			innerShadowBlur = Dialog.getNumber();
 			innerShadowDarkness = Dialog.getNumber();
 			ctrChoice = Dialog.getChoice(); /* Choose ROI or morphological centers for object labels */
+			paraLabAdd = Dialog.getCheckbox();
+			summaryAdd = Dialog.getCheckbox();
 			paraLabPos = Dialog.getChoice(); /* Parameter Label Position */
 			statsChoiceLines = Dialog.getNumber();
 			if (isNaN(getResult("mc_X\(px\)",0)) && ctrChoice=="Morphological Center") AddMCsToResultsTable ();
@@ -775,6 +779,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		else outlierCounter="No"; 
 		// roiManager("show none");
+		
 		if (addLabels) {
 			newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 			/*
@@ -815,7 +820,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				fontArray[i] = lFontS;
 			}
 			Array.getStatistics(fontArray, minFontSize, null, meanFontSize, null);
-				negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
+			negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
 			if (shadowDrop<0) labelShadowDrop = round(shadowDrop * negAdj);
 			else labelShadowDrop = shadowDrop;
 			if (shadowDisp<0) labelShadowDisp = round(shadowDisp * negAdj);
@@ -830,20 +835,20 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			else labelInnerShadowBlur = innerShadowBlur;
 			fontFactor = meanFontSize/100;
 			minFontFactor = minFontSize/100;
-			outlineStroke = round(fontFactor * outlineStrokePC);
-			if (outlineStrokePC>0) outlineStroke = maxOf(1,outlineStroke); /* set a minimum stroke */
-			labelShadowDrop = floor(fontFactor * labelShadowDrop);
-			if (shadowDrop>0) labelShadowDrop = maxOf(1+outlineStroke, labelShadowDrop);
-			labelShadowDisp = floor(fontFactor * labelShadowDisp);
-			if (shadowDisp>0) labelShadowDisp = maxOf(1+outlineStroke, labelShadowDisp);
-			labelShadowBlur = floor(fontFactor * labelShadowBlur);
-			if (shadowBlur>0) labelShadowBlur = maxOf(outlineStroke, labelShadowBlur);
-			labelInnerShadowDrop = floor(minFontFactor * labelInnerShadowDrop);
-			labelInnerShadowDisp = floor(minFontFactor * labelInnerShadowDisp);
-			labelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
+			if (outlineStrokePC>0) objectOutlineStroke = maxOf(1,round(fontFactor * outlineStrokePC));
+			else objectOutlineStroke = 0;
+			if (shadowDrop>0) objectLabelShadowDrop = maxOf(1+objectOutlineStroke, floor(fontFactor * labelShadowDrop));
+			else objectLabelShadowDrop = 0;
+			if (shadowDisp>0) labelShadowDisp = maxOf(1+objectOutlineStroke, floor(fontFactor * labelShadowDisp));
+			objectLabelShadowDisp = 0;
+			if (shadowBlur>0) objectLabelShadowBlur = maxOf(objectOutlineStroke, floor(fontFactor * labelShadowBlur));
+			else objectLabelShadowBlur = 0;
+			objectLabelInnerShadowDrop = floor(minFontFactor * labelInnerShadowDrop);
+			objectLabelInnerShadowDisp = floor(minFontFactor * labelInnerShadowDisp);
+			objectLabelInnerShadowBlur = floor(minFontFactor * labelInnerShadowBlur);
 			run("Select None");
 			roiManager("show none");
-			fancyTextOverImage(labelShadowDrop,labelShadowDisp,labelShadowBlur,shadowDarkness,outlineStroke,labelInnerShadowDrop,labelInnerShadowDisp,labelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
+			fancyTextOverImage(objectLabelShadowDrop,objectLabelShadowDisp,objectLabelShadowBlur,shadowDarkness,objectOutlineStroke,objectLabelInnerShadowDrop,objectLabelInnerShadowDisp,objectLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
 			closeImageByTitle("textImage");
 			if (stroke>=0) flatImage = getTitle();
 		}
@@ -854,7 +859,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	/*	
 		Start of Optional Summary section
 	*/
-	if (paraLabPos!="None") {
+	if (summaryAdd) {
 	/* Reduce decimal places - but not as much as ramp labels */
 		summaryDP = decPlaces + 2;
 		outlierChoiceAbbrev = cleanLabel(outlierChoice);
@@ -868,72 +873,84 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		arrayMax = d2s(arrayMax,summaryDP);
 		median = d2s(arrayQuartile[1],summaryDP);
 		if (IQR!=0) mode = d2s(mode,summaryDP);
-		titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
+	}
+	titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
+	if (summaryAdd || paraLabAdd) {
 		/* Then Statistics Summary Options Dialog . . . */
 		Dialog.create("Statistics Summary Options");
-			Dialog.addCheckbox("Add parameter label to top line of summary?", true);
-			Dialog.addNumber("Parameter label font size:", paraLabFontSize);	
-			Dialog.addNumber("Statistics summary font size:", statsLabFontSize);				
-			statsChoice1 = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items);
-			if (outlierChoice!="No") statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
-			statsChoice3 = newArray(			
-			"Mean:  " + arrayMean + " " +unitLabel,
-			"Median:  " + median + " " +unitLabel,
-			"StdDev:  " + arraySD + " " +unitLabel,
-			"CoeffVar:  " + coeffVar + "%", "Min-Max:  " + arrayMin + " - " + arrayMax + " " +unitLabel,
-			"Minimum:  " + arrayMin, "Maximum:  " + arrayMax);
-			statsChoice4 = newArray(	/* additional frequency distribution stats */		
-			"Mode:  " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)",
-			"InterQuartile Range:  " + IQR + " " + unitLabel);
-			statsChoice5 = newArray(  /* log stats */
-			"ln Stats Mean:  " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " +unitLabel,
-			"ln Stats +SD:  " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
-			"ln Stats +2SD:  " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
-			"ln Stats +3SD:  " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
-			"ln Stats -SD:  " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
-			"ln Stats -2SD:  " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
-			"ln Stats -3SD:  " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
-			statsChoice6 = newArray(
-			"Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "User Text",
-			"Long Underline:  ___","Blank line");
-			if (IQR!=0 && freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4);
-			if (outlierChoice!="No") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6);
-			else statsChoice = Array.concat(statsChoice1,statsChoice3,statsChoice5,statsChoice6);
-			if (menuLimit > 752)	textChoiceLines = 3;
-			else textChoiceLines = 1;
-			userInput = newArray(textChoiceLines);
-			for (i=0; i<statsChoiceLines; i++) {
-				if (i<6) Dialog.addChoice("Statistics label line "+(i+1)+":", statsChoice, statsChoice[i+2]);
-				else Dialog.addChoice("Statistics label line "+(i+1)+":", statsChoice, statsChoice[0]);
+			if (paraLabAdd) {
+				Dialog.addString("Parameter Label or Title:",paraLabel,12);
+				Dialog.addNumber("Parameter label font size:", paraLabFontSize);	
 			}
-			for (i=0; i<textChoiceLines; i++)
-				Dialog.addString("User text if selected above: "+(i+1)+":","None", 30);
-			Dialog.addNumber("Change decimal places from " + summaryDP + ": ", summaryDP);
+			if (!summaryAdd) Dialog.addNumber("Optional text font size:", statsLabFontSize);
+			else {
+				Dialog.addNumber("Statistics summary font size:", statsLabFontSize);
+				Dialog.addNumber("Change decimal places from " + summaryDP + ": ", summaryDP);
+				statsChoice1 = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items);
+				if (outlierChoice!="No") statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
+				statsChoice3 = newArray(			
+				"Mean:  " + arrayMean + " " +unitLabel,
+				"Median:  " + median + " " +unitLabel,
+				"StdDev:  " + arraySD + " " +unitLabel,
+				"CoeffVar:  " + coeffVar + "%", "Min-Max:  " + arrayMin + " - " + arrayMax + " " +unitLabel,
+				"Minimum:  " + arrayMin, "Maximum:  " + arrayMax);
+				statsChoice4 = newArray(	/* additional frequency distribution stats */		
+				"Mode:  " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)",
+				"InterQuartile Range:  " + IQR + " " + unitLabel);
+				statsChoice5 = newArray(  /* log stats */
+				"ln Stats Mean:  " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " +unitLabel,
+				"ln Stats +SD:  " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+				"ln Stats +2SD:  " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+				"ln Stats +3SD:  " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+				"ln Stats -SD:  " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+				"ln Stats -2SD:  " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel,
+				"ln Stats -3SD:  " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+				statsChoice6 = newArray(
+				"Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "Manual",
+				"Long Underline:  ___","Blank line");
+				if (IQR!=0 && freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4);
+				if (outlierChoice!="No") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6);
+				else statsChoice = Array.concat(statsChoice1,statsChoice3,statsChoice5,statsChoice6);
+				for (i=0; i<statsChoiceLines; i++) {
+					if (i<6) Dialog.addChoice("Statistics label line "+(i+1)+":", statsChoice, statsChoice[i+2]);
+					else Dialog.addChoice("Statistics label line "+(i+1)+":", statsChoice, statsChoice[0]);
+				}
+				if (menuLimit > 752)	textChoiceLines = 3;
+				else textChoiceLines = 1;
+				userInput = newArray(textChoiceLines);
+				for (i=0; i<textChoiceLines; i++)
+					Dialog.addString("Manual: Line selected above: "+(i+1)+":","None", 30);
+			}	
 			Dialog.addChoice("Summary and parameter font color:", colorChoice, "white");
 			Dialog.addChoice("Summary and parameter outline color:", colorChoice, "black");
 			if (menuLimit>=796) { /* room to show full dialog */
-				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of stats label font size");
-				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of stats label font size");
-				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of stats label font size");
-				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of stats label font size");
+				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of summary font size");
+				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of summary font size");
+				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of summary font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of summary font size");
 				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
-				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of stats label font size");
-				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of summary font size");
+				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of summary font size");
 				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
 				Dialog.show();
 			}
-			else Dialog.show(); /* This menu is too long for small screens */
-			paraLabAdd = Dialog.getCheckbox();
-			paraLabFontSize =  Dialog.getNumber();
+			else Dialog.show(); /* Sorry, only an abbreviated menu for small screens */
+			
+			if (paraLabAdd) {
+				paraLabel = Dialog.getString();
+				paraLabFontSize =  Dialog.getNumber();
+			}
 			statsLabFontSize =  Dialog.getNumber();
-			statsLabLine = newArray(statsChoiceLines);
-			for (i=0; i<statsChoiceLines; i++)
-				statsLabLine[i] = Dialog.getChoice();
-			textInputLines = newArray(textChoiceLines);
-			for (i=0; i<textChoiceLines; i++)
-				textInputLines[i] = Dialog.getString();
-			newSummaryDP = Dialog.getNumber;
+			if (summaryAdd) {
+				newSummaryDP = Dialog.getNumber;
+				statsLabLine = newArray(statsChoiceLines);
+				for (i=0; i<statsChoiceLines; i++)
+					statsLabLine[i] = Dialog.getChoice();
+				textInputLines = newArray(textChoiceLines);
+				for (i=0; i<textChoiceLines; i++)
+					textInputLines[i] = Dialog.getString();
+			}
 			fontColor = Dialog.getChoice();
 			outlineColor = Dialog.getChoice();
 			if (menuLimit>=796) {
@@ -996,69 +1013,66 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Count lines of summary label */
 		if (paraLabAdd) labLines = 1;
 		else labLines = 0;
-		if (newSummaryDP!=summaryDP) {
-			summaryDP = newSummaryDP;
-			arrayMean = d2s(arrayMean,summaryDP);
-			coeffVar = d2s((100/arrayMean)*arraySD,summaryDP);
-			arraySD = d2s(arraySD,summaryDP);
-			arrayMin = d2s(arrayMin,summaryDP);
-			arrayMax = d2s(arrayMax,summaryDP);
-			median = d2s(arrayQuartile[1],summaryDP);
-			if (IQR!=0) mode = d2s(mode,summaryDP);
-		}
-		statsLines = 0;
-		statsLabLineText = newArray(statsChoiceLines);
-		setFont(fontName, statsLabFontSize, fontStyle);
-		longestStringWidth = 0;
-		userTextLine=0;
-		if (lengthOf(t)>round(imageWidth/(1.5*fontSize)))
-			titleShort = substring(t, 0, round(imageWidth/(1.5*fontSize))) + "...";
-		else titleShort = t;
-		for (i=0; i<statsChoiceLines; i++) {
-			if (statsLabLine[i]!="None") {
-				statsLines = i + 1;
-				if (indexOf(statsLabLine[i], ":  ")>0) statsLabLine[i] = substring(statsLabLine[i], 0, indexOf(statsLabLine[i], ":  "));
-				if (statsLabLine[i]=="Dashed Line:  ---") statsLabLineText[i] = "----------";
-				else if (statsLabLine[i]=="Number of objects") statsLabLineText[i] = "Objects = " + items;
-				else if (statsLabLine[i]=="Outlines") statsLabLineText[i] = "Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor;
-				else if (statsLabLine[i]=="Mean") statsLabLineText[i] = "Mean = " + arrayMean + " " + unitLabel;
-				else if (statsLabLine[i]=="Median") statsLabLineText[i] = "Median = " + median + " " + unitLabel;
-				else if (statsLabLine[i]=="StdDev") statsLabLineText[i] = "Std.Dev.: " + arraySD + " " + unitLabel;
-				else if (statsLabLine[i]=="CoeffVar") statsLabLineText[i] = "Coeff.Var.: " + coeffVar + "%";
-				else if (statsLabLine[i]=="Min-Max") statsLabLineText[i] = "Range: " + arrayMin + " - " + arrayMax + " " + unitLabel;
-				else if (statsLabLine[i]=="Minimum") statsLabLineText[i] = "Minimum: " + arrayMin + " " + unitLabel;
-				else if (statsLabLine[i]=="Maximum") statsLabLineText[i] = "Maximum: " + arrayMax + " " + unitLabel;
-				else if (statsLabLine[i]=="Mode") statsLabLineText[i] = "Mode = " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)";
-				else if (statsLabLine[i]=="InterQuartile Range") statsLabLineText[i] = "InterQuartile Range = " + IQR + " " +unitLabel;
-				else if (statsLabLine[i]=="ln Stats Mean") statsLabLineText[i] = "ln Stats Mean: " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +SD") statsLabLineText[i] = "ln Stats +SD: " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats +2SD: " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats +3SD: " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats -SD") statsLabLineText[i] = "ln Stats -SD: " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats -2SD: " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats -3SD: " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-				else if (statsLabLine[i]=="Pixel Size") statsLabLineText[i] = "Scale: 1 pixel = " + lcf + " " + unit;
-				else if (statsLabLine[i]=="Image Title") statsLabLineText[i] = "Image: " + titleShort;
-				else if (statsLabLine[i]=="User Text"){
-					 if (textInputLines[userTextLine]!="None") statsLabLineText[i] = textInputLines[userTextLine];
-					 else statsLabLineText[i] = "";
-					 userTextLine += 1;
+		if (summaryAdd) {
+			if (newSummaryDP!=summaryDP) {
+				summaryDP = newSummaryDP;
+				arrayMean = d2s(arrayMean,summaryDP);
+				coeffVar = d2s((100/arrayMean)*arraySD,summaryDP);
+				arraySD = d2s(arraySD,summaryDP);
+				arrayMin = d2s(arrayMin,summaryDP);
+				arrayMax = d2s(arrayMax,summaryDP);
+				median = d2s(arrayQuartile[1],summaryDP);
+				if (IQR!=0) mode = d2s(mode,summaryDP);
+			}
+			statsLines = 0;
+			statsLabLineText = newArray(statsChoiceLines);
+			setFont(fontName, statsLabFontSize, fontStyle);
+			longestStringWidth = 0;
+			userTextLine=0;
+			if (lengthOf(t)>round(imageWidth/(1.5*fontSize)))
+				titleShort = substring(t, 0, round(imageWidth/(1.5*fontSize))) + "...";
+			else titleShort = t;
+			for (i=0; i<statsLabLineText.length; i++) {
+				if (statsLabLine[i]!="None") {
+					statsLines = i + 1;
+					if (indexOf(statsLabLine[i], ":  ")>0) statsLabLine[i] = substring(statsLabLine[i], 0, indexOf(statsLabLine[i], ":  "));
+					if (statsLabLine[i]=="Dashed Line:  ---") statsLabLineText[i] = "----------";
+					else if (statsLabLine[i]=="Number of objects") statsLabLineText[i] = "Objects = " + items;
+					else if (statsLabLine[i]=="Outlines") statsLabLineText[i] = "Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor;
+					else if (statsLabLine[i]=="Mean") statsLabLineText[i] = "Mean = " + arrayMean + " " + unitLabel;
+					else if (statsLabLine[i]=="Median") statsLabLineText[i] = "Median = " + median + " " + unitLabel;
+					else if (statsLabLine[i]=="StdDev") statsLabLineText[i] = "Std.Dev.: " + arraySD + " " + unitLabel;
+					else if (statsLabLine[i]=="CoeffVar") statsLabLineText[i] = "Coeff.Var.: " + coeffVar + "%";
+					else if (statsLabLine[i]=="Min-Max") statsLabLineText[i] = "Range: " + arrayMin + " - " + arrayMax + " " + unitLabel;
+					else if (statsLabLine[i]=="Minimum") statsLabLineText[i] = "Minimum: " + arrayMin + " " + unitLabel;
+					else if (statsLabLine[i]=="Maximum") statsLabLineText[i] = "Maximum: " + arrayMax + " " + unitLabel;
+					else if (statsLabLine[i]=="Mode") statsLabLineText[i] = "Mode = " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)";
+					else if (statsLabLine[i]=="InterQuartile Range") statsLabLineText[i] = "InterQuartile Range = " + IQR + " " +unitLabel;
+					else if (statsLabLine[i]=="ln Stats Mean") statsLabLineText[i] = "ln Stats Mean: " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="ln Stats +SD") statsLabLineText[i] = "ln Stats +SD: " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats +2SD: " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats +3SD: " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="ln Stats -SD") statsLabLineText[i] = "ln Stats -SD: " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats -2SD: " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats -3SD: " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+					else if (statsLabLine[i]=="Pixel Size") statsLabLineText[i] = "Scale: 1 pixel = " + lcf + " " + unit;
+					else if (statsLabLine[i]=="Image Title") statsLabLineText[i] = "Image: " + titleShort;
+					else if (statsLabLine[i]=="Manual"){
+						 if (textInputLines[userTextLine]!="None") statsLabLineText[i] = textInputLines[userTextLine];
+						 else statsLabLineText[i] = "";
+						 userTextLine += 1;
+					}
+					else if (statsLabLine[i]=="Long Underline") statsLabLineText[i] = "__________";
+					else if (statsLabLine[i]=="Blank line") statsLabLineText[i] = " ";
+					if (getStringWidth(statsLabLineText[i])>longestStringWidth) longestStringWidth = getStringWidth(statsLabLineText[i]);
 				}
-				else if (statsLabLine[i]=="Long Underline") statsLabLineText[i] = "__________";
-				else if (statsLabLine[i]=="Blank line") statsLabLineText[i] = " ";
-				if (getStringWidth(statsLabLineText[i])>longestStringWidth) longestStringWidth = getStringWidth(statsLabLineText[i]);
 			}
+			linesSpace = 1.2 * ((labLines*paraLabFontSize)+(statsLines*statsLabFontSize));
 		}
-		linesSpace = 1.2 * ((labLines*paraLabFontSize)+(statsLines*statsLabFontSize));
-				
-		if (paraLabPos!="None") {		
-			/* recombine units and labels that were used in Ramp */
-			if (unitLabel!="") paraLabel = parameterLabel + ", " + unitLabel;
-			else paraLabel = parameterLabel;
-			if (paraLabAdd) {
-				setFont(fontName,paraLabFontSize, fontStyle);
-				if (getStringWidth(paraLabel)>longestStringWidth) longestStringWidth = getStringWidth(paraLabel);
-			}
+		if (paraLabAdd && !summaryAdd) longestStringWidth = getStringWidth(paraLabel);
+		if (paraLabAdd) {
+			setFont(fontName,paraLabFontSize, fontStyle);
+			if (getStringWidth(paraLabel)>longestStringWidth) longestStringWidth = getStringWidth(paraLabel);
 			if (paraLabPos == "Top Left") {
 				selEX = offsetX;
 				selEY = offsetY;
@@ -1108,10 +1122,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			paraLabelY += round(1.2 * paraLabFontSize);
 		}
 		setFont(fontName,statsLabFontSize, fontStyle);
-		for (i=0; i<statsLines; i++) {
-			if (statsLabLine[i]!="None") {
-				drawString(statsLabLineText[i], paraLabelX, paraLabelY);
-				paraLabelY += round(1.2 * statsLabFontSize);		
+		if (summaryAdd) {
+			for (i=0; i<statsLines; i++) {
+				if (statsLabLine[i]!="None") {
+					drawString(statsLabLineText[i], paraLabelX, paraLabelY);
+					paraLabelY += round(1.2 * statsLabFontSize);		
+				}
 			}
 		}
 		fancyTextOverImage(summLabelShadowDrop,summLabelShadowDisp,summLabelShadowBlur,shadowDarkness,outlineStroke,summLabelInnerShadowDrop,summLabelInnerShadowDisp,summLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original flatImage */
@@ -1153,7 +1169,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					run("Crop");
 					run("Select None");
 				}
-				else run("Auto Crop (guess background color)");
+				else {
+					run("Select Bounding Box (guess background color)");
+					run("Enlarge...", "enlarge="+round(imageHeight*0.02)); /* Adds a 2% margin */
+					run("Crop");
+				}
 				croppedImageHeight = getHeight(); croppedImageWidth = getWidth();
 				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 				selectWindow(tR);

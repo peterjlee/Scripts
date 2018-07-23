@@ -10,7 +10,8 @@
 	+ v161117 adds more decimal place control
 	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 	+ Update functions to latest versions.
-	+ v180316 Reordered 1st menu.								  
+	+ v180316 Reordered 1st menu.
+	+ v180723 Minor updates to LUTs list function.
  */
 macro "ROI Color Coder with Labels"{
 	requires("1.47r");
@@ -547,24 +548,26 @@ if (minmaxIOR) {
 		return string;
 	}
 	function getLutsList() {
+		/* v180723 added check for preferred LUTs */
 		lutsCheck = 0;
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
-		if (getDirectory("luts") == "") restoreExit("Failure to find any LUTs!");
+		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLuts = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
-		baseLuts = newArray(lengthOf(preferredLuts));
-		baseLutsCount = 0;
-		for (i=0; i<lengthOf(preferredLuts); i++) {
-			for (j=0; j<lengthOf(defaultLuts); j++) {
-				if (preferredLuts[i]==defaultLuts[j]) {
-					baseLuts[baseLutsCount] = preferredLuts[i];
-					baseLutsCount += 1;
+		preferredLutsList = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLuts = newArray(preferredLutsList.length);
+		counter = 0;
+		for (i=0; i<preferredLutsList.length; i++) {
+			for (j=0; j<defaultLuts.length; j++) {
+				if (preferredLutsList[i] == defaultLuts[j]) {
+					preferredLuts[counter] = preferredLutsList[i];
+					counter +=1;
+					j = defaultLuts.length;
 				}
 			}
 		}
-		baseLuts=Array.trim(baseLuts, baseLutsCount);
-		lutsList=Array.concat(baseLuts, defaultLuts);
+		preferredLuts = Array.trim(preferredLuts, counter);
+		lutsList=Array.concat(preferredLuts, defaultLuts);
 		return lutsList; /* Required to return new array */
 	}
 	function getSelectionFromMask(selection_Mask){
@@ -637,7 +640,7 @@ if (minmaxIOR) {
 		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
-		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
+		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
 		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */

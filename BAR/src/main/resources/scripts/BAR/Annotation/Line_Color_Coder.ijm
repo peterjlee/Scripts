@@ -8,6 +8,7 @@
 	+ v170411 removes spaces from image names for compatibility with new image combinations
 	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 	+ v180125 fixed "items" should be "nRes" error.
+	+ v180725 Added system fonts to font list. Updated functions. Adds unit:pixel conversion option.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -33,6 +34,7 @@ macro "Line Color Coder with Labels"{
 	id = getImageID();	t=getTitle(); /* get id of image and title */	
 	checkForUnits(); /* Required function */
 	getPixelSize(unit, pixelWidth, pixelHeight);
+	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor */
 	checkForAnyResults();
 	nRes= nResults;
 	setBatchMode(true);
@@ -62,13 +64,15 @@ macro "Line Color Coder with Labels"{
 		headingsWithRange[0] = "ID" + ":  1 - " + nRes; /* relabels ImageJ ID column */
 	/* create the dialog prompt */
 	Dialog.create("Line Color Coder: " + tN);
-	Dialog.addMessage("This macro draws lines between sets of coordinates\nin a table and colors them according to an LUT");
+	// Dialog.addMessage("This macro draws lines between sets of coordinates\nin a table and colors them according to an LUT");
 	Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
 	Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[0]);
 	Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[1]);
 	Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
+	Dialog.setInsets(-1, 20, 6);
+	if (lcf!=1) Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false); 
 	Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[1]);
-	luts=getLutsList(); // still prefer this to new direct use of getList
+	luts=getLutsList();
 	Dialog.addChoice("LUT:", luts, luts[0]);
 	Dialog.addCheckbox("Reverse LUT?", false); 
 	Dialog.setInsets(6, 0, 6);
@@ -97,7 +101,7 @@ macro "Line Color Coder with Labels"{
 	Dialog.addMessage(rampH + " pxls suggested\nby image height");
 	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
 	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
-	fontNameChoice = newArray("SansSerif", "Serif", "Monospaced");
+	fontNameChoice = getFontChoiceList();
 	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
 	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
 	Dialog.setInsets(-25, 205, 0);
@@ -113,6 +117,8 @@ macro "Line Color Coder with Labels"{
 		fromY = Dialog.getChoice;
 		toX = Dialog.getChoice;
 		toY = Dialog.getChoice;
+		if (lcf!=1 && Dialog.getCheckbox) ccf = lcf;
+		else ccf = 1;
 		parameterWithLabel= Dialog.getChoice;
 		parameter= substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
 		lut= Dialog.getChoice;
@@ -410,23 +416,23 @@ macro "Line Color Coder with Labels"{
 			// roiManager("Set Line Width", lineWidth);
 			// roiManager("Set Color", alpha+lineColors[lutIndex]);
 			setColor("#"+lineColors[lutIndex]);
-			X1 = getResult(fromX,i);
-			Y1 = getResult(fromY,i);
-			X2 = getResult(toX,i);
-			Y2 = getResult(toY,i);
+			X1 = getResult(fromX,i)/ccf;
+			Y1 = getResult(fromY,i)/ccf;
+			X2 = getResult(toX,i)/ccf;
+			Y2 = getResult(toY,i)/ccf;
 			if (X1<=imageWidth && X2<=imageWidth && Y1<=imageHeight && Y2 <imageHeight) { // this allows you to crop image from top left if necessary
 				if 	(restrictLines!="No") {
 					selEX2 = selEX + selEWidth;
 					selEY2 = selEY + selEHeight;
 					if (X1>=selEX && X1<=selEX2 && X2>=selEX && X2<=selEX2 && Y1>=selEY && Y1<=selEY2 && Y2>=selEY && Y2<=selEY2) {	
-						drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
+						drawLine();
 						frameSkipCounter += 1;
 						if (frameSkipCounter==frameSkip) {
 							if (makeAnimStack) {
 								if (!singleLine)	addImageToStack("animStack",workingT);
 								else {
 									newImage("tempFrame", "RGB white", imageWidth, imageHeight, 1);
-									drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
+									drawLine(X1, Y1, X2, Y2);
 									addImageToStack("animStack","tempFrame");
 									closeImageByTitle("tempFrame");
 								}
@@ -436,7 +442,7 @@ macro "Line Color Coder with Labels"{
 					}
 				}
 				else {
-					drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
+					drawLine(X1, Y1, X2, Y2);
 					frameSkipCounter += 1;
 					if (frameSkipCounter==frameSkip) {
 						if (makeAnimStack) {
@@ -496,6 +502,7 @@ macro "Line Color Coder with Labels"{
 		hideResultsAs(tableUsed);
 	}
 	setBatchMode("exit & display");
+	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage");
 	showStatus("Line Drawing Macro Finished");
 	/*
@@ -575,20 +582,24 @@ macro "Line Color Coder with Labels"{
 			restoreResultsFrom(tableUsed);
 		}
 	}
-	function checkForUnits() {  /* 
+	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)
-		*/
+		 v170914 Radio dialog with more information displayed */
 		getPixelSize(unit, pixelWidth, pixelHeight);
 		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches"){
-			Dialog.create("No Units");
-			Dialog.addCheckbox("Unit asymmetry, pixel units or dpi remnants; do you want to define units for this image?", true);
+			Dialog.create("Suspicious Units");
+			rescaleChoices = newArray("Define new units for this image", "Use current scale", "Exit this macro");
+			rescaleDialogLabel = "pixelHeight = "+pixelHeight+", pixelWidth = "+pixelWidth+", unit = "+unit+": what would you like to do?";
+			Dialog.addRadioButtonGroup(rescaleDialogLabel, rescaleChoices, 3, 1, rescaleChoices[0]) ;
 			Dialog.show();
-			setScale = Dialog.getCheckbox;
-			if (setScale) run("Set Scale...");
+			rescaleChoice = Dialog.getRadioButton;
+			if (rescaleChoice==rescaleChoices[0]) run("Set Scale...");
+			else if (rescaleChoice==rescaleChoices[2]) restoreExit("Goodbye");
 		}
 	}
 	function cleanLabel(string) {
-		/* v161104 */
+		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters
+		v180317 */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
@@ -602,6 +613,8 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
 		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
+		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
+		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -726,6 +739,27 @@ macro "Line Color Coder with Labels"{
 	/*
 	End of Color Functions 
 	*/
+	function getFontChoiceList() {
+		/* v180723 first version */
+		systemFonts = getFontList();
+		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
+		fontNameChoice = Array.concat(IJFonts,systemFonts);
+		faveFontList = newArray("Your favorite fonts here", "SansSerif", "Arial Black", "Open Sans ExtraBold", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Helvetica");
+		faveFontListCheck = newArray(faveFontList.length);
+		counter = 0;
+		for (i=0; i<faveFontList.length; i++) {
+			for (j=0; j<fontNameChoice.length; j++) {
+				if (faveFontList[i] == fontNameChoice[j]) {
+					faveFontListCheck[counter] = faveFontList[i];
+					counter +=1;
+					j = fontNameChoice.length;
+				}
+			}
+		}
+		faveFontListCheck = Array.trim(faveFontListCheck, counter);
+		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
+		return fontNameChoice;
+	}
 	function getSelectionFromMask(selection_Mask){
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
@@ -804,26 +838,27 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
-	if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
-		unitIndexStart = lastIndexOf(string, "\(");
-		unitIndexEnd = lastIndexOf(string, "\)");
-		stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
-		unitCheck = matches(stringUnit, ".*[0-9].*");
-		if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
-			unitLabel = stringUnit;
+	/* v180404 added Feret_MinDAngle_Offset */
+		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
+			unitIndexStart = lastIndexOf(string, "\(");
+			unitIndexEnd = lastIndexOf(string, "\)");
+			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
+			unitCheck = matches(stringUnit, ".*[0-9].*");
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
+				unitLabel = stringUnit;
+			}
+			else {
+				unitLabel = "";
+			}
 		}
 		else {
-			unitLabel = "";
+			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
+			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
+			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
+			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90" || string=="Feret_MinDAngle_Offset" || string=="MinDistAngle") unitLabel = fromCharCode(0x00B0);
+			else if (string=="%Area") unitLabel = "%";
+			else unitLabel = imageUnit;
 		}
-	}
-	else {
-		if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-		else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
-		else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-		else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90") unitLabel = fromCharCode(0x00B0);
-		else if (string=="%Area") unitLabel = "%";
-		else unitLabel = imageUnit;
-	}
-	return unitLabel;
+		return unitLabel;
 	}
 }

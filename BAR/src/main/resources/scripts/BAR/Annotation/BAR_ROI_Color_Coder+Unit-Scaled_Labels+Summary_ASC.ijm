@@ -44,7 +44,7 @@
 	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
 	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
 	+ v180722 Allows any system font to be used. Fixed selected positions.
-	+ v180723 Checks for preferred LUTs before adding to list and added favorite font list
+	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -126,8 +126,18 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
 		Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
 		Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
-		Dialog.setInsets(6, 120, 0);
+		Dialog.setInsets(20, 120, 10);
 		Dialog.addCheckbox("Make copy of image with scaled labels?", true);
+		Dialog.setInsets(6, 120, 10);
+		if (selectionExists) {
+			Dialog.addCheckbox("Summary/Parameter at selected location \(below\)?", true); 
+			Dialog.addNumber("Starting",selPosStartX,0,5,"X");
+			Dialog.setInsets(-28, 150, 0);
+			Dialog.addNumber("Starting",selPosStartY,0,5,"Y");
+			Dialog.addNumber("Selected",originalSelEWidth,0,5,"Width");
+			Dialog.setInsets(-28, 150, 0);
+			Dialog.addNumber("Selected",originalSelEHeight,0,5,"Height");
+		}
 		Dialog.show;
 		
 		imageChoice = Dialog.getChoice;
@@ -137,8 +147,15 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		revLut = Dialog.getCheckbox;
 		stroke = Dialog.getNumber;
 		alpha = pad(toHex(255*Dialog.getNumber/100));
-		addLabels = Dialog.getCheckbox();
-		
+		addLabels = Dialog.getCheckbox;
+		if (selectionExists) {
+			selectionExists = Dialog.getCheckbox; 
+			selPosStartX = Dialog.getNumber;
+			selPosStartY = Dialog.getNumber;
+			originalSelEWidth = Dialog.getNumber;
+			originalSelEHeight = Dialog.getNumber;
+		}
+	
 	unitLabel = unitLabelFromString(parameter, unit);
 	/* get values for chosen parameter */
 	values= newArray(items);
@@ -206,7 +223,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		minmaxLines = Dialog.getCheckbox;
 		outlierChoice =  Dialog.getRadioButton;
-		outlierColor = Dialog.getChoice(); /* Object label color */
+		if (outlierChoice!="No") sigmaR = (parseInt(substring(outlierChoice,0,1)));
+		outlierColor = Dialog.getChoice(); /* Outline color for outliers */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice = Dialog.getChoice;
@@ -542,7 +560,50 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
 			setColor(0,0,0);
+			/* Color right sigma tick mark with outlier color for outlier range */ 
+			if(statsRampLines!="No"){
+				setColor(outlierColor);
+				for (s=1; s<10; s++) {
+					if (outlierChoice!="No" && s>=sigmaR) {
+						if (rampMeanPlusSDFactors[s]<=1 && plusSDPos[s]<=(rampH - fontSR2) && abs(plusSDPos[s]-lastDrawnPlusSDPos)>0.75*fontSR2) {
+							if (minmaxLines) {
+								if (plusSDPos[s]<=(maxPos-0.75*fontSR2) || plusSDPos[s]>=(maxPos+0.75*fontSR2)) { /* prevent overlap with max line */
+									drawLine(rampW-1-tickLR, plusSDPos[s]+rampLW*0.75, rampW-rampLW-1, plusSDPos[s]+rampLW*0.75);
+									drawLine(rampW-1-tickLR, plusSDPos[s]-rampLW*0.75, rampW-rampLW-1, plusSDPos[s]-rampLW*0.75);
+								}
+							}
+							else {
+								drawLine(rampW-1-tickLR, plusSDPos[s]+rampLW*0.75, rampW-rampLW-1, plusSDPos[s]+rampLW*0.75);
+								drawLine(rampW-1-tickLR, plusSDPos[s]-rampLW*0.75, rampW-rampLW-1, plusSDPos[s]-rampLW*0.75);
+								lastDrawnPlusSDPos = plusSDPos[s];
+							}
+							if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.93) s = 10;
+						}
+					}
+				}
+				lastDrawnMinusSDPos = minusSDPos[0];
+				for (s=1; s<10; s++) {
+					if (outlierChoice!="No" && s>=sigmaR) {
+						if (rampMeanMinusSDFactors[s]>0 && minusSDPos[s]>fontSR2 && abs(minusSDPos[s]-lastDrawnMinusSDPos)>0.75*fontSR2) {
+							if (minmaxLines) {
+								if (minusSDPos[s]<(minPos-0.75*fontSR2) || minusSDPos[s]>(minPos+0.75*fontSR2)) { /* prevent overlap with min line */
+									drawLine(rampW-1-tickLR, minusSDPos[s]+rampLW*0.75, rampW-rampLW-1, minusSDPos[s]+rampLW*0.75);
+									drawLine(rampW-1-tickLR, minusSDPos[s]-rampLW*0.75, rampW-rampLW-1, minusSDPos[s]-rampLW*0.75);
+									lastDrawnMinusSDPos = minusSDPos[s];
+								}
+							}
+							else {
+								drawLine(rampW-1-tickLR, minusSDPos[s]+rampLW*0.75, rampW-rampLW-1, minusSDPos[s]+rampLW*0.75);
+								drawLine(rampW-1-tickLR, minusSDPos[s]-rampLW*0.75, rampW-rampLW-1, minusSDPos[s]-rampLW*0.75);
+								lastDrawnMinusSDPos = minusSDPos[s];
+							}
+							if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
+						}
+					}
+				}
+			}
 		}
+		setColor(0, 0, 0);
 		/*	parse symbols in unit and draw final label below ramp */
 		selectWindow(tR);
 		rampParameterLabel= cleanLabel(parameterLabel);
@@ -724,7 +785,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		workingImage = getTitle();
 		if (is("Batch Mode")==false) setBatchMode(true);
 		if (outlierChoice!="No")  {
-			sigmaR = (parseInt(substring(outlierChoice,0,1)));
 			if (outlierChoice=="Select") {
 				Dialog.create("Input Outlier Limits");
 				Dialog.addString("Outlier Limits:", "Low-High", 16);
@@ -868,7 +928,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		outlierChoiceAbbrev = cleanLabel(outlierChoice);
 		if (outlierChoice=="Select") 	outlierChoiceAbbrev = "<" + outlierMin + " >" + outlierMax + " " + unitLabel;
 		else if (outlierChoice=="Range") 	outlierChoiceAbbrev = "<" + rampMin + " >" + rampMax + " " + unitLabel;
-		else outlierChoiceAbbrev = "outside " + outlierChoiceAbbrev;
+		else outlierChoiceAbbrev = "" + fromCharCode(0x2265) + outlierChoiceAbbrev;
 		arrayMean = d2s(arrayMean,summaryDP);
 		coeffVar = d2s((100/arrayMean)*arraySD,summaryDP);
 		arraySD = d2s(arraySD,summaryDP);
@@ -1750,7 +1810,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		 return hexName;
 	}
 	function getLutsList() {
-		/* v180723 added check for preferred LUTs */
 		lutsCheck = 0;
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);

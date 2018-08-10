@@ -45,6 +45,7 @@
 	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
 	+ v180722 Allows any system font to be used. Fixed selected positions.
 	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
+	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -63,6 +64,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		selectionExists = true;
 	} else selectionExists = false;
 	run("Select None");
+	if (roiManager("count")>0) roiManager("deselect");
 	/*
 	Set options for black objects on white background as this works better for publications */
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
@@ -92,7 +94,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
-	fontSize = rampH/28; /* default fonts size based on imageHeight */
+	acceptMinFontSize = true;
+	fontSize = maxOf(10,rampH/28); /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray(lengthOf(headings));
@@ -224,6 +227,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		minmaxLines = Dialog.getCheckbox;
 		outlierChoice =  Dialog.getRadioButton;
 		if (outlierChoice!="No") sigmaR = (parseInt(substring(outlierChoice,0,1)));
+		else sigmaR = NaN;
 		outlierColor = Dialog.getChoice(); /* Outline color for outliers */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
@@ -244,6 +248,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		t = imageChoice;
 		tN = stripExtensionsFromString(t);
 		tN = unCleanLabel(tN);
+	}
+	if (fontSize<10) {
+		acceptMinFontSize = getBoolean("A font size of 10 is the minimum recommended font size for the macro; increase font size to 10?");
+		if (acceptMinFontSize) fontSize = 10;
 	}
 	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampChoice;
@@ -362,6 +370,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		setColor(0, 0, 0);
 		setBackgroundColor(255, 255, 255);
 		numLabelFontSize = minOf(fontSize, rampH/numLabels);
+		if (numLabelFontSize<10 && acceptMinFontSize) numLabelFontSize = maxOf(10, numLabelFontSize);
 		setFont(fontName, numLabelFontSize, fontStyle);
 		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
 		setLineWidth(rampLW*2);
@@ -551,7 +560,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			/* The following steps smooth the interior of the text labels */
 			selectWindow("stats_text");
 			getSelectionFromMask("label_mask");
-			run("Make Inverse");
+			if (selectionType()>=0) run("Make Inverse");
+			else restoreExit("Ramp creation: No selection to invert");
 			run("Invert");
 			run("Select None");
 			imageCalculator("Min",tR,"stats_text");
@@ -684,7 +694,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		fontColor = "white";
 		outlineColor = "black"; 	
 		paraLabFontSize = round((imageHeight+imageWidth)/45);
+		if (paraLabFontSize<10 && acceptMinFontSize) paraLabFontSize = 10;
 		statsLabFontSize = round((imageHeight+imageWidth)/60);
+		if (statsLabFontSize<10 && acceptMinFontSize) statsLabFontSize = 10;
 		/* Feature Label Formatting Options Dialog . . . */
 		Dialog.create("Feature Label Formatting Options");
 			Dialog.setInsets(0, 150, 6);
@@ -694,9 +706,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
 			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
-			Dialog.addNumber("Restrict label font size:", round(imageWidth/90),0,4, "Min to ");
+			minROIFont = round(imageWidth/90);
+			if (minROIFont<10 && acceptMinFontSize) minROIFont = 10;
+			Dialog.addNumber("Restrict label font size:", minROIFont,0,4, "Min to ");
 			Dialog.setInsets(-28, 90, 0);
-			Dialog.addNumber("Max", round(imageWidth/16), 0, 4, "Max");
+			maxROIFont = round(imageWidth/16);
+			if (maxROIFont<10 && acceptMinFontSize) maxROIFont = 10;			
+			Dialog.addNumber("Max", maxROIFont, 0, 4, "Max");
 			fontStyleChoice = newArray("bold", "bold antialiased", "italic", "bold italic", "unstyled");
 			Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);  /* Reuse font list from previous dialog */
 			Dialog.addChoice("Font name:", fontNameChoice, fontName); /* Default to previous fontName */
@@ -863,6 +879,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				lFontS = fontSCorrection * fontSize * roiMin/(getStringWidth(labelString));
 				if (lFontS>maxLFontS) lFontS = maxLFontS; 
 				if (lFontS<minLFontS) lFontS = minLFontS;
+				if (lFontS<10 && acceptMinFontSize) lFontS = 10;
 				setFont(fontName,lFontS,fontStyle);
 				if (ctrChoice=="ROI Center") {
 					textOffset = roiX + ((roiWidth) - getStringWidth(labelString))/2;
@@ -1235,64 +1252,66 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
 		roiManager("deselect");
 		run("Select None");
-		setFont(fontName,paraLabFontSize, fontStyle);
-		newImage("antiAliased", originalImageDepth, imageWidth, imageHeight, 1);
-		/* Draw text for mask and antiAliased tweak */
-		
-		/* determine font color intensities settings for antialiased tweak */
-		fontColorArray = getColorArrayFromColorName(fontColor);
-		Array.getStatistics(fontColorArray,fontIntMean);
-		fontInt = floor(fontIntMean);
-		outlineColorArray = getColorArrayFromColorName(outlineColor);
-		Array.getStatistics(outlineColorArray,outlineIntMean);
-		outlineInt = floor(outlineIntMean);
-		paraLabelY1 = paraLabelY;
-		for (t=0; t<2; t++) {
-			selectWindow(textImages[t]);
-			if (t==0) setColor("white");
-			else {
-				paraLabelY = paraLabelY1;
-				run("Select All");
-				setColorFromColorName(outlineColor);
-				fill();
-				roiManager("deselect");
-				run("Select None");
-				setColorFromColorName(fontColor);
-			}
-			if (paraLabAdd) {
-				setFont(fontName,paraLabFontSize, fontStyle);
-				if (just=="left") drawString(paraLabel, paraLabelX, paraLabelY);
-				else if (just=="right") drawString(paraLabel, paraLabelX + (longestStringWidth - getStringWidth(paraLabel)), paraLabelY);
-				else drawString(paraLabel, paraLabelX + (longestStringWidth-getStringWidth(paraLabel))/2, paraLabelY);
-				paraLabelY += round(1.2 * paraLabFontSize);
-			}
-			if (summaryAdd) {
-				setFont(fontName,statsLabFontSize, fontStyle);
-				for (i=0; i<statsLines; i++) {
-					if (just=="left") drawString(statsLabLineText[i], paraLabelX, paraLabelY);
-					else if (just=="right") drawString(statsLabLineText[i], paraLabelX + (longestStringWidth - getStringWidth(statsLabLineText[i])), paraLabelY);
-					else drawString(statsLabLineText[i], paraLabelX + (longestStringWidth-getStringWidth(statsLabLineText[i]))/2, paraLabelY);
-					paraLabelY += round(1.2 * statsLabFontSize);		
+		if (paraLabFontSize>=0) {
+			setFont(fontName,paraLabFontSize, fontStyle);
+			newImage("antiAliased", originalImageDepth, imageWidth, imageHeight, 1);
+			/* Draw text for mask and antiAliased tweak */
+			
+			/* determine font color intensities settings for antialiased tweak */
+			fontColorArray = getColorArrayFromColorName(fontColor);
+			Array.getStatistics(fontColorArray,fontIntMean);
+			fontInt = floor(fontIntMean);
+			outlineColorArray = getColorArrayFromColorName(outlineColor);
+			Array.getStatistics(outlineColorArray,outlineIntMean);
+			outlineInt = floor(outlineIntMean);
+			paraLabelY1 = paraLabelY;
+			for (t=0; t<2; t++) {
+				selectWindow(textImages[t]);
+				if (t==0) setColor("white");
+				else {
+					paraLabelY = paraLabelY1;
+					run("Select All");
+					setColorFromColorName(outlineColor);
+					fill();
+					roiManager("deselect");
+					run("Select None");
+					setColorFromColorName(fontColor);
+				}
+				if (paraLabAdd) {
+					setFont(fontName,paraLabFontSize, fontStyle);
+					if (just=="left") drawString(paraLabel, paraLabelX, paraLabelY);
+					else if (just=="right") drawString(paraLabel, paraLabelX + (longestStringWidth - getStringWidth(paraLabel)), paraLabelY);
+					else drawString(paraLabel, paraLabelX + (longestStringWidth-getStringWidth(paraLabel))/2, paraLabelY);
+					paraLabelY += round(1.2 * paraLabFontSize);
+				}
+				if (summaryAdd) {
+					setFont(fontName,statsLabFontSize, fontStyle);
+					for (i=0; i<statsLines; i++) {
+						if (just=="left") drawString(statsLabLineText[i], paraLabelX, paraLabelY);
+						else if (just=="right") drawString(statsLabLineText[i], paraLabelX + (longestStringWidth - getStringWidth(statsLabLineText[i])), paraLabelY);
+						else drawString(statsLabLineText[i], paraLabelX + (longestStringWidth-getStringWidth(statsLabLineText[i]))/2, paraLabelY);
+						paraLabelY += round(1.2 * statsLabFontSize);		
+					}
 				}
 			}
+			fancyTextOverImage(summLabelShadowDrop,summLabelShadowDisp,summLabelShadowBlur,shadowDarkness,outlineStroke,summLabelInnerShadowDrop,summLabelInnerShadowDisp,summLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */
+			
+			if (isOpen("antiAliased")) {
+				if (fontInt>=outlineInt){
+					// selectWindow("textImage");
+					// run("Invert");
+					imageCalculator("Max","textImage","antiAliased");
+					imageCalculator("Min",workingImage,"textImage");
+				}
+				else {
+					imageCalculator("Max","textImage","antiAliased");
+					imageCalculator("Min",workingImage,"textImage");
+				}
+			}		
+			closeImageByTitle("textImage");
+			closeImageByTitle("label_mask");
+			closeImageByTitle("antiAliased");
 		}
-		fancyTextOverImage(summLabelShadowDrop,summLabelShadowDisp,summLabelShadowBlur,shadowDarkness,outlineStroke,summLabelInnerShadowDrop,summLabelInnerShadowDisp,summLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */
-		
-		if (isOpen("antiAliased")) {
-			if (fontInt>=outlineInt){
-				selectWindow("textImage");
-				// run("Invert");
-				imageCalculator("Max","textImage","antiAliased");
-				imageCalculator("Min",workingImage,"textImage");
-			}
-			else {
-				imageCalculator("Max","textImage","antiAliased");
-				imageCalculator("Min",workingImage,"textImage");
-			}
-		}		
-		closeImageByTitle("textImage");
-		closeImageByTitle("label_mask");
-		closeImageByTitle("antiAliased");
 	}
 /*	
 		End of Optional Summary section
@@ -1739,7 +1758,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		/* The following steps smooth the interior of the text labels */
 		selectWindow("textImage");
 		run("Restore Selection");
-		run("Make Inverse");
+		if (selectionType()>=0) run("Make Inverse");
+		else restoreExit("fancyTextOverImage function error: No selection to invert");
 		run("Invert");
 		run("Select None");
 		imageCalculator("Min",workingImage,"textImage");
@@ -1810,6 +1830,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		 return hexName;
 	}
 	function getLutsList() {
+		/* v180723 added check for preferred LUTs */
 		lutsCheck = 0;
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);

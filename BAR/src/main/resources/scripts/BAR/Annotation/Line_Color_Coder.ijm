@@ -9,9 +9,12 @@
 	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
 	+ v180125 fixed "items" should be "nRes" error.
 	+ v180725 Added system fonts to font list. Updated functions. Adds unit:pixel conversion option.
+	+ v180831 Added check for Fiji_Plugins.	 
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
+	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
+	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
 	close("*_Ramp"); /* cleanup: closes previous ramp windows */
 	run("Select None");
@@ -581,6 +584,44 @@ macro "Line Color Coder with Labels"{
 			tableUsed = Dialog.getChoice;
 			restoreResultsFrom(tableUsed);
 		}
+	}
+	function checkForPluginNameContains(pluginNamePart) {
+		/* v180831 1st version to check for partial names so avoid versioning problems */
+		var pluginCheck = false, subFolderCount = 0;
+		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
+		else pluginDir = getDirectory("plugins");
+		pluginList = getFileList(pluginDir);
+		subFolderList = newArray(lengthOf(pluginList));
+		/* First check root plugin folder */
+		for (i=0; i<lengthOf(pluginList); i++) {
+			if (!endsWith(pluginList[i], "/") && endsWith(pluginList[i], ".jar")) {
+				if (indexOf(pluginList[i], pluginNamePart)>=0) {
+					pluginCheck = true;
+					i=lengthOf(pluginList);
+				}
+			}
+		}
+		/* If not in the root try the subfolders */
+		if (!pluginCheck) {
+			for (i=0; i<lengthOf(pluginList); i++) {
+				if (endsWith(pluginList[i], "/")) {
+					subFolderList[subFolderCount] = pluginList[i];
+					subFolderCount += 1;
+				}
+			}
+			subFolderList = Array.trim(subFolderList, subFolderCount);
+			for (j=0; i<lengthOf(subFolderList); i++) {
+				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
+				for (i=0; j<lengthOf(subFolderPluginList); j++) {
+					if (indexOf(subFolderPluginList[j], pluginNamePart)>=0 && endsWith(subFolderPluginList[j], ".jar")) {
+						pluginCheck = true;
+						i=lengthOf(subFolderList);
+						j=lengthOf(subFolderPluginList);
+					}
+				}
+			}
+		}
+		return pluginCheck;
 	}
 	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)

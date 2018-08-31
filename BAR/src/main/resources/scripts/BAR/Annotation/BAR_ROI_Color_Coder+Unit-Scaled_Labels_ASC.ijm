@@ -39,11 +39,14 @@
 	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
 	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
 	+ v180722 Allows any system font to be used. Fixed selected positions.
-	+ v180723 Checks for preferred LUTs before adding to list and added favorite font list
+	+ v180723 Checks for preferred LUTs before adding to list and added favorite font list.
+	+ v180831 Added check for Fiji_Plugins.	 
  */
  
 macro "ROI Color Coder with Scaled Labels"{
 	requires("1.47r");
+	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
+	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	// run("Remove Overlay");
@@ -954,7 +957,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				}
 				else {
 					run("Select Bounding Box (guess background color)");
-					run("Enlarge...", "enlarge="+round(imageHeight*0.02)); /* Adds a 2% margin */
+					run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
 					run("Crop");
 				}
 				croppedImageHeight = getHeight(); croppedImageWidth = getWidth();
@@ -1151,6 +1154,44 @@ macro "ROI Color Coder with Scaled Labels"{
 					pluginCheck = true;
 					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
 					i = lengthOf(subFolderList);
+				}
+			}
+		}
+		return pluginCheck;
+	}
+	function checkForPluginNameContains(pluginNamePart) {
+		/* v180831 1st version to check for partial names so avoid versioning problems */
+		var pluginCheck = false, subFolderCount = 0;
+		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
+		else pluginDir = getDirectory("plugins");
+		pluginList = getFileList(pluginDir);
+		subFolderList = newArray(lengthOf(pluginList));
+		/* First check root plugin folder */
+		for (i=0; i<lengthOf(pluginList); i++) {
+			if (!endsWith(pluginList[i], "/") && endsWith(pluginList[i], ".jar")) {
+				if (indexOf(pluginList[i], pluginNamePart)>=0) {
+					pluginCheck = true;
+					i=lengthOf(pluginList);
+				}
+			}
+		}
+		/* If not in the root try the subfolders */
+		if (!pluginCheck) {
+			for (i=0; i<lengthOf(pluginList); i++) {
+				if (endsWith(pluginList[i], "/")) {
+					subFolderList[subFolderCount] = pluginList[i];
+					subFolderCount += 1;
+				}
+			}
+			subFolderList = Array.trim(subFolderList, subFolderCount);
+			for (j=0; i<lengthOf(subFolderList); i++) {
+				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
+				for (i=0; j<lengthOf(subFolderPluginList); j++) {
+					if (indexOf(subFolderPluginList[j], pluginNamePart)>=0 && endsWith(subFolderPluginList[j], ".jar")) {
+						pluginCheck = true;
+						i=lengthOf(subFolderList);
+						j=lengthOf(subFolderPluginList);
+					}
 				}
 			}
 		}

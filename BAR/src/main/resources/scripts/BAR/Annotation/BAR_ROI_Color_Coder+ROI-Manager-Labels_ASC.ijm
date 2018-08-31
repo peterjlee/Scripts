@@ -12,9 +12,12 @@
 	+ Update functions to latest versions.
 	+ v180316 Reordered 1st menu.
 	+ v180723 Minor updates to LUTs list function.
+	+ v180831 Added check for Fiji_Plugins.	 
  */
 macro "ROI Color Coder with Labels"{
 	requires("1.47r");
+	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
+	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
 	/* Some cleanup */
 	close("*Ramp"); /* closes previous ramp windows */  
@@ -446,6 +449,44 @@ if (minmaxIOR) {
 		if (stepExp>=2) dP = 0;
 		if (stepExp>=5) dP = -1; /* Scientific Notation */
 		return dP;
+	}
+	function checkForPluginNameContains(pluginNamePart) {
+		/* v180831 1st version to check for partial names so avoid versioning problems */
+		var pluginCheck = false, subFolderCount = 0;
+		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
+		else pluginDir = getDirectory("plugins");
+		pluginList = getFileList(pluginDir);
+		subFolderList = newArray(lengthOf(pluginList));
+		/* First check root plugin folder */
+		for (i=0; i<lengthOf(pluginList); i++) {
+			if (!endsWith(pluginList[i], "/") && endsWith(pluginList[i], ".jar")) {
+				if (indexOf(pluginList[i], pluginNamePart)>=0) {
+					pluginCheck = true;
+					i=lengthOf(pluginList);
+				}
+			}
+		}
+		/* If not in the root try the subfolders */
+		if (!pluginCheck) {
+			for (i=0; i<lengthOf(pluginList); i++) {
+				if (endsWith(pluginList[i], "/")) {
+					subFolderList[subFolderCount] = pluginList[i];
+					subFolderCount += 1;
+				}
+			}
+			subFolderList = Array.trim(subFolderList, subFolderCount);
+			for (j=0; i<lengthOf(subFolderList); i++) {
+				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
+				for (i=0; j<lengthOf(subFolderPluginList); j++) {
+					if (indexOf(subFolderPluginList[j], pluginNamePart)>=0 && endsWith(subFolderPluginList[j], ".jar")) {
+						pluginCheck = true;
+						i=lengthOf(subFolderList);
+						j=lengthOf(subFolderPluginList);
+					}
+				}
+			}
+		}
+		return pluginCheck;
 	}
 	function checkForResults() {
 		nROIs = roiManager("count");

@@ -553,7 +553,7 @@ macro "Line Color Coder with Labels"{
 		run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
 		makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
 		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
-		else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated */ the "No" option
+		else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated */ 
 		run("Flatten");
 		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 		rename(workingT + "+ramp");

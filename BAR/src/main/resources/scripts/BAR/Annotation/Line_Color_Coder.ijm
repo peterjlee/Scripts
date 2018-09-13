@@ -399,14 +399,17 @@ macro "Line Color Coder with Labels"{
 	if (makeAnimStack) {
 		reuseSelection = false;
 		Dialog.create("Reduce Animation Frame?");
-		Dialog.addCheckbox("Would you like to the animation frames to be a cropped area?", true);
+		Dialog.addCheckbox("Would you like to restrict the animation frames to the cropped area?", false);
 		if (selEType>=0) Dialog.addCheckbox("Reuse frame used to restrict lines?", true);
 		scaleGuess = (round(10240/imageWidth))/10;
-		Dialog.addNumber("Would you like to scale the animation frame?", scaleGuess);
+		Dialog.addCheckbox("Would you like to resize the animation frame to reduce memory load?", false);
+		Dialog.addNumber("Choice of scale factor:", scaleGuess);
 		Dialog.show;
 		animCrop = Dialog.getCheckbox();
 		if (selEType>=0) reuseSelection = Dialog.getCheckbox();
+		animResize = Dialog.getCheckbox();
 		animScaleF = Dialog.getNumber();
+		if (!animResize) animScaleF -1;
 		if(animCrop) {
 			if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
 			selectWindow(t);
@@ -420,7 +423,7 @@ macro "Line Color Coder with Labels"{
 			run("Select None");
 			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 		}
-		if(animCrop || animScaleF!=1){
+		if(animCrop || animResize){
 			selectWindow(t);
 			run("Duplicate...", "title=temp1");
 			if (originalImageDepth!=8 || lut!="Grays") run("RGB Color");

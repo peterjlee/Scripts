@@ -11,6 +11,7 @@
 	+ v180725 Added system fonts to font list. Updated functions. Adds unit:pixel conversion option.
 	+ v180831 Added check for Fiji_Plugins.
 	+ v180912 Added options to crop animation frames to make it possible to create animations for very large data sets.
+	+ v180918 Updated table functions.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -18,6 +19,7 @@ macro "Line Color Coder with Labels"{
 	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
 	close("*_Ramp"); /* cleanup: closes previous ramp windows */
+	closeByScript("Progress"); /* cleanup: closes previous progress window */
 	/*
 	Set options for black objects on white background as this works better for publications */
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
@@ -32,16 +34,20 @@ macro "Line Color Coder with Labels"{
 	selEType = selectionType; 
 	if (selEType>=0) {
 		getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
+		selEX2 = selEX + selEWidth;
+		selEY2 = selEY + selEHeight;
 		if (selEWidth<10 || selEHeight<10) run("Select None"); /* assumed to be an accidental selection */
 	}
-	id = getImageID();	t=getTitle(); /* get id of image and title */	
+	id = getImageID();	t=getTitle(); /* get id of image and title */
+	maxMem = IJ.maxMemory();
+	maxMemFactor = 100000000/maxMem;
 	checkForUnits(); /* Required function */
 	getPixelSize(unit, pixelWidth, pixelHeight);
 	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor */
 	checkForAnyResults();
 	nRes= nResults;
 	setBatchMode(true);
-	tN = stripExtensionsFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
+	tN = stripKnownExtensionFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
 	tN = unCleanLabel(tN); /* remove special characters to might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
@@ -65,6 +71,10 @@ macro "Line Color Coder with Labels"{
 	}
 	if (headingsWithRange[0]==" :  Infinity - -Infinity")
 		headingsWithRange[0] = "ID" + ":  1 - " + nRes; /* relabels ImageJ ID column */
+	lineParameters = newArray("ist","hick","ength","idth","readth", "iamter","eret");
+	parameterIndex = 0;
+	for (i=0; i<lengthOf(lineParameters); i++)
+		parameterIndex = maxOf(parameterIndex,indexOfArrayThatContains(headingsWithRange, lineParameters[i]));
 	/* create the dialog prompt */
 	Dialog.create("Line Color Coder: " + tN);
 	Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
@@ -73,7 +83,7 @@ macro "Line Color Coder with Labels"{
 	Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
 	Dialog.setInsets(-1, 20, 6);
 	if (lcf!=1) Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false); 
-	Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[1]);
+	Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
 	luts=getLutsList();
 	Dialog.addChoice("LUT:", luts, luts[0]);
 	Dialog.addCheckbox("Reverse LUT?", false); 
@@ -82,9 +92,10 @@ macro "Line Color Coder with Labels"{
 		Dialog.addRadioButtonGroup("Restrict Lines to Area?", newArray("No", "Current Selection", "New Selection"), 1, 3, "Current Selection"); 
 	else Dialog.addRadioButtonGroup("Restrict Lines to Area?", newArray("No", "New Selection"), 1, 3, "No"); 
 	Dialog.addCheckbox("Overwrite Active Image?", false); 
+	Dialog.addCheckbox("Lines on white background?", false); 
 	Dialog.addCheckbox("Create a stack for animation?", false); 
-	Dialog.addCheckbox("Animation: 1 line\/white frame?", false); /* Using individual non-disposing lines can reduce the size of gif animation files */
-	Dialog.addNumber("Anim: Layers:", 0, 0, 3, "frames to skip");
+	Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?", false); /* Using individual non-disposing lines can reduce the size of gif animation files */
+	Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
 	Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
 	Dialog.setInsets(12, 0, 6);
 	Dialog.addMessage("Legend \(ramp\):________________");
@@ -127,9 +138,10 @@ macro "Line Color Coder with Labels"{
 		revLut= Dialog.getCheckbox;
 		restrictLines= Dialog.getRadioButton;
 		overwriteImage= Dialog.getCheckbox;
+		linesOnWhiteBG= Dialog.getCheckbox;
 		makeAnimStack= Dialog.getCheckbox;
-		singleLine= Dialog.getCheckbox;
-		frameAdvance= Dialog.getNumber+1;
+		linesOnWhite= Dialog.getCheckbox;
+		linesPerFrame= maxOf(1,Dialog.getNumber);
 		lineWidth= Dialog.getNumber;
 		if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
 		unitLabel = Dialog.getChoice();
@@ -151,7 +163,7 @@ macro "Line Color Coder with Labels"{
 		
 		/* Some more cleanup after last run */
 		if (makeAnimStack) closeImageByTitle("animStack");
-		if (!overwriteImage) closeImageByTitle(t+"_Lines");
+		if (!overwriteImage) closeImageByTitle(tN+"_Lines");
 		
 		if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
 		else rampH = rampChoice;
@@ -172,15 +184,15 @@ macro "Line Color Coder with Labels"{
 			msg = "Draw a box in the image to which you want the lines restricted";
 			waitForUser(msgtitle, msg);
 			getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
+			selEX2 = selEX + selEWidth;
+			selEY2 = selEY + selEHeight;
 			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
-		}
-		
+		}	
 		rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 		minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
 	run("Select None");
 	/* get values for chosen parameter */
-	values = newArray(nRes);
-	for (i=0; i<nRes; i++) values[i]= getResult(parameter,i);
+	values = Table.getColumn(parameter); 
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	if (isNaN(min)) min= arrayMin;
 	if (isNaN(max)) max= arrayMax;
@@ -278,7 +290,7 @@ macro "Line Color Coder with Labels"{
 		for (i=0; i<numLabels*minorTicks; i++) {
 			if (i > 0 && i < (((numLabels-1)*minorTicks))) {
 				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
-				setLineWidth(round(rampLW/4));
+				setLineWidth(maxOf(1,round(rampLW/2)));
 				drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
 				drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
 				setLineWidth(rampLW); /* Rest line width */
@@ -352,7 +364,7 @@ macro "Line Color Coder with Labels"{
 	run("Select None");
 	closeImageByTitle("label_mask");
 		
-	// reset colors and font
+	/* reset colors and font */
 	setFont(fontName, fontSize, fontStyle);
 	setColor(0,0,0);
 	}
@@ -360,7 +372,7 @@ macro "Line Color Coder with Labels"{
 	parse symbols in unit and draw final label below ramp */
 	rampParameterLabel= cleanLabel(parameterLabel);
 	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
-	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { // can center align if labels shorter than ramp width
+	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 	}
@@ -378,7 +390,6 @@ macro "Line Color Coder with Labels"{
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		run("Rotate 90 Degrees Right");
 	}
-	// setBatchMode("exit & display");
 	run("Auto Crop (guess background color)");
 	setBatchMode("true");
 	getDisplayedArea(null, null, canvasW, canvasH);
@@ -392,60 +403,22 @@ macro "Line Color Coder with Labels"{
 	selectImage(id);
 	if (is("Batch Mode")==false) setBatchMode(true);
 	setLineWidth(lineWidth);
-	if (!overwriteImage)
-		newImage(t+"_Lines", "RGB white", imageWidth, imageHeight, 1);
+	if (!overwriteImage) {
+		if(linesOnWhiteBG) newImage(tN+"_Lines", "RGB white", imageWidth, imageHeight, 1);
+		else copyImage(t,tN+"_Lines");
+	} 
 	workingT=getTitle();
 	run("Select None");
-	if (makeAnimStack) {
-		reuseSelection = false;
-		Dialog.create("Reduce Animation Frame?");
-		Dialog.addCheckbox("Would you like to restrict the animation frames to the cropped area?", false);
-		if (selEType>=0) Dialog.addCheckbox("Reuse frame used to restrict lines?", true);
-		scaleGuess = (round(10240/imageWidth))/10;
-		Dialog.addCheckbox("Would you like to resize the animation frame to reduce memory load?", false);
-		Dialog.addNumber("Choice of scale factor:", scaleGuess);
-		Dialog.show;
-		animCrop = Dialog.getCheckbox();
-		if (selEType>=0) reuseSelection = Dialog.getCheckbox();
-		animResize = Dialog.getCheckbox();
-		animScaleF = Dialog.getNumber();
-		if (!animResize) animScaleF -1;
-		if(animCrop) {
-			if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
-			selectWindow(t);
-			setTool("rectangle");
-			if (reuseSelection) makeRectangle(selEX, selEY, selEWidth, selEHeight);
-			msgtitle="Select area to crop for animation frames";
-			if (reuseSelection) msg = "Edit previous line selection box - add space for ramp perhaps";
-			else msg = "Draw a box in the image to which you want to use for the animation frames";
-			waitForUser(msgtitle, msg);
-			getSelectionBounds(cX1, cY1, cW, cH);
-			run("Select None");
-			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
-		}
-		if(animCrop || animResize){
-			selectWindow(t);
-			run("Duplicate...", "title=temp1");
-			if (originalImageDepth!=8 || lut!="Grays") run("RGB Color");
-			if (animCrop){
-				makeRectangle(cX1, cY1, cW, cH);
-				run("Crop");
-				run("Select None");
-			}
-			run("Scale...", "x="+animScaleF+" y="+animScaleF+" interpolation=Bicubic average create title=animStack");
-			closeImageByTitle("temp1");
-			closeImageByTitle("tempFrame");
-			selectWindow(workingT);
-		}
-		else run("Duplicate...", "title=animStack");
-		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color");
-	}
 	progressWindowTitle = "[Progress]";
-	run("Text Window...", "name="+ progressWindowTitle +" width=25 height=2 monospaced");
-	eval("script","f = WindowManager.getWindow('Progress'); f.setLocation(50,20); f.setSize(550,150);"); 
 	selectWindow(workingT);
-	frameAdvanceCounter = 0;
+	run("Select None");
+	linesPerFrameCounter = 0;
 	loopStart = getTime();
+	makeFrame = newArray(nRes);
+	fromXs = Table.getColumn(fromX);
+	fromYs = Table.getColumn(fromY);
+	toXs = Table.getColumn(toX);
+	toYs = Table.getColumn(toY);
 	for (i=0; i<nRes; i++) {
 		showProgress(i, nRes);
 		if (!isNaN(values[i])) {
@@ -458,113 +431,247 @@ macro "Line Color Coder with Labels"{
 			else 
 				lutIndex= round(255 * (max - values[i]) / (max - min));
 			setColor("#"+lineColors[lutIndex]);
-			X1 = getResult(fromX,i)/ccf;
-			Y1 = getResult(fromY,i)/ccf;
-			X2 = getResult(toX,i)/ccf;
-			Y2 = getResult(toY,i)/ccf;
+			X1 = fromXs[i]/ccf;
+			Y1 = fromYs[i]/ccf;
+			X2 = toXs[i]/ccf;
+			Y2 = toYs[i]/ccf;
+			makeFrame[i] = false;
 			if (X1<=imageWidth && X2<=imageWidth && Y1<=imageHeight && Y2 <imageHeight) { /* this allows you to crop image from top left if necessary */
-				if 	(restrictLines!="No") {
-					selEX2 = selEX + selEWidth;
-					selEY2 = selEY + selEHeight;
-					if (X1>=selEX && X1<=selEX2 && X2>=selEX && X2<=selEX2 && Y1>=selEY && Y1<=selEY2 && Y2>=selEY && Y2<=selEY2) {	
-						drawLine(X1, Y1, X2, Y2);
-						frameAdvanceCounter += 1;
-						if (frameAdvanceCounter==frameAdvance) {
-							if (makeAnimStack) {
-								if (!singleLine) {
-									if(!animCrop && !animScale)	addImageToStack("animStack",workingT);
-									else {
-										run("Duplicate...", "title=temp1");
-										if (animCrop){
-											makeRectangle(cX1, cY1, cW, cH);
-											run("Crop");
-										}
-										run("Scale...", "x="+animScaleF+" y="+animScaleF+" interpolation=Bicubic average create title=tempFrame");
-										closeImageByTitle("temp1");
-										addImageToStack("animStack","tempFrame");
-										closeImageByTitle("tempFrame");
-									}
-								}
-								else {
-									newImage("temp1", "RGB white", imageWidth, imageHeight, 1);
-									drawLine(X1, Y1, X2, Y2);
-									if (animCrop){
-										makeRectangle(cX1, cY1, cW, cH);
-										run("Crop");
-									}
-									run("Scale...", "x="+animScaleF+" y="+animScaleF+" interpolation=Bicubic average create title=tempFrame");
-									closeImageByTitle("temp1");
-									addImageToStack("animStack","tempFrame");
-									closeImageByTitle("tempFrame");
-								}
-							}
-						frameAdvanceCounter = 0;
-						}
-					}
+				selectWindow(workingT);
+				if 	(restrictLines=="No") {
+					drawLine(X1, Y1, X2, Y2);
+					makeFrame[i] = true;
 				}
 				else {
-					drawLine(X1, Y1, X2, Y2);
-					frameAdvanceCounter += 1;
-					if (frameAdvanceCounter==frameAdvance) {
-						if (makeAnimStack) {
-							if (!singleLine)	addImageToStack("animStack",workingT);
-							else {
-								newImage("tempFrame", "RGB white", imageWidth, imageHeight, 1);
-								drawLine(getResult(fromX,i), getResult(fromY,i), getResult(toX,i), getResult(toY,i));
-								addImageToStack("animStack","tempFrame");
-								closeImageByTitle("tempFrame");
-							}
-						}
-						frameAdvanceCounter = 0;
+					if (X1>=selEX && X1<=selEX2 && X2>=selEX && X2<=selEX2 && Y1>=selEY && Y1<=selEY2 && Y2>=selEY && Y2<=selEY2) {
+						drawLine(X1, Y1, X2, Y2);
+						makeFrame[i] = true;
 					}
 				}
 			}
 		}
-		loopTime = getTime();
-		timeTaken = loopTime-loopStart;
-		timeLeft = (nRes-(i+1)) * timeTaken/(i+1);
-		timeLeftM = floor(timeLeft/60000);
-		timeLeftS = (timeLeft-timeLeftM*60000)/1000;
-		totalTime = timeTaken + timeLeft;
-		maxFactor = 100000000/IJ.maxMemory();
-		mem = IJ.currentMemory();
-		mem /=1000000;
-		memPC = mem*maxFactor;
-		if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
-		print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: ");
 	}
-	eval("script","f = WindowManager.getWindow('Progress'); f.close();"); 
-	run("Collect Garbage");
 	Dialog.create("Combine Labeled Image and Legend?");
-		if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
-		else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); // close enough
-		else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image");
+		comboChoice = newArray("No");
+		comboChoiceCurrent = newArray("Combine Ramp with Current", "Combine Ramp with New Image");
+		comboChoiceScaled = newArray("Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
+		comboChoiceCropped = newArray("Combine Scaled Ramp with New Image Cropped to Restricted Lines");
+		comboChoiceCropNewSelection = newArray("Combine Scaled Ramp with Image Cropped to New Selection");
+		if (canvasH>imageHeight || canvasH<(0.93*imageHeight)) comboChoice = Array.concat(comboChoice,comboChoiceScaled,comboChoiceCropNewSelection);
+		else comboChoice = Array.concat(comboChoice,comboChoiceCurrent,comboChoiceCropNewSelection); /* close enough */
+		if (restrictLines!="No") comboChoice = Array.concat(comboChoice,comboChoiceCropped,comboChoiceCropNewSelection);
 		Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
 		Dialog.show();
-	createCombo = Dialog.getChoice();
+		createCombo = Dialog.getChoice();
 	if (createCombo!="No") {
-		selectWindow(tR);
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
-			rampScale = imageHeight/canvasH;
-			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
-			canvasH = getHeight(); /* update ramp height */
+		comboImage = "temp_combo";
+		rampScale =  getHeight()/canvasH; /* default to no scale */
+		if (indexOf(createCombo, "Cropped")>0) {
+			if (indexOf(createCombo, "New Selection")>0) {
+				if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
+				if (restrictLines!="No") makeRectangle(selEX, selEY, selEWidth, selEHeight);
+				setTool("rectangle");
+				msgtitle="Area selection";
+				msg = "Draw a box in the image to which you want the output image restricted";
+				waitForUser(msgtitle, msg);
+				getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
+			}
+			else makeRectangle(selEX, selEY, selEWidth, selEHeight);
+			run("Duplicate...", "title=temp_combo");
+			rampScale = getHeight()/canvasH;
+		} else if (indexOf(createCombo, "New Image")>0){
+			selectWindow(workingT);
+			run("Duplicate...", "title=temp_combo");
+			rampScale = getHeight()/canvasH;
 		}
-		srW = getWidth;
-		comboW = srW + imageWidth;
-		selectWindow(workingT);
-		if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
-		run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
-		makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
-		else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated */ 
+		comboH = getHeight();
+		comboW = getWidth();
+		if (indexOf(createCombo, "Scaled")<=0) rampScale =  1;
+		selectWindow(tR);
+		run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
+		canvasH = getHeight(); /* update ramp height */
+		canvasW = getWidth(); /* update ramp width */
+		if (indexOf(createCombo, "Current")>0) {
+			comboW = imageWidth+canvasW;
+			comboH = imageHeight;
+			comboImage = workingT;
+		}
+		else comboW += canvasW;
+		selectWindow(comboImage);
+		run("Canvas Size...", "width="+comboW+" height="+comboH+" position=Top-Left");
+		makeRectangle(comboW-canvasW, round((comboH-canvasH)/2), canvasW, canvasH);
+		run("Image to Selection...", "image=scaled_ramp opacity=100");
 		run("Flatten");
 		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 		rename(workingT + "+ramp");
 		closeImageByTitle("scaled_ramp");
 		closeImageByTitle("temp_combo");
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
 	}
-		
+	setBatchMode("exit & display");
+	wait(2000);
+	setBatchMode(true);
+	if(makeAnimStack) {
+		reuseSelection = false;
+		cX1 = 0;
+		cY1 = 0;
+		copyImage(t,"tempFrame1");
+		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color");
+		if(linesOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
+		Dialog.create("Crop Animation Frame?");
+			Dialog.addCheckbox("Would you like to restrict the animation frames to a cropped area?", false);
+			if (restrictLines!="No") Dialog.addCheckbox("Crop to restricted lines area?", true);
+			Dialog.addCheckbox("Would you like to resize the animation frame to reduce memory load?", false);
+			Dialog.addCheckbox("Would you like to add the scaled ramp to the right of the 1st frame?", true);
+		Dialog.show;
+			animCrop = Dialog.getCheckbox();
+			if (restrictLines!="No") reuseSelection = Dialog.getCheckbox();
+			animResize = Dialog.getCheckbox();
+			addRamp = Dialog.getCheckbox();
+		if(animCrop) {
+			if (reuseSelection) {
+				cX1 = selEX; cY1 = selEY; cW = selEWidth;cH = selEHeight;
+			}
+			else {	
+				if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
+				selectWindow(t);
+				if (restrictLines!="No") run("Restore Selection");;
+				msgtitle="Select area to crop for animation frames";
+				if (restrictLines!="No") msg = "Previous restricted lines box shown";
+				else msg = "Draw a box in the image to which you want to use for the animation frames";
+				waitForUser(msgtitle, msg);
+				getSelectionBounds(cX1, cY1, cW, cH);
+				run("Select None");
+				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+			}
+		}
+		if (animResize) {
+			if (animCrop) scaleGuess = (round(10240/selEWidth))/10;
+			else scaleGuess = (round(10240/imageWidth))/10;
+			Dialog.create("Scale Animation Frame?");
+				if (animCrop) Dialog.addMessage("Current Frame Width: " + selEWidth + "pixels");
+				else Dialog.addMessage("Current Frame Width: " + imageWidth + "pixels");
+				Dialog.addNumber("Choice of scale factor:", scaleGuess);
+			Dialog.show;
+			animScaleF = Dialog.getNumber();
+		}
+		/* Create first animation frame */
+		selectWindow("tempFrame1");
+		if(animCrop || animResize){
+			if (animCrop){
+				makeRectangle(cX1, cY1, cW, cH);
+				run("Crop");
+				run("Select None");
+			}
+			if(animResize) run("Scale...", "x="+animScaleF+" y="+animScaleF+" interpolation=Bicubic average create title=frame1");
+			else run("Duplicate...", "title=frame1");
+		}
+		else copyImage("tempFrame1", "frame1");
+		closeImageByTitle("tempFrame1");
+		animFrameHeight = getHeight;
+		animFrameWidth = getWidth;
+		if(addRamp){
+			selectWindow(tR);
+			canvasH = getHeight(); /* update ramp height */
+			rampScale = animFrameHeight/canvasH;
+			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=Scaled_Anim_Ramp");
+			selectWindow("Scaled_Anim_Ramp");
+			sarW = getWidth;
+			sarH = getHeight;
+			animComboW = sarW + animFrameWidth;
+			selectWindow("frame1");
+			copyImage("frame1","temp_combo");
+			selectWindow("temp_combo");
+			run("Canvas Size...", "width="+animComboW+" height="+animFrameHeight+" position=Top-Left");
+			makeRectangle(animFrameWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
+			run("Image to Selection...", "image=Scaled_Anim_Ramp opacity=100");
+			run("Flatten");
+			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+			rename("frame1_combo");
+			closeImageByTitle("Scaled_Anim_Ramp");
+			closeImageByTitle("temp_combo");
+			closeImageByTitle("frame1");
+			selectWindow("frame1_combo");
+			rename("frame1");
+		}
+		animFrameHeight = getHeight;
+		animFrameWidth = getWidth;
+		/* End of creation of initial animStack frame */
+		copyImage("frame1", "animStack");
+		linesPerFrameCounter = 0;
+		loopStart = getTime();
+		progressUpdateIntervalCount = 0;
+		run("Text Window...", "name="+ progressWindowTitle +" width=25 height=2 monospaced");
+		eval("script","f = WindowManager.getWindow('Progress'); f.setLocation(50,20); f.setSize(550,150);"); 
+		for (i=0; i<nRes; i++) {
+			showProgress(i, nRes);
+			if (makeFrame[i]) {
+				if (values[i]<=min)
+					lutIndex= 0;
+				else if (values[i]>max)
+					lutIndex= 255;
+				else if (!revLut)
+					lutIndex= round(255 * (values[i] - min) / (max - min));
+				else 
+					lutIndex= round(255 * (max - values[i]) / (max - min));
+				setColor("#"+lineColors[lutIndex]);
+				X1 = animScaleF * ((fromXs[i]/ccf)-cX1);
+				Y1 = animScaleF * ((fromYs[i]/ccf)-cY1);
+				X2 = animScaleF * ((toXs[i]/ccf)-cX1);
+				Y2 = animScaleF * ((toYs[i]/ccf)-cY1);
+				if (!linesOnWhite) { /* create animation frames lines on original image */
+					/* Keep adding to frame1 to create a cumulative image */
+					selectWindow("frame1");
+					drawLine(X1, Y1, X2, Y2);
+					linesPerFrameCounter += 1;
+					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
+						addImageToStack("animStack","frame1");
+						linesPerFrameCounter = 0;
+					}
+				}
+				else {
+					if (i>0) {
+						if(linesPerFrameCounter==0) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
+						/* Only create new frame at intervals to reduce excessive animation size */
+					}
+					else {
+						replaceImage("tempFrame","frame1");
+					}
+					selectWindow("tempFrame");
+					// run("Select None");
+					drawLine(X1, Y1, X2, Y2);
+					linesPerFrameCounter += 1;
+					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
+						addImageToStack("animStack","tempFrame");
+						closeImageByTitle("tempFrame");
+						linesPerFrameCounter = 0;
+					}
+					run("Select None");
+				}
+			}
+			loopTime = getTime();
+			if(i==0) loopReporting = round(1000/loopTime);
+			if(progressUpdateIntervalCount==0) {
+				timeTaken = loopTime-loopStart;
+				timeLeft = (nRes-(i+1)) * timeTaken/(i+1);
+				timeLeftM = floor(timeLeft/60000);
+				timeLeftS = (timeLeft-timeLeftM*60000)/1000;
+				totalTime = timeTaken + timeLeft;
+				mem = IJ.currentMemory();
+				mem /=1000000;
+				memPC = mem * maxMemFactor;
+				if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
+				print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
+			}
+			progressUpdateIntervalCount +=1;
+			if (progressUpdateIntervalCount>loopReporting) progressUpdateIntervalCount = 0;
+		}		
+		eval("script","f = WindowManager.getWindow('" + progressWindowTitle + "'); f.close();");
+		animHeight = getHeight();
+		closeImageByTitle("frame1");
+	}
+	closeImageByTitle(workingT);
+	selectWindow("tempFrame");
+	run("Collect Garbage");
 	/* display result		 */
 	restoreSettings;
 	if (switchIsOn== "true") {
@@ -613,21 +720,22 @@ macro "Line Color Coder with Labels"{
 		return dP;
 	}
 	function checkForAnyResults() {
+	/* v180918 uses getResultsTableList function */
 		if (nResults==0 && (getValue("results.count"))==0){
-			nonImageWindowList = getList("window.titles");
-			if (lengthOf(nonImageWindowList)==0) {
+			tableList = getResultsTableList();
+			if (lengthOf(tableList)==0) {
 				Dialog.create("No Results to Work With");
-				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following colums in any order:\n   1.\) The paramenter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
+				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following columns in any order:\n   1.\) The parameter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
 				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit"); 
 				Dialog.show();
 				tableDecision = Dialog.getRadioButton();
 				if (tableDecision=="Exit") restoreExit("GoodBye");
 				else open();
-				nonImageWindowList = getList("window.titles");
+				tableList = getResultsTableList();
 			}
-			nonImageWindowList = Array.concat(newArray("none - exit"), nonImageWindowList);
+			tableList = Array.concat(newArray("none - exit"), tableList);
 			Dialog.create("Select table to use...");
-			Dialog.addChoice("Select Table to Activate", nonImageWindowList);
+			Dialog.addChoice("Select Table to Activate", tableList);
 			Dialog.show();
 			tableUsed = Dialog.getChoice;
 			if (tableUsed=="none - exit") restoreExit("Goodbye");
@@ -645,10 +753,10 @@ macro "Line Color Coder with Labels"{
 				closeNonImageByTitle("Results");
 				restoreExit("Your have selected \"Exit\", perhaps now change name of your table to \"Results\"");
 			}else {
-				nonImageWindowList = getList("window.titles");
-				if (lengthOf(nonImageWindowList)==0) restoreExit("Whoops, no other tables either");
+				tableList = getResultsTableList();
+				if (lengthOf(tableList)==0) restoreExit("Whoops, no other tables either");
 				Dialog.create("Select table to analyze...");
-				Dialog.addChoice("Select Table to Activate", nonImageWindowList);
+				Dialog.addChoice("Select Table to Activate", tableList);
 				Dialog.show();
 				switchIsOn = "true";
 				hideResultsAs(hiddenResults);
@@ -657,10 +765,10 @@ macro "Line Color Coder with Labels"{
 			}
 		}
 		else if ((getValue("results.count"))!=0 && nResults==0) {
-			nonImageWindowList = getList("window.titles");
+			tableList = getResultsTableList();
 			if (lengthOf(list)==0) restoreExit("Whoops, no other tables either");
 			Dialog.create("Select table to analyze...");
-			Dialog.addChoice("Select Table to Activate", nonImageWindowList);
+			Dialog.addChoice("Select Table to Activate", tableList);
 			Dialog.show();
 			activateIsOn = "true";
 			tableUsed = Dialog.getChoice;
@@ -746,6 +854,9 @@ macro "Line Color Coder with Labels"{
         close();
 		}
 	}
+	function closeByScript(windowTitle) {
+		if (isOpen(windowTitle)) eval("script","f = WindowManager.getWindow('"+windowTitle+"'); f.close();"); 
+	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
@@ -764,10 +875,16 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function closeNonImageByTitle(windowTitle) { /* obviously */
-	if (isOpen(windowTitle)) {
-		selectWindow(windowTitle);
-        run("Close");
-		}
+		if (isOpen(windowTitle)) {
+			selectWindow(windowTitle);
+			run("Close");
+			}
+	}
+	function copyImage(source,target){
+		if (isOpen(source)) {
+			imageCalculator("Copy create", source, source);
+			rename(target);
+		} else restoreExit("ImageWindow: " + source + " not found");
 	}
 	function filterArrayByContents(inputArray,filterString1,filterString2) {
 		arrayLengthCounter = 0; /* Reset row counter */
@@ -856,7 +973,7 @@ macro "Line Color Coder with Labels"{
 		Array.sort(defaultLuts);
 		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLutsList = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLutsList = newArray("Your favorite LUTS here", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		preferredLuts = newArray(preferredLutsList.length);
 		counter = 0;
 		for (i=0; i<preferredLutsList.length; i++) {
@@ -908,6 +1025,27 @@ macro "Line Color Coder with Labels"{
 		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
 		return fontNameChoice;
 	}
+	function getResultsTableList() {
+		windowList = getList("window.titles");
+		if (windowList.length==0)
+			 showMessage("No non-image windows are open");
+		else {
+			tableList = newArray(windowList.length);
+			tableCounter=0;
+			for (i=0; i<tableList.length; i++) {
+				selectWindow(windowList[i]);
+				if (getInfo("window.type")=="ResultsTable") {
+					tableList[tableCounter]=windowList[i];
+					tableCounter += 1;
+				}
+			}
+			tableList = Array.trim(tableList, tableCounter);
+			if (tableCounter==0)
+				 showMessage("No Results table windows are open");
+			else tableList = Array.trim(tableList, tableCounter);
+		}
+		return tableList;
+	}
 	function getSelectionFromMask(selection_Mask){
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
@@ -925,6 +1063,12 @@ macro "Line Color Coder with Labels"{
 			IJ.renameResults(deactivatedResults);
 		}
 	}
+	function indexOfArrayThatContains(array, value) {
+		indexFound = -1;
+		for (i=0; i<lengthOf(array); i++)
+			if (indexOf(array[i], value)>=0) indexFound = i;
+		return indexFound;
+	}
 	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
@@ -934,6 +1078,18 @@ macro "Line Color Coder with Labels"{
 		}
 		return string;
 	}
+	function replaceImage(replacedWindow,window2) {
+        if (isOpen(replacedWindow)) {
+			selectWindow(replacedWindow);
+			rename(replacedWindow+Replaced);
+			selectWindow(window2);
+			rename(replacedWindow);
+			eval("script","f = WindowManager.getWindow('"+replacedWindow+Replaced+"'); f.close();"); 
+		}
+		else copyImage(window2, replacedWindow); /* Use copyImage function */
+	}
+	
+	
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* Restore previous settings before exiting */
@@ -947,10 +1103,13 @@ macro "Line Color Coder with Labels"{
 			IJ.renameResults("Results");
 		}
 	}
-	function stripExtensionsFromString(string) {
-		while (lastIndexOf(string, ".")!=-1) {
-			index = lastIndexOf(string, ".");
-			string = substring(string, 0, index);
+	function stripKnownExtensionFromString(string) {
+		if (lastIndexOf(string, ".")!=-1) {
+			knownExt = newArray("tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");
+			for (i=0; i<knownExt.length; i++) {
+				index = lastIndexOf(string, "." + knownExt[i]);
+				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1))) string = substring(string, 0, index);
+			}
 		}
 		return string;
 	}

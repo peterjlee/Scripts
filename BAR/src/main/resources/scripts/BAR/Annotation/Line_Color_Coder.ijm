@@ -12,6 +12,7 @@
 	+ v180831 Added check for Fiji_Plugins.
 	+ v180912 Added options to crop animation frames to make it possible to create animations for very large data sets.
 	+ v180918 Updated table functions.
+	+ v180921 Can now sort values for the animation frames. Greatly reduced run time.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -376,7 +377,6 @@ macro "Line Color Coder with Labels"{
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 	}
-	
 	else { /* need to left align if labels are longer and increase distance from ramp */
 		run("Auto Crop (guess background color)");
 		getDisplayedArea(null, null, canvasW, canvasH);
@@ -414,7 +414,8 @@ macro "Line Color Coder with Labels"{
 	run("Select None");
 	linesPerFrameCounter = 0;
 	loopStart = getTime();
-	makeFrame = newArray(nRes);
+	makeFrames = newArray(nRes);
+	frameCount = 0;
 	fromXs = Table.getColumn(fromX);
 	fromYs = Table.getColumn(fromY);
 	toXs = Table.getColumn(toX);
@@ -435,17 +436,19 @@ macro "Line Color Coder with Labels"{
 			Y1 = fromYs[i]/ccf;
 			X2 = toXs[i]/ccf;
 			Y2 = toYs[i]/ccf;
-			makeFrame[i] = false;
+			makeFrames[i] = false;
 			if (X1<=imageWidth && X2<=imageWidth && Y1<=imageHeight && Y2 <imageHeight) { /* this allows you to crop image from top left if necessary */
 				selectWindow(workingT);
 				if 	(restrictLines=="No") {
 					drawLine(X1, Y1, X2, Y2);
-					makeFrame[i] = true;
+					makeFrames[i] = true;
+					frameCount += 1;
 				}
 				else {
 					if (X1>=selEX && X1<=selEX2 && X2>=selEX && X2<=selEX2 && Y1>=selEY && Y1<=selEY2 && Y2>=selEY && Y2<=selEY2) {
 						drawLine(X1, Y1, X2, Y2);
-						makeFrame[i] = true;
+						makeFrames[i] = true;
+						frameCount += 1;
 					}
 				}
 			}
@@ -507,11 +510,10 @@ macro "Line Color Coder with Labels"{
 		closeImageByTitle("scaled_ramp");
 		closeImageByTitle("temp_combo");
 	}
-	setBatchMode("exit & display");
-	wait(2000);
-	setBatchMode(true);
+	/* Start Animation Loop */
 	if(makeAnimStack) {
 		reuseSelection = false;
+		reuseLines = false;
 		cX1 = 0;
 		cY1 = 0;
 		copyImage(t,"tempFrame1");
@@ -519,14 +521,22 @@ macro "Line Color Coder with Labels"{
 		if(linesOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
 		Dialog.create("Crop Animation Frame?");
 			Dialog.addCheckbox("Would you like to restrict the animation frames to a cropped area?", false);
-			if (restrictLines!="No") Dialog.addCheckbox("Crop to restricted lines area?", true);
+			if (restrictLines!="No") {
+				Dialog.addCheckbox("Crop to restricted lines area?", true);
+				Dialog.addCheckbox("Use the same restricted " + frameCount + " lines?", true);
+			}
 			Dialog.addCheckbox("Would you like to resize the animation frame to reduce memory load?", false);
 			Dialog.addCheckbox("Would you like to add the scaled ramp to the right of the 1st frame?", true);
+			Dialog.addRadioButtonGroup("Sequence frames by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
 		Dialog.show;
 			animCrop = Dialog.getCheckbox();
-			if (restrictLines!="No") reuseSelection = Dialog.getCheckbox();
+			if (restrictLines!="No") {
+				reuseSelection = Dialog.getCheckbox();
+				reuseLines =  Dialog.getCheckbox();
+			}
 			animResize = Dialog.getCheckbox();
 			addRamp = Dialog.getCheckbox();
+			valueSort = Dialog.getRadioButton();
 		if(animCrop) {
 			if (reuseSelection) {
 				cX1 = selEX; cY1 = selEY; cW = selEWidth;cH = selEHeight;
@@ -568,7 +578,7 @@ macro "Line Color Coder with Labels"{
 		else copyImage("tempFrame1", "frame1");
 		closeImageByTitle("tempFrame1");
 		animFrameHeight = getHeight;
-		animFrameWidth = getWidth;
+		animFrameNoRampWidth = getWidth;
 		if(addRamp){
 			selectWindow(tR);
 			canvasH = getHeight(); /* update ramp height */
@@ -577,12 +587,12 @@ macro "Line Color Coder with Labels"{
 			selectWindow("Scaled_Anim_Ramp");
 			sarW = getWidth;
 			sarH = getHeight;
-			animComboW = sarW + animFrameWidth;
+			animComboW = sarW + animFrameNoRampWidth;
 			selectWindow("frame1");
 			copyImage("frame1","temp_combo");
 			selectWindow("temp_combo");
 			run("Canvas Size...", "width="+animComboW+" height="+animFrameHeight+" position=Top-Left");
-			makeRectangle(animFrameWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
+			makeRectangle(animFrameNoRampWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
 			run("Image to Selection...", "image=Scaled_Anim_Ramp opacity=100");
 			run("Flatten");
 			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
@@ -593,39 +603,80 @@ macro "Line Color Coder with Labels"{
 			selectWindow("frame1_combo");
 			rename("frame1");
 		}
-		animFrameHeight = getHeight;
+		// animFrameHeight = getHeight;
 		animFrameWidth = getWidth;
 		/* End of creation of initial animStack frame */
 		copyImage("frame1", "animStack");
+		
+		if (valueSort=="No"){
+			valueRank = Array.getSequence(nRes);
+			animValues = values;
+		}
+		else if (valueSort=="Ascending"){
+			valueRank = Array.rankPositions(values);
+			animValues = Array.sort(values);
+		}
+		else {
+			valueRank = Array.rankPositions(values);
+			animValues = Array.sort(values);
+			Array.reverse(valueRank);
+			Array.reverse(animValues);
+		}
+		/* Create array holders for sorted values */
+		animX1 = newArray(nRes);
+		animY1 = newArray(nRes);
+		animX2 = newArray(nRes);
+		animY2 = newArray(nRes);
+		animMakeFrame = newArray(nRes);
+		lineCounter = 0;
+		/* Determine lines to be drawn for animation and their order */
+		for (i=0; i<nRes; i++) {
+			j = valueRank[i];
+			X1 = animScaleF * ((fromXs[j]/ccf)-cX1);
+			Y1 = animScaleF * ((fromYs[j]/ccf)-cY1);
+			X2 = animScaleF * ((toXs[j]/ccf)-cX1);
+			Y2 = animScaleF * ((toYs[j]/ccf)-cY1);
+			if (reuseLines) reuseLine = makeFrames[j];
+			else reuseLine = true;
+			if (X1>=0 && Y1 >=0 && X2 <= animFrameNoRampWidth && Y2 <= animFrameHeight && reuseLine){
+				animMakeFrame[i] = true;
+				lineCounter += 1;
+			}
+			else animMakeFrame[i] = false;
+			animX1[i] = X1;
+			animY1[i] = Y1;
+			animX2[i] = X2;
+			animY2[i] = Y2;
+		}
 		linesPerFrameCounter = 0;
+		linesDrawn = 0;
+		lastFrameValue = 0;
 		loopStart = getTime();
 		progressUpdateIntervalCount = 0;
-		run("Text Window...", "name="+ progressWindowTitle +" width=25 height=2 monospaced");
-		eval("script","f = WindowManager.getWindow('Progress'); f.setLocation(50,20); f.setSize(550,150);"); 
+		run("Text Window...", "name="+ progressWindowTitle +" width=550 height=150 monospaced");
+		eval("script","f = WindowManager.getWindow('"+ progressWindowTitle +"'); f.setLocation(50,20);"); 
 		for (i=0; i<nRes; i++) {
-			showProgress(i, nRes);
-			if (makeFrame[i]) {
-				if (values[i]<=min)
+			if(animMakeFrame[i] && animValues[i]>0){
+				if (animValues[i]<=min)
 					lutIndex= 0;
-				else if (values[i]>max)
+				else if (animValues[i]>max)
 					lutIndex= 255;
 				else if (!revLut)
-					lutIndex= round(255 * (values[i] - min) / (max - min));
+					lutIndex= round(255 * (animValues[i] - min) / (max - min));
 				else 
-					lutIndex= round(255 * (max - values[i]) / (max - min));
+					lutIndex= round(255 * (max - animValues[i]) / (max - min));
 				setColor("#"+lineColors[lutIndex]);
-				X1 = animScaleF * ((fromXs[i]/ccf)-cX1);
-				Y1 = animScaleF * ((fromYs[i]/ccf)-cY1);
-				X2 = animScaleF * ((toXs[i]/ccf)-cX1);
-				Y2 = animScaleF * ((toYs[i]/ccf)-cY1);
 				if (!linesOnWhite) { /* create animation frames lines on original image */
 					/* Keep adding to frame1 to create a cumulative image */
 					selectWindow("frame1");
-					drawLine(X1, Y1, X2, Y2);
+					drawLine(animX1[i], animY1[i], animX2[i], animY2[i]);
 					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
-						addImageToStack("animStack","frame1");
-						linesPerFrameCounter = 0;
+					if (linesPerFrameCounter>=linesPerFrame || i==(lineCounter-1)) {
+						if (animValues[i]!=lastFrameValue || i==(lineCounter-1)) {
+							addImageToStack("animStack","frame1");
+							linesPerFrameCounter = 0;
+							lastFrameValue = animValues[i];
+						}
 					}
 				}
 				else {
@@ -638,39 +689,47 @@ macro "Line Color Coder with Labels"{
 					}
 					selectWindow("tempFrame");
 					// run("Select None");
-					drawLine(X1, Y1, X2, Y2);
+					drawLine(animX1[i], animY1[i], animX2[i], animY2[i]);
 					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
-						addImageToStack("animStack","tempFrame");
-						closeImageByTitle("tempFrame");
-						linesPerFrameCounter = 0;
+					if (linesPerFrameCounter>=linesPerFrame || i==(lineCounter-1)) {
+						if (animValues[i]!=lastFrameValue || i==(lineCounter-1)) {
+							addImageToStack("animStack","tempFrame");
+							closeImageByTitle("tempFrame");
+							linesPerFrameCounter = 0;
+							lastFrameValue = animValues[i];
+						}
 					}
 					run("Select None");
 				}
+				linesDrawn += 1;
+				loopTime = getTime();
+				if(linesDrawn>1) {
+					timeTaken = loopTime-loopStart;
+					timeLeft = (lineCounter-(linesDrawn)) * timeTaken/(linesDrawn);
+					timeLeftM = floor(timeLeft/60000);
+					timeLeftS = round(timeLeft-timeLeftM*60000)/1000;
+					if (timeLeftS>previousTime) { /* only update once per second */
+						totalTime = timeTaken + timeLeft;
+						mem = IJ.currentMemory();
+						mem /=1000000;
+						memPC = mem * maxMemFactor;
+						if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
+						print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
+						previousTime = timeLeftS;
+					}
+				}
 			}
-			loopTime = getTime();
-			if(i==0) loopReporting = round(1000/loopTime);
-			if(progressUpdateIntervalCount==0) {
-				timeTaken = loopTime-loopStart;
-				timeLeft = (nRes-(i+1)) * timeTaken/(i+1);
-				timeLeftM = floor(timeLeft/60000);
-				timeLeftS = (timeLeft-timeLeftM*60000)/1000;
-				totalTime = timeTaken + timeLeft;
-				mem = IJ.currentMemory();
-				mem /=1000000;
-				memPC = mem * maxMemFactor;
-				if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
-				print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
-			}
-			progressUpdateIntervalCount +=1;
-			if (progressUpdateIntervalCount>loopReporting) progressUpdateIntervalCount = 0;
 		}		
-		eval("script","f = WindowManager.getWindow('" + progressWindowTitle + "'); f.close();");
-		animHeight = getHeight();
-		closeImageByTitle("frame1");
+		closeByScript(progressWindowTitle);
+		// animHeight = getHeight();
+		// closeImageByTitle("frame1");
+		closeByScript("frame1");
 	}
-	closeImageByTitle(workingT);
-	selectWindow("tempFrame");
+	/* End Animation Loop */
+	closeByScript(workingT);
+	closeByScript("tempFrame");
+	// closeImageByTitle(workingT);
+	// closeImageByTitle("tempFrame");
 	run("Collect Garbage");
 	/* display result		 */
 	restoreSettings;
@@ -855,7 +914,7 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	function closeByScript(windowTitle) {
-		if (isOpen(windowTitle)) eval("script","f = WindowManager.getWindow('"+windowTitle+"'); f.close();"); 
+		while (isOpen(windowTitle)) eval("script","f = WindowManager.getWindow('"+windowTitle+"'); f.close();"); 
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
@@ -1081,15 +1140,14 @@ macro "Line Color Coder with Labels"{
 	function replaceImage(replacedWindow,window2) {
         if (isOpen(replacedWindow)) {
 			selectWindow(replacedWindow);
-			rename(replacedWindow+Replaced);
+			rename(""+replacedWindow+"Replaced");
 			selectWindow(window2);
 			rename(replacedWindow);
-			eval("script","f = WindowManager.getWindow('"+replacedWindow+Replaced+"'); f.close();"); 
+			closeByScript(""+replacedWindow+"Replaced");  /* Use close By Script function */
+			// eval("script","f = WindowManager.getWindow('"+replacedWindow+Replaced+"'); f.close();"); 
 		}
 		else copyImage(window2, replacedWindow); /* Use copyImage function */
 	}
-	
-	
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* Restore previous settings before exiting */

@@ -46,7 +46,9 @@
 	+ v180722 Allows any system font to be used. Fixed selected positions.
 	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
 	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
-	+ v180831 Added check for Fiji_Plugins.	 
+	+ v180831 Added check for Fiji_Plugins.
+	+ v180926 Added coded range option.
+	+ v180928 Fixed 2 lines of missing code, and replaced Autocrop which seems to be have become unreliable.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -187,6 +189,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.addMessage("Auto based on\nselected parameter");
 	Dialog.addMessage("Original data range: "+rampMin+"-"+rampMax+" \("+(rampMax-rampMin)+" "+unit+"\)");
 	Dialog.addString("Ramp data range:", rampMin+"-"+rampMax, 11);
+	Dialog.addString("Color Coded Range:", rampMin+"-"+rampMax, 11);
 	Dialog.setInsets(-35, 240, 0);
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.setInsets(-4, 120, 0);
@@ -227,6 +230,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
+		rangeCoded = Dialog.getString;
 		minmaxLines = Dialog.getCheckbox;
 		outlierChoice =  Dialog.getRadioButton;
 		if (outlierChoice!="No") sigmaR = (parseInt(substring(outlierChoice,0,1)));
@@ -265,11 +269,22 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		rampMin= parseFloat(range[0]); rampMax= parseFloat(range[1]);
 	}
 	if (indexOf(rangeS, "-")==0) rampMin = 0 - rampMin; /* checks to see if rampMin is a negative value (lets hope the rampMax isn't). */
+	
+	codedRange = split(rangeCoded, "-");
+	if (lengthOf(codedRange)==1) {
+		minCoded = NaN; maxCoded = parseFloat(codedRange[0]);
+	} else {
+		minCoded = parseFloat(codedRange[0]); maxCoded = parseFloat(codedRange[1]);
+	}
+	if (indexOf(rangeCoded, "-")==0) minC = 0 - minC; /* checks to see if min is a negative value (lets hope the max isn't). */	
+	
 	fontSR2 = fontSize * thinLinesFontSTweak/100;
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
-	if (isNaN(rampMin)) rampMin= arrayMin;
-	if (isNaN(rampMax)) rampMax= arrayMax;
+	if (isNaN(rampMin)) rampMin = arrayMin;
+	if (isNaN(rampMax)) rampMax = arrayMax;
+	if (isNaN(minCoded)) minCoded = arrayMin;
+	if (isNaN(maxCoded)) maxCoded = arrayMax;
 	coeffVar = arraySD*100/arrayMean;
 	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
 	arrayQuartile = newArray(3);
@@ -639,7 +654,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 			run("Rotate 90 Degrees Right");
 		}
-		run("Auto Crop (guess background color)");
+		// run("Auto Crop (guess background color)"); /* seems to not be reliable */
+		call("Versatile_Wand_Tool.doWand", 0, 0, 0.0, 0.0, 0.0, "8-connected");
+		run("Make Inverse");
+		run("Crop");
+		run("Select None");
 		setBatchMode("true");
 		getDisplayedArea(null, null, canvasW, canvasH);
 		canvasW += round(imageWidth/150); canvasH += round(imageHeight/150); /* add padding to legend box */
@@ -649,29 +668,31 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		*/
 		selectImage(id);
 		for (countNaN=0, i=0; i<items; i++) {
-			showStatus("Coloring object " + i + ", " + (nROIs-i) + " more to go");
-			if (isNaN(values[i])) countNaN++;
-			if (!revLut) {
-				if (values[i]<=rampMin) lutIndex= 0;
-				else if (values[i]>rampMax) lutIndex= 255;
-				else lutIndex= round(255 * (values[i] - rampMin) / (rampMax - rampMin));
+			if (values[i]>=minCoded && values[i]<=maxCoded) {
+				showStatus("Coloring object " + i + ", " + (nROIs-i) + " more to go");
+				if (isNaN(values[i])) countNaN++;
+				if (!revLut) {
+					if (values[i]<=rampMin) lutIndex= 0;
+					else if (values[i]>rampMax) lutIndex= 255;
+					else lutIndex= round(255 * (values[i] - rampMin) / (rampMax - rampMin));
+				}
+				else {
+					if (values[i]<=rampMin) lutIndex= 255;
+					else if (values[i]>rampMax) lutIndex= 0;
+					else lutIndex= round(255 * (rampMax - values[i]) / (rampMax - rampMin));
+				}
+				roiManager("select", i);
+				if (stroke>0) {
+					roiManager("Set Line Width", stroke);
+					roiManager("Set Color", alpha+roiColors[lutIndex]);
+				} else
+					roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
+				labelValue = values[i];
+				labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
+				labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
+				// roiManager("Rename", labelString); /* label roi with feature value: not necessary if creating new labels */
+				Overlay.show;
 			}
-			else {
-				if (values[i]<=rampMin) lutIndex= 255;
-				else if (values[i]>rampMax) lutIndex= 0;
-				else lutIndex= round(255 * (rampMax - values[i]) / (rampMax - rampMin));
-			}
-			roiManager("select", i);
-			if (stroke>0) {
-				roiManager("Set Line Width", stroke);
-				roiManager("Set Color", alpha+roiColors[lutIndex]);
-			} else
-				roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
-			labelValue = values[i];
-			labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
-			labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
-			// roiManager("Rename", labelString); /* label roi with feature value: not necessary if creating new labels */
-			Overlay.show;		
 		}
 		// roiManager("Show All without labels");
 	}
@@ -705,7 +726,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.setInsets(0, 150, 6);
 			Dialog.addCheckbox("Add feature labels to each ROI?", true);
 			if (lut!="Grays")
-				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern", "red", "green", "blue", "cyan", "yellow", "magenta"); 
+				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
 			else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
 			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
@@ -1812,7 +1833,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	 Macro Color Functions
  */
 	function getColorArrayFromColorName(colorName) {
-		/* Corrected yellow and reordered v180317 */
+		/* v180828 added Fluorescent Colors */
 		cA = newArray(255,255,255);
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1820,30 +1841,48 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "red") cA = newArray(255,0,0);
-		else if (colorName == "green") cA = newArray(0,255,0);
+		else if (colorName == "pink") cA = newArray(255, 192, 203);
+		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0,0,255);
-		else if (colorName == "cyan") cA = newArray(0,255,255);
-		else if (colorName == "magenta") cA = newArray(255,0,255);		
 		else if (colorName == "yellow") cA = newArray(255,255,0);
-		else if (colorName == "aqua_modern") cA = newArray(75,172,198);
-		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189);
-		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);
-		else if (colorName == "blue_modern") cA = newArray(58,93,174);
+		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "garnet") cA = newArray(120,47,64);
 		else if (colorName == "gold") cA = newArray(206,184,136);
+		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
+		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
+		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);
+		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
 		else if (colorName == "gray_modern") cA = newArray(83,86,90);
 		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);
-		else if (colorName == "green_modern") cA = newArray(155,187,89);
-		else if (colorName == "orange") cA = newArray(255, 165, 0);
+		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
+		else if (colorName == "green_modern_accent") cA = newArray(214,228,187); /* #D6E4BB AKA "Gin" */
+		else if (colorName == "green_spring_accent") cA = newArray(0,255,102); /* #00FF66 AKA "Spring Green" */
 		else if (colorName == "orange_modern") cA = newArray(247,150,70);
-		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "pink_modern") cA = newArray(255,105,180);
 		else if (colorName == "purple_modern") cA = newArray(128,100,162);
+		else if (colorName == "jazzberry_jam") cA = newArray(165,11,94);
 		else if (colorName == "red_N_modern") cA = newArray(227,24,55);
 		else if (colorName == "red_modern") cA = newArray(192,80,77);
 		else if (colorName == "tan_modern") cA = newArray(238,236,225);
 		else if (colorName == "violet_modern") cA = newArray(76,65,132);
 		else if (colorName == "yellow_modern") cA = newArray(247,238,69);
+		/* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp */
+		else if (colorName == "Radical Red") cA = newArray(255,53,94);			/* #FF355E */
+		else if (colorName == "Wild Watermelon") cA = newArray(253,91,120);		/* #FD5B78 */
+		else if (colorName == "Outrageous Orange") cA = newArray(255,96,55);	/* #FF6037 */
+		else if (colorName == "Supernova Orange") cA = newArray(255,191,63);	/* FFBF3F Supernova Neon Orange*/
+		else if (colorName == "Atomic Tangerine") cA = newArray(255,153,102);	/* #FF9966 */
+		else if (colorName == "Neon Carrot") cA = newArray(255,153,51);			/* #FF9933 */
+		else if (colorName == "Sunglow") cA = newArray(255,204,51); 			/* #FFCC33 */
+		else if (colorName == "Laser Lemon") cA = newArray(255,255,102); 		/* #FFFF66 "Unmellow Yellow" */
+		else if (colorName == "Electric Lime") cA = newArray(204,255,0); 		/* #CCFF00 */
+		else if (colorName == "Screamin' Green") cA = newArray(102,255,102); 	/* #66FF66 */
+		else if (colorName == "Magic Mint") cA = newArray(170,240,209); 		/* #AAF0D1 */
+		else if (colorName == "Blizzard Blue") cA = newArray(80,191,230); 		/* #50BFE6 Malibu */
+		else if (colorName == "Dodger Blue") cA = newArray(9,159,255);			/* #099FFF Dodger Neon Blue */
+		else if (colorName == "Shocking Pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
+		else if (colorName == "Razzle Dazzle Rose") cA = newArray(238,52,210); 	/* #EE34D2 */
+		else if (colorName == "Hot Magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		return cA;
 	}
 	function setColorFromColorName(colorName) {

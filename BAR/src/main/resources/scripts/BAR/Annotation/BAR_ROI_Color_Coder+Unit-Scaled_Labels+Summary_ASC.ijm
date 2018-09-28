@@ -197,7 +197,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
 	Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values \("+fromCharCode(0x03C3)+" = "+arraySD+"\):", outlierOptions, 1, 5, "No");
 	Dialog.setInsets(3, 0, 15);
-	colorChoice = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
+	colorChoice = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
 	Dialog.addChoice("Outliers: Outline:", colorChoice, colorChoice[0]);
 	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
@@ -741,7 +741,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);  /* Reuse font list from previous dialog */
 			Dialog.addChoice("Font name:", fontNameChoice, fontName); /* Default to previous fontName */
 			if (outlierChoice!="No") {
-				colorChoice2 = newArray("red", "green", "blue", "cyan", "yellow", "magenta", "white", "black", "aqua_modern", "blue_modern", "garnet", "gold", "green_modern", "orange_modern", "pink_modern", "red_modern", "violet_modern", "yellow_modern");
+				colorChoice2 = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
 				Dialog.setInsets(0, 0, 8);
 				Dialog.addChoice("Outlier outline color:", colorChoice2, colorChoice2[0]);
 				Dialog.addNumber("Outlier object outline stroke:", outlierStrokePC,0,3,"% of auto font size");

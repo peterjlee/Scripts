@@ -48,7 +48,8 @@
 	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
 	+ v180831 Added check for Fiji_Plugins.
 	+ v180926 Added coded range option.
-	+ v180928 Fixed 2 lines of missing code, and replaced Autocrop which seems to be have become unreliable.
+	+ v180928 Fixed 2 lines of missing code.
+	+ v181003 Restored autocrop, updated functions.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -642,7 +643,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 		}
 		else { /* need to left align if labels are longer and increase distance from ramp */
-			run("Auto Crop (guess background color)");
+			if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
+			run("Auto Crop (guess background color)"); /* not reliable in batch mode */
+			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 			getDisplayedArea(null, null, canvasW, canvasH);
 			run("Rotate 90 Degrees Left");
 			canvasW = getHeight + round(2.5*fontSize);
@@ -654,14 +657,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 			run("Rotate 90 Degrees Right");
 		}
-		// run("Auto Crop (guess background color)"); /* seems to not be reliable */
-		call("Versatile_Wand_Tool.doWand", 0, 0, 0.0, 0.0, 0.0, "8-connected");
-		run("Make Inverse");
-		run("Crop");
-		run("Select None");
-		setBatchMode("true");
+		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
+		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on *
+		/* add padding to legend box - better than expanding crop selection as is adds padding to all sides */
 		getDisplayedArea(null, null, canvasW, canvasH);
-		canvasW += round(imageWidth/150); canvasH += round(imageHeight/150); /* add padding to legend box */
+		canvasW += round(imageWidth/150);
+		canvasH += round(imageHeight/150);
 		run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center");
 		/*
 			iterate through the ROI Manager list and colorize ROIs
@@ -1699,10 +1701,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
+		/* v181002 reselects original image at end if open */
+		oIID = getImageID();
         if (isOpen(windowTitle)) {
-		selectWindow(windowTitle);
-        close();
+			selectWindow(windowTitle);
+			close();
 		}
+		if (isOpen(oIID)) selectImage(oIID);
 	}
 	function createInnerShadowFromMask4(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
 		/* Requires previous run of: originalImageDepth = bitDepth();

@@ -15,6 +15,7 @@
 	+ v180921 Can now sort values for the animation frames. Greatly reduced run time.
 	+ v180926 Added coded range option.
 	+ v180928 Fixed undef variable error.
+	+ v181002-3 Minor fixes.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -22,7 +23,6 @@ macro "Line Color Coder with Labels"{
 	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
 	close("*_Ramp"); /* cleanup: closes previous ramp windows */
-	if (isOpen("Progress")) eval("script","f = WindowManager.getWindow('"Progress"'); f.close();");  /* cleanup: closes previous progress window */
 	/* Set options for black objects on white background as this works better for publications */
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
@@ -44,6 +44,7 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	id = getImageID();	t=getTitle(); /* get id of image and title */
+	screenH = screenHeight();
 	maxMem = IJ.maxMemory();
 	maxMemFactor = 100000000/maxMem;
 	mem = IJ.currentMemory();
@@ -404,7 +405,9 @@ macro "Line Color Coder with Labels"{
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 	}
 	else { /* need to left align if labels are longer and increase distance from ramp */
-		run("Auto Crop (guess background color)");
+		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
+		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on *
 		getDisplayedArea(null, null, canvasW, canvasH);
 		run("Rotate 90 Degrees Left");
 		canvasW = getHeight + round(2.5*fontSize);
@@ -416,15 +419,9 @@ macro "Line Color Coder with Labels"{
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		run("Rotate 90 Degrees Right");
 	}
-	// run("Auto Crop (guess background color)"); /* Seems to have become unreliable */
-	// run("Select Bounding Box (guess background color)");
-	call("Versatile_Wand_Tool.doWand", 0, 0, 0.0, 0.0, 0.0, "8-connected");
-	run("Make Inverse");
-	// expansion = round((imageWidth+imageHeight)/150);
-	// if (expansion>0) run("Enlarge...", "enlarge=" + expansion + " pixel");
-	run("Crop");
-	run("Select None");
-	if (is("Batch Mode")==false) setBatchMode(true);
+	if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
+	run("Auto Crop (guess background color)"); /* not reliable in batch mode */
+	if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on *
 	getDisplayedArea(null, null, canvasW, canvasH);
 	/* add padding to legend box - better than expanding crop selection as is adds padding to all sides */
 	canvasW += round(imageWidth/150);
@@ -529,7 +526,8 @@ macro "Line Color Coder with Labels"{
 		comboW = getWidth();
 		if (indexOf(createCombo, "Scaled")<=0) rampScale =  1;
 		selectWindow(tR);
-		run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
+		tRS = "scaled_ramp"; 
+		run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title="+tRS);
 		canvasH = getHeight(); /* update ramp height */
 		canvasW = getWidth(); /* update ramp width */
 		if (indexOf(createCombo, "Current")>0) {
@@ -541,11 +539,11 @@ macro "Line Color Coder with Labels"{
 		selectWindow(comboImage);
 		run("Canvas Size...", "width="+comboW+" height="+comboH+" position=Top-Left");
 		makeRectangle(comboW-canvasW, round((comboH-canvasH)/2), canvasW, canvasH);
-		run("Image to Selection...", "image=scaled_ramp opacity=100");
+		run("Image to Selection...", "image="+tRS+" opacity=100");
 		run("Flatten");
 		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 		rename(workingT + "+ramp");
-		closeImageByTitle("scaled_ramp");
+		closeImageByTitle(tRS);
 		closeImageByTitle("temp_combo");
 	}
 	/* Start Animation Section */
@@ -580,16 +578,20 @@ macro "Line Color Coder with Labels"{
 				cX1 = selEX; cY1 = selEY; cW = selEWidth;cH = selEHeight;
 			}
 			else {	
-				if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
+				// if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
+				getLocationAndSize(tFx, tFy, tFWidth, tFHeight);
+				OKZoom = 75*screenH/tFHeight;
+				run("Set... ", "zoom="+OKZoom/10+" x=0 y=0"); /* Use zoom to hide image */
 				selectWindow(t);
-				if (restrictLines!="No") run("Restore Selection");;
+				if (restrictLines!="No") run("Restore Selection");
 				msgtitle="Select area to crop for animation frames";
 				if (restrictLines!="No") msg = "Previous restricted lines box shown";
 				else msg = "Select an area in image window " + t + " for the animation frames";
 				waitForUser(msgtitle, msg);
 				getSelectionBounds(cX1, cY1, cW, cH);
 				run("Select None");
-				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+				selectWindow("tempFrame1");
+				run("Set... ", "zoom="+OKZoom+" x="+tFWidth/2+" y="+tFHeight/2); /* Use zoom to hide image */
 			}
 		}
 		animScaleF = 1; /* Default to no scaling */
@@ -599,11 +601,13 @@ macro "Line Color Coder with Labels"{
 			Dialog.create("Scale Animation Frame?");
 				if (animCrop) Dialog.addMessage("Current Frame Width: " + cW + "pixels");
 				else Dialog.addMessage("Current Frame Width: " + imageWidth + "pixels");
-				Dialog.addNumber("Choice of scale factor:", minOf(1,scaleGuess));
+				Dialog.addNumber("Choice of scale factor:", minOf(1,scaleGuess)); /* Limit to reduction only */
+				// Dialog.addNumber("Choice of scale factor:", scaleGuess);
 			Dialog.show;
 			animScaleF = Dialog.getNumber();
 		}
 		/* Create first animation frame */
+		setBatchMode("exit & display");
 		selectWindow("tempFrame1");
 		if(animCrop || animResize){
 			if (animCrop){
@@ -615,15 +619,19 @@ macro "Line Color Coder with Labels"{
 			else run("Duplicate...", "title=frame1");
 		}
 		else copyImage("tempFrame1", "frame1");
-		closeImageByTitle("tempFrame1");
+		closeImageByTitle("tempFrame1"); /* requires v181002 version */
 		animFrameHeight = getHeight;
 		animFrameNoRampWidth = getWidth;
 		if(addRamp){
 			selectWindow(tR);
+			tRA = "Scaled_Anim_Ramp";
+			// setBatchMode("exit & display");
+			selectWindow(tR);
 			canvasH = getHeight(); /* update ramp height */
 			rampScale = animFrameHeight/canvasH;
-			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=Scaled_Anim_Ramp");
-			selectWindow("Scaled_Anim_Ramp");
+			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title="+tRA);
+			setBatchMode("exit & display");
+			selectWindow(tRA);
 			sarW = getWidth;
 			sarH = getHeight;
 			animComboW = sarW + animFrameNoRampWidth;
@@ -636,12 +644,13 @@ macro "Line Color Coder with Labels"{
 			run("Flatten");
 			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 			rename("frame1_combo");
-			closeImageByTitle("Scaled_Anim_Ramp");
+			closeImageByTitle(tRA);
 			closeImageByTitle("temp_combo");
 			closeImageByTitle("frame1");
-			selectWindow("frame1_combo");
+			// selectWindow("frame1_combo"); /* not necessary with v181002 version of closeImage */
 			rename("frame1");
 		}
+		setBatchMode(true);
 		// animFrameHeight = getHeight;
 		animFrameWidth = getWidth;
 		/* End of creation of initial animStack frame */
@@ -695,9 +704,10 @@ macro "Line Color Coder with Labels"{
 		previousTime = 0;
 		animLineWidth = maxOf(1,animScaleF*lineWidth);
 		setLineWidth(animLineWidth);
-		progressWindowTitle = "[Progress]";
+		progressWindowTitleS = "Animation_Frame_Creation_Progress";
+		progressWindowTitle = "[" + progressWindowTitleS + "]";
 		run("Text Window...", "name="+ progressWindowTitle +" width=25 height=2 monospaced");
-		eval("script","f = WindowManager.getWindow('Progress'); f.setLocation(50,20); f.setSize(550,150);"); 
+		eval("script","f = WindowManager.getWindow('"+progressWindowTitleS+"'); f.setLocation(50,20); f.setSize(550,150);"); 
 		nextMemoryFlushPC = 50; /* 1st memory flush at 50% mem */
 		for (i=0; i<nRes; i++) {
 			if(animMakeFrame[i] && animValues[i]>0 && animValues[i]>=minCoded && animValues[i]<=maxCoded){
@@ -781,12 +791,12 @@ macro "Line Color Coder with Labels"{
 				progressUpdateIntervalCount *= 1; 
 			}
 		}
-		if (isOpen(progressWindowTitle)) eval("script","f = WindowManager.getWindow('Progress'); f.close();"); 
 		closeImageByTitle("frame1");
 		closeImageByTitle("tempFrame");
+		eval("script","WindowManager.getWindow('"+progressWindowTitleS+"').close();");
 	}
 	/* End Animation Loop */
-	// if (isOpen(progressWindowTitle)) eval("script","f = WindowManager.getWindow('"+progressWindowTitle+"'); f.close();"); 
+	
 	closeImageByTitle(workingT);
 	;
 	run("Collect Garbage");
@@ -803,7 +813,7 @@ macro "Line Color Coder with Labels"{
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage");
 	showStatus("Line Drawing Macro Finished");
-	
+}	
 	function getBar(p1, p2) {
 		/* from https://imagej.nih.gov/ij/macros/ProgressBar.txt */
         n = 20;
@@ -967,10 +977,13 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
+		/* v181002 reselects original image at end if open */
+		oIID = getImageID();
         if (isOpen(windowTitle)) {
-		selectWindow(windowTitle);
-        close();
+			selectWindow(windowTitle);
+			close();
 		}
+		if (isOpen(oIID)) selectImage(oIID);
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
@@ -1286,4 +1299,3 @@ macro "Line Color Coder with Labels"{
 		}
 		return unitLabel;
 	}
-}

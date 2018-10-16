@@ -16,6 +16,7 @@
 	+ v180926 Added coded range option.
 	+ v180928 Fixed undef variable error.
 	+ v181002-3 Minor fixes.
+	+ v181004 Major overhaul of menus for better fit on smaller screen and to allow editing of labels. Also added option to change line drawing order.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -28,8 +29,7 @@ macro "Line Color Coder with Labels"{
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
 	run("Appearance...", " "); /* Do not use Inverting LUT */
-	/*	The above should be the defaults but this makes sure (black particles on a white background)
-		http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
+	/*	The above should be the defaults but this makes sure (black particles on a white background)	http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	switchIsOn = "false";
 	activateIsOn = "false";
@@ -99,8 +99,13 @@ macro "Line Color Coder with Labels"{
 	Dialog.setInsets(-1, 20, 6);
 	if (lcf!=1) Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false); 
 	Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
+	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
+	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
+	// Dialog.setInsets(-40, 197, -5);
+	// Dialog.addMessage("Auto based on\nselected parameter");
 	luts=getLutsList();
 	Dialog.addChoice("LUT:", luts, luts[0]);
+	Dialog.setInsets(0, 120, 0);
 	Dialog.addCheckbox("Reverse LUT?", false); 
 	Dialog.setInsets(6, 0, 6);
 	if (selEType>=0)
@@ -108,40 +113,13 @@ macro "Line Color Coder with Labels"{
 	else Dialog.addRadioButtonGroup("Restrict Lines to Area?", newArray("No", "New Selection"), 1, 3, "No"); 
 	Dialog.addCheckbox("Overwrite Active Image?", false); 
 	Dialog.addCheckbox("Lines on white background?", false); 
+	Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
 	Dialog.addCheckbox("Create a stack for animation?", false); 
 	Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?", false); /* Using individual non-disposing lines can reduce the size of gif animation files */
 	Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
 	Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
-	Dialog.setInsets(12, 0, 6);
-	Dialog.addMessage("Legend \(ramp\):________________");
-	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
-	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
-	Dialog.setInsets(-42, 197, -5);
-	Dialog.addMessage("Auto based on\nselected parameter");
-	Dialog.addString("Ramp Range:", "AutoMin-AutoMax", 11);
-	Dialog.addString("Color Coded Range:", "AutoMin-AutoMax", 11);
-	Dialog.setInsets(-35, 243, 0);
-	Dialog.addMessage("(e.g., 10-100)");
-	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
-	Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
-	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
-	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
-	Dialog.setInsets(-38, 200, 0);
-	Dialog.addMessage(rampH + " pxls suggested\nby image height");
-	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
-	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
-	fontNameChoice = getFontChoiceList();
-	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
-	Dialog.setInsets(-25, 205, 0);
-	Dialog.addCheckbox("Draw tick marks", true);
-	Dialog.setInsets(4, 120, 0);
-	Dialog.addCheckbox("Force rotated legend label", false);
-	Dialog.addCheckbox("Add thin lines at true minimum and maximum if different", false);
-	Dialog.addCheckbox("Add thin lines at true mean and ± SD", false);
-	Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
-	Dialog.addNumber("Thin line label font:", 70, 0, 3, "% of font size");
 	Dialog.show;
+	
 		fromX = Dialog.getChoice;
 		fromY = Dialog.getChoice;
 		toX = Dialog.getChoice;
@@ -150,6 +128,7 @@ macro "Line Color Coder with Labels"{
 		else ccf = 1;
 		parameterWithLabel= Dialog.getChoice;
 		parameter= substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
+		unitLabel = Dialog.getChoice;
 		lut= Dialog.getChoice;
 		revLut= Dialog.getCheckbox;
 		restrictLines= Dialog.getRadioButton;
@@ -157,10 +136,64 @@ macro "Line Color Coder with Labels"{
 		linesOnWhiteBG= Dialog.getCheckbox;
 		makeAnimStack= Dialog.getCheckbox;
 		linesOnWhite= Dialog.getCheckbox;
+		drawSequence = Dialog.getRadioButton;
 		linesPerFrame= maxOf(1,Dialog.getNumber);
 		lineWidth= Dialog.getNumber;
 		if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
-		unitLabel = Dialog.getChoice();
+	
+	values = Table.getColumn(parameter); 
+	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
+	
+	/*	Determine parameter label */
+	parameterLabel = parameter;
+	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
+	if (unitLabel=="Manual") {
+		unitLabel = unitLabelFromString(parameter, unit);
+			Dialog.create("Manual unit input");
+			Dialog.addString("Label:", unitLabel, 8);
+			Dialog.addMessage("^2 & um etc. replaced by " + fromCharCode(178) + " & " + fromCharCode(181) + "m...");
+			Dialog.show();
+			unitLabel = Dialog.getString();
+	}
+	if (unitLabel=="None") unitLabel = ""; 
+	parameterLabel = stripUnitFromString(parameter);
+	unitLabel = cleanLabel(unitLabel);
+	rampParameterLabel = cleanLabel(parameterLabel);
+	
+	dP = autoCalculateDecPlaces(arrayMin,arrayMax,10);
+		
+	Dialog.create("Ramp - Legend Options");
+	Dialog.addString("Ramp Parameter Label:", rampParameterLabel, 22);
+	Dialog.addString("Ramp Unit:", unitLabel, 5);
+	Dialog.addString("Ramp Range:", arrayMin + "-" + arrayMax, 11);
+	Dialog.setInsets(-35, 248, 0);
+	Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
+	Dialog.addString("Color Coded Range:", arrayMin + "-" + arrayMax, 11);
+	Dialog.setInsets(-35, 248, 0);
+	Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
+	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
+	Dialog.addNumber("Minor tick intervals:", 5, 0, 3, "5 would add 4 ticks between labels ");
+	Dialog.addChoice("Decimal places:", newArray(dP, "Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), dP);
+	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
+	// Dialog.setInsets(-38, 250, 0); /* (top, left, bottom) */
+	// Dialog.addMessage(rampH + " pxls suggested\nby image height");
+	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
+	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
+	fontNameChoice = getFontChoiceList();
+	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
+	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
+	// Dialog.setInsets(-25, 205, 0);
+	Dialog.addCheckbox("Draw tick marks", true);
+	// Dialog.setInsets(4, 120, 0);
+	Dialog.addCheckbox("Force rotated legend label", false);
+	Dialog.addCheckbox("Add thin lines at true minimum and maximum if different", false);
+	Dialog.addCheckbox("Add thin lines at true mean and " + fromCharCode(0x00B1) + " SD", false);
+	Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
+	Dialog.addNumber("Thin line label font:", 70, 0, 3, "% of font size");
+	Dialog.show;
+	
+		rampParameterLabel = cleanLabel(Dialog.getString);
+		unitLabel = cleanLabel(Dialog.getString);
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		rangeCoded = Dialog.getString; /* Range to be coded */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
@@ -202,8 +235,11 @@ macro "Line Color Coder with Labels"{
 		minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
 	run("Select None");
 	/* get values for chosen parameter */
-	values = Table.getColumn(parameter); 
-	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
+
+	
+	if (drawSequence=="No") drawOrder = Array.getSequence(nRes);
+	else drawOrder = Array.rankPositions(values);
+	if (drawSequence=="Descending") drawOrder = Array.reverse(drawOrder);
 	
 	range = split(rangeS, "-");
 	if (lengthOf(range)==1) {
@@ -225,21 +261,7 @@ macro "Line Color Coder with Labels"{
 	if (isNaN(max)) max = arrayMax;
 	if (isNaN(minCoded)) minCoded = arrayMin;
 	if (isNaN(maxCoded)) maxCoded = arrayMax;
-	/*
-	Determine parameter label */
-	parameterLabel = parameter;
-	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
-	if (unitLabel=="Manual") {
-		unitLabel = unitLabelFromString(parameter, unit);
-			Dialog.create("Manual unit input");
-			Dialog.addString("Label:", unitLabel, 8);
-			Dialog.addMessage("^2 & um etc. replaced by " + fromCharCode(178) + " & " + fromCharCode(181) + "m...");
-			Dialog.show();
-			unitLabel = Dialog.getString();
-	}
-	if (unitLabel=="None") unitLabel = ""; 
-	parameterLabel = stripUnitFromString(parameter);
-	unitLabel= cleanLabel(unitLabel);
+
 	/*	Create LUT-map legend	*/
 	rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
 	if (statsRampLines || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
@@ -268,7 +290,7 @@ macro "Line Color Coder with Labels"{
 	run("Rotate 90 Degrees Left");
 	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
 	if (dpChoice=="Auto")
-		decPlaces = autoCalculateDecPlaces(decPlaces);
+		decPlaces = autoCalculateDecPlaces(min, max, numLabels);
 	else if (dpChoice=="Manual") 
 		decPlaces=getNumber("Choose Number of Decimal Places", 0);
 	else if (dpChoice=="Scientific")
@@ -320,8 +342,8 @@ macro "Line Color Coder with Labels"{
 			if (i > 0 && i < (((numLabels-1)*minorTicks))) {
 				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 				setLineWidth(maxOf(1,round(rampLW/2)));
-				drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
-				drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
+				drawLine(0, yPos, tickL/3, yPos);					/* left minor tick */
+				drawLine(rampW-tickL/3-1, yPos, rampW-1, yPos);		/* right minor tick */
 				setLineWidth(rampLW); /* Rest line width */
 			}
 		}
@@ -398,7 +420,6 @@ macro "Line Color Coder with Labels"{
 	}
 	/*
 	parse symbols in unit and draw final label below ramp */
-	rampParameterLabel= cleanLabel(parameterLabel);
 	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
 	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
@@ -407,7 +428,7 @@ macro "Line Color Coder with Labels"{
 	else { /* need to left align if labels are longer and increase distance from ramp */
 		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
 		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
-		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on *
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 		getDisplayedArea(null, null, canvasW, canvasH);
 		run("Rotate 90 Degrees Left");
 		canvasW = getHeight + round(2.5*fontSize);
@@ -421,7 +442,7 @@ macro "Line Color Coder with Labels"{
 	}
 	if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
 	run("Auto Crop (guess background color)"); /* not reliable in batch mode */
-	if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on *
+	if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 	getDisplayedArea(null, null, canvasW, canvasH);
 	/* add padding to legend box - better than expanding crop selection as is adds padding to all sides */
 	canvasW += round(imageWidth/150);
@@ -455,7 +476,8 @@ macro "Line Color Coder with Labels"{
 	fromYs = Table.getColumn(fromY);
 	toXs = Table.getColumn(toX);
 	toYs = Table.getColumn(toY);
-	for (i=0; i<nRes; i++) {
+	for (d=0; d<nRes; d++) {
+		i = drawOrder[d];
 		showProgress(i, nRes);
 		if (!isNaN(values[i]) && values[i]>=minCoded && values[i]<=maxCoded) {
 			if (values[i]<=min)
@@ -506,13 +528,14 @@ macro "Line Color Coder with Labels"{
 		rampScale =  getHeight()/canvasH; /* default to no scale */
 		if (indexOf(createCombo, "Cropped")>0) {
 			if (indexOf(createCombo, "New Selection")>0) {
-				if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
+				if (is("Batch Mode")==true) setBatchMode(false); /* Toggle batch mode off for user interaction */
 				if (restrictLines!="No") makeRectangle(selEX, selEY, selEWidth, selEHeight);
 				setTool("rectangle");
 				msgtitle="Area selection";
 				msg = "Draw a box in the image to which you want the output image restricted";
 				waitForUser(msgtitle, msg);
 				getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
+				if (is("Batch Mode")==false) setBatchMode(true); /* Toggle batch mode back on */
 			}
 			else makeRectangle(selEX, selEY, selEWidth, selEHeight);
 			run("Duplicate...", "title=temp_combo");
@@ -578,12 +601,11 @@ macro "Line Color Coder with Labels"{
 				cX1 = selEX; cY1 = selEY; cW = selEWidth;cH = selEHeight;
 			}
 			else {	
-				// if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
 				getLocationAndSize(tFx, tFy, tFWidth, tFHeight);
 				OKZoom = 75*screenH/tFHeight;
 				run("Set... ", "zoom="+OKZoom/10+" x=0 y=0"); /* Use zoom to hide image */
 				selectWindow(t);
-				if (restrictLines!="No") run("Restore Selection");
+				if (restrictLines!="No" && selEType>=0) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 				msgtitle="Select area to crop for animation frames";
 				if (restrictLines!="No") msg = "Previous restricted lines box shown";
 				else msg = "Select an area in image window " + t + " for the animation frames";
@@ -607,7 +629,6 @@ macro "Line Color Coder with Labels"{
 			animScaleF = Dialog.getNumber();
 		}
 		/* Create first animation frame */
-		setBatchMode("exit & display");
 		selectWindow("tempFrame1");
 		if(animCrop || animResize){
 			if (animCrop){
@@ -625,12 +646,10 @@ macro "Line Color Coder with Labels"{
 		if(addRamp){
 			selectWindow(tR);
 			tRA = "Scaled_Anim_Ramp";
-			// setBatchMode("exit & display");
 			selectWindow(tR);
 			canvasH = getHeight(); /* update ramp height */
 			rampScale = animFrameHeight/canvasH;
 			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title="+tRA);
-			setBatchMode("exit & display");
 			selectWindow(tRA);
 			sarW = getWidth;
 			sarH = getHeight;
@@ -647,29 +666,15 @@ macro "Line Color Coder with Labels"{
 			closeImageByTitle(tRA);
 			closeImageByTitle("temp_combo");
 			closeImageByTitle("frame1");
-			// selectWindow("frame1_combo"); /* not necessary with v181002 version of closeImage */
 			rename("frame1");
 		}
-		setBatchMode(true);
-		// animFrameHeight = getHeight;
 		animFrameWidth = getWidth;
 		/* End of creation of initial animStack frame */
 		copyImage("frame1", "animStack");
 		
-		if (valueSort=="No"){
-			valueRank = Array.getSequence(nRes);
-			animValues = values;
-		}
-		else if (valueSort=="Ascending"){
-			valueRank = Array.rankPositions(values);
-			animValues = Array.sort(values);
-		}
-		else {
-			valueRank = Array.rankPositions(values);
-			animValues = Array.sort(values);
-			Array.reverse(valueRank);
-			Array.reverse(animValues);
-		}
+		if (valueSort!="No") valueRank = Array.rankPositions(values);
+		if (valueSort=="Descending")	valueRank = Array.reverse(valueRank);
+		
 		/* Create array holders for sorted values */
 		animX1 = newArray(nRes);
 		animY1 = newArray(nRes);
@@ -679,7 +684,8 @@ macro "Line Color Coder with Labels"{
 		lineCounter = 0;
 		/* Determine lines to be drawn for animation and their order */
 		for (i=0; i<nRes; i++) {
-			j = valueRank[i];
+			if (valueSort!="No") j = valueRank[i];
+			else j = i;
 			X1 = animScaleF * ((fromXs[j]/ccf)-cX1);
 			Y1 = animScaleF * ((fromYs[j]/ccf)-cY1);
 			X2 = animScaleF * ((toXs[j]/ccf)-cX1);
@@ -687,21 +693,23 @@ macro "Line Color Coder with Labels"{
 			if (reuseLines) reuseLine = makeFrames[j];
 			else reuseLine = true;
 			if (X1>=0 && Y1 >=0 && X2 <= animFrameNoRampWidth && Y2 <= animFrameHeight && reuseLine){
-				animMakeFrame[i] = true;
+				animMakeFrame[j] = true;
 				lineCounter += 1;
 			}
-			else animMakeFrame[i] = false;
-			animX1[i] = X1;
-			animY1[i] = Y1;
-			animX2[i] = X2;
-			animY2[i] = Y2;
+			else animMakeFrame[j] = false;
+			animX1[j] = X1;
+			animY1[j] = Y1;
+			animX2[j] = X2;
+			animY2[j] = Y2;
 		}
 		linesPerFrameCounter = 0;
 		linesDrawn = 0;
-		lastFrameValue = 0;
+		frameCount = 0;
+		lastFrameValue = arrayMax + 1; /* Just make sure this is not in the value set */
 		loopStart = getTime();
-		progressUpdateIntervalCount = 0;
-		previousTime = 0;
+		loopReporting = -1; /* -1 value triggers first measurement */
+		// progressUpdateIntervalCount = 0;
+		previousUpdate = 0;
 		animLineWidth = maxOf(1,animScaleF*lineWidth);
 		setLineWidth(animLineWidth);
 		progressWindowTitleS = "Animation_Frame_Creation_Progress";
@@ -710,57 +718,58 @@ macro "Line Color Coder with Labels"{
 		eval("script","f = WindowManager.getWindow('"+progressWindowTitleS+"'); f.setLocation(50,20); f.setSize(550,150);"); 
 		nextMemoryFlushPC = 50; /* 1st memory flush at 50% mem */
 		for (i=0; i<nRes; i++) {
-			if(animMakeFrame[i] && animValues[i]>0 && animValues[i]>=minCoded && animValues[i]<=maxCoded){
-				if (animValues[i]<=min)
+			if (valueSort!="No") j = valueRank[i];
+			else j = i;
+			if(animMakeFrame[j] && values[j]>0 && values[j]>=minCoded && values[j]<=maxCoded){
+				if (values[j]<=min)
 					lutIndex= 0;
-				else if (animValues[i]>max)
+				else if (values[j]>max)
 					lutIndex= 255;
 				else if (!revLut)
-					lutIndex= round(255 * (animValues[i] - min) / (max - min));
+					lutIndex= round(255 * (values[j] - min) / (max - min));
 				else 
-					lutIndex= round(255 * (max - animValues[i]) / (max - min));
+					lutIndex= round(255 * (max - values[j]) / (max - min));
 				setColor("#"+lineColors[lutIndex]);
 				if (!linesOnWhite) { /* create animation frames lines on original image */
 					/* Keep adding to frame1 to create a cumulative image */
 					selectWindow("frame1");
-					drawLine(animX1[i], animY1[i], animX2[i], animY2[i]);
+					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
 					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(lineCounter-1)) {
-						if (animValues[i]!=lastFrameValue || i==(lineCounter-1)) {
+					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
+						if (values[j]!=lastFrameValue || i==(nRes-1)) {
 							addImageToStack("animStack","frame1");
 							linesPerFrameCounter = 0;
-							lastFrameValue = animValues[i];
+							lastFrameValue = values[j];
 						}
 					}
 				}
 				else {
-					if (i>0) {
-						if(linesPerFrameCounter==0) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
-						/* Only create new frame at intervals to reduce excessive animation size */
-					}
-					else {
-						replaceImage("tempFrame","frame1");
-					}
+					// if (linesPerFrameCounter==0 && values[j]!=lastFrameValue) {
+						// newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1); /* Trigger a new frame if the number of lines/frame has been reached and we have a new value */
+						// frameCount += 1;
+					// }
+					if (!isOpen("tempFrame")) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
 					selectWindow("tempFrame");
 					// run("Select None");
-					drawLine(animX1[i], animY1[i], animX2[i], animY2[i]);
+					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
 					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(lineCounter-1)) {
-						if (animValues[i]!=lastFrameValue || i==(lineCounter-1)) {
+					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) { /* lineCounter is the number of lines in the full or restricted region and was determined earlier. This should trigger the last frame to be added */
+						if (values[j]!=lastFrameValue || i==(nRes-1)) {
 							addImageToStack("animStack","tempFrame");
-							closeImageByTitle("tempFrame");
-							linesPerFrameCounter = 0;
-							lastFrameValue = animValues[i];
+							if(i!=(nRes-1)) closeImageByTitle("tempFrame"); /* leave last frame for debugging purposes */
+							linesPerFrameCounter = 0; /* Reset lines per frame counter so start new set of lines in a new frame */
+							lastFrameValue = values[j];
 						}
 					}
 					run("Select None");
 				}
-				if(i==0) {
+				if(loopReporting == -1) {
 					loopTime = getTime()-loopStart;
 					loopReporting = round(1000/loopTime);  /* set to update only ~ once per second */
-				}				
+				}
+				timeLapse = previousUpdate - getTime();
 				linesDrawn += 1;
-				if(progressUpdateIntervalCount==0 && linesDrawn>1) {
+				if(timeLapse>loopReporting && linesDrawn>1) {
 					timeTaken = getTime()-loopStart;
 					timePerLoop = timeTaken/(i+1);
 					loopReporting = round(1000/timePerLoop);
@@ -781,17 +790,20 @@ macro "Line Color Coder with Labels"{
 						flushedMem = IJ.currentMemory();
 						flushedMem /=1000000;
 						memFlushed = mem-flushedMem;
-						memFlushedPC = (mem/100) * memFlushed;
+						memFlushedPC = (100/mem) * memFlushed;
 						print(memFlushedPC + "% Memory flushed at " + timeTaken);
 						nextMemoryFlushPC += memFlushIncrement;
 					}						
 					if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
 					print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
+					previousUpdate = getTime();
 				}
-				progressUpdateIntervalCount *= 1; 
+				// progressUpdateIntervalCount += 1; 
 			}
 		}
+		if (isOpen("frame1")) addImageToStack("animStack","frame1");
 		closeImageByTitle("frame1");
+		if (isOpen("tempFrame")) addImageToStack("animStack","tempFrame");
 		closeImageByTitle("tempFrame");
 		eval("script","WindowManager.getWindow('"+progressWindowTitleS+"').close();");
 	}
@@ -835,7 +847,8 @@ macro "Line Color Coder with Labels"{
 		run("Paste");
 		selectWindow(baseImage);
 	}
-	function autoCalculateDecPlaces(dP){
+	function autoCalculateDecPlaces(min,max,numLabels){
+		/* v181004 */
 		step = (max-min)/numLabels;
 		stepSci = d2s(step, -1);
 		iExp = indexOf(stepSci, "E");
@@ -863,7 +876,7 @@ macro "Line Color Coder with Labels"{
 			}
 			tableList = Array.concat(newArray("none - exit"), tableList);
 			Dialog.create("Select table to use...");
-			Dialog.addChoice("Select Table to Activate", tableList);
+			Dialog.addChoice("Select Table to Activate", tableList,1);
 			Dialog.show();
 			tableUsed = Dialog.getChoice;
 			if (tableUsed=="none - exit") restoreExit("Goodbye");
@@ -904,7 +917,8 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	function checkForPluginNameContains(pluginNamePart) {
-		/* v180831 1st version to check for partial names so avoid versioning problems */
+		/* v180831 1st version to check for partial names so avoid versioning problems
+			v181005 1st version that works correctly ? */
 		var pluginCheck = false, subFolderCount = 0;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -921,20 +935,19 @@ macro "Line Color Coder with Labels"{
 		}
 		/* If not in the root try the subfolders */
 		if (!pluginCheck) {
+			subFolderList = newArray(0);
 			for (i=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount += 1;
-				}
+				if (endsWith(pluginList[i], "/")) subFolderList = Array.concat(subFolderList, pluginList[i]);
 			}
-			subFolderList = Array.trim(subFolderList, subFolderCount);
-			for (j=0; i<lengthOf(subFolderList); i++) {
+			for (i=0; i<lengthOf(subFolderList); i++) {
 				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
-				for (i=0; j<lengthOf(subFolderPluginList); j++) {
-					if (indexOf(subFolderPluginList[j], pluginNamePart)>=0 && endsWith(subFolderPluginList[j], ".jar")) {
-						pluginCheck = true;
-						i=lengthOf(subFolderList);
-						j=lengthOf(subFolderPluginList);
+				for (j=0; j<lengthOf(subFolderPluginList); j++) {
+					if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class")) {
+						if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) {
+							pluginCheck = true;
+							i=lengthOf(subFolderList);
+							j=lengthOf(subFolderPluginList);
+						}
 					}
 				}
 			}
@@ -1212,12 +1225,15 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function replaceImage(replacedWindow,window2) {
+		/* v181005 Added descriptive failure for missing window2 */
+		if (!isOpen(window2) restoreExit("replaceImage Function failure: Image " + window2 + " not open");
         if (isOpen(replacedWindow)) {
 			selectWindow(replacedWindow);
-			rename(""+replacedWindow+"Replaced");
+			tempName = ""+replacedWindow+"Replaced";
+			rename(tempName);
 			selectWindow(window2);
 			rename(replacedWindow);
-			eval("script","f = WindowManager.getWindow('"+replacedWindow+Replaced+"'); f.close();"); 
+			eval("script","WindowManager.getWindow('"+tempName+"').close();"); 
 		}
 		else copyImage(window2, replacedWindow); /* Use copyImage function */
 	}
@@ -1257,7 +1273,7 @@ macro "Line Color Coder with Labels"{
 		}
 		else stringLabel = string;
 		return stringLabel;
-	}	
+	}
 	function unCleanLabel(string) { 
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
 	/* mod 041117 to remove spaces as well */

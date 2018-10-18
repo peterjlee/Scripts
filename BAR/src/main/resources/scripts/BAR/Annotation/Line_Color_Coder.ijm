@@ -17,6 +17,7 @@
 	+ v180928 Fixed undef variable error.
 	+ v181002-3 Minor fixes.
 	+ v181004 Major overhaul of menus for better fit on smaller screen and to allow editing of labels. Also added option to change line drawing order.
+	+ v181016-7 Restricted memory flush use to greatly improve speed. Fixed missing last animation frame. Original selection restored.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -426,9 +427,7 @@ macro "Line Color Coder with Labels"{
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 	}
 	else { /* need to left align if labels are longer and increase distance from ramp */
-		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
-		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
-		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+		autoCropGuessBackgroundSafe(); /* Use function that turns batch mode off and on */
 		getDisplayedArea(null, null, canvasW, canvasH);
 		run("Rotate 90 Degrees Left");
 		canvasW = getHeight + round(2.5*fontSize);
@@ -440,9 +439,7 @@ macro "Line Color Coder with Labels"{
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		run("Rotate 90 Degrees Right");
 	}
-	if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
-	run("Auto Crop (guess background color)"); /* not reliable in batch mode */
-	if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+	autoCropGuessBackgroundSafe(); /* Use function that turns batch mode off and on */
 	getDisplayedArea(null, null, canvasW, canvasH);
 	/* add padding to legend box - better than expanding crop selection as is adds padding to all sides */
 	canvasW += round(imageWidth/150);
@@ -516,11 +513,13 @@ macro "Line Color Coder with Labels"{
 		comboChoiceCurrent = newArray("Combine Ramp with Current", "Combine Ramp with New Image");
 		comboChoiceScaled = newArray("Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
 		comboChoiceCropped = newArray("Combine Scaled Ramp with New Image Cropped to Restricted Lines");
-		comboChoiceCropNewSelection = newArray("Combine Scaled Ramp with Image Cropped to New Selection");
+		comboChoiceCropNewSelection = newArray("Combine Scaled Ramp with Image Cropped to Old or New Selection");
 		if (canvasH>imageHeight || canvasH<(0.93*imageHeight)) comboChoice = Array.concat(comboChoice,comboChoiceScaled,comboChoiceCropNewSelection);
 		else comboChoice = Array.concat(comboChoice,comboChoiceCurrent,comboChoiceCropNewSelection); /* close enough */
-		if (restrictLines!="No") comboChoice = Array.concat(comboChoice,comboChoiceCropped,comboChoiceCropNewSelection);
-		Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
+		if (restrictLines!="No") {
+			comboChoice = Array.concat(comboChoice,comboChoiceCropped,comboChoiceCropNewSelection);
+			Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[4]);
+		}else Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
 		Dialog.show();
 		createCombo = Dialog.getChoice();
 	if (createCombo!="No") {
@@ -529,7 +528,7 @@ macro "Line Color Coder with Labels"{
 		if (indexOf(createCombo, "Cropped")>0) {
 			if (indexOf(createCombo, "New Selection")>0) {
 				if (is("Batch Mode")==true) setBatchMode(false); /* Toggle batch mode off for user interaction */
-				if (restrictLines!="No") makeRectangle(selEX, selEY, selEWidth, selEHeight);
+				if (selEType>=0) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 				setTool("rectangle");
 				msgtitle="Area selection";
 				msg = "Draw a box in the image to which you want the output image restricted";
@@ -707,9 +706,7 @@ macro "Line Color Coder with Labels"{
 		frameCount = 0;
 		lastFrameValue = arrayMax + 1; /* Just make sure this is not in the value set */
 		loopStart = getTime();
-		loopReporting = -1; /* -1 value triggers first measurement */
-		// progressUpdateIntervalCount = 0;
-		previousUpdate = 0;
+		previousUpdateTime = loopStart;
 		animLineWidth = maxOf(1,animScaleF*lineWidth);
 		setLineWidth(animLineWidth);
 		progressWindowTitleS = "Animation_Frame_Creation_Progress";
@@ -744,35 +741,26 @@ macro "Line Color Coder with Labels"{
 					}
 				}
 				else {
-					// if (linesPerFrameCounter==0 && values[j]!=lastFrameValue) {
-						// newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1); /* Trigger a new frame if the number of lines/frame has been reached and we have a new value */
-						// frameCount += 1;
-					// }
 					if (!isOpen("tempFrame")) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
 					selectWindow("tempFrame");
-					// run("Select None");
 					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
 					linesPerFrameCounter += 1;
 					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) { /* lineCounter is the number of lines in the full or restricted region and was determined earlier. This should trigger the last frame to be added */
 						if (values[j]!=lastFrameValue || i==(nRes-1)) {
 							addImageToStack("animStack","tempFrame");
-							if(i!=(nRes-1)) closeImageByTitle("tempFrame"); /* leave last frame for debugging purposes */
+							if(i<(nRes-1)) closeImageByTitle("tempFrame"); /* leave the last frame to add at the end */
 							linesPerFrameCounter = 0; /* Reset lines per frame counter so start new set of lines in a new frame */
 							lastFrameValue = values[j];
 						}
 					}
 					run("Select None");
 				}
-				if(loopReporting == -1) {
-					loopTime = getTime()-loopStart;
-					loopReporting = round(1000/loopTime);  /* set to update only ~ once per second */
-				}
-				timeLapse = previousUpdate - getTime();
+				timeSinceUpdate = getTime()- previousUpdateTime;
 				linesDrawn += 1;
-				if(timeLapse>loopReporting && linesDrawn>1) {
+				if(timeSinceUpdate>1000 && linesDrawn>1) {
+					/* The time/memory window and memory flushing was add for some older PC with had limited memory but it is relatively time consuming so it is only updated ~ 1 second */
 					timeTaken = getTime()-loopStart;
 					timePerLoop = timeTaken/(i+1);
-					loopReporting = round(1000/timePerLoop);
 					timeLeft = (nRes-(i+1)) * timePerLoop;
 					timeLeftM = floor(timeLeft/60000);
 					timeLeftS = (timeLeft-timeLeftM*60000)/1000;
@@ -796,9 +784,8 @@ macro "Line Color Coder with Labels"{
 					}						
 					if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
 					print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
-					previousUpdate = getTime();
+					previousUpdateTime = getTime();
 				}
-				// progressUpdateIntervalCount += 1; 
 			}
 		}
 		if (isOpen("frame1")) addImageToStack("animStack","frame1");
@@ -807,13 +794,16 @@ macro "Line Color Coder with Labels"{
 		closeImageByTitle("tempFrame");
 		eval("script","WindowManager.getWindow('"+progressWindowTitleS+"').close();");
 	}
+	run("Select None");
 	/* End Animation Loop */
 	
 	closeImageByTitle(workingT);
 	;
 	run("Collect Garbage");
 	/* display result		 */
+	if (isOpen(id)) selectImage(id);
 	restoreSettings;
+	if (restrictLines!="No" && selEType>=0) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 	if (switchIsOn== "true") {
 		hideResultsAs(tableUsed);
 		restoreResultsFrom(hiddenResults);
@@ -859,6 +849,11 @@ macro "Line Color Coder with Labels"{
 		if (stepExp>=2) dP = 0;
 		if (stepExp>=5) dP = -1; /* Scientific Notation */
 		return dP;
+	}
+	function autoCropGuessBackgroundSafe() {
+		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
+		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 	}
 	function checkForAnyResults() {
 	/* v180918 uses getResultsTableList function */
@@ -1042,10 +1037,17 @@ macro "Line Color Coder with Labels"{
 	}
 		/* ASC Color Functions */
 	function getColorArrayFromColorName(colorName) {
-		/* v180828 added Fluorescent Colors */
-		cA = newArray(255,255,255);
+		/* v180828 added Fluorescent Colors
+		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
+		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
+		else if (colorName == "off-white") cA = newArray(245,245,245);
+		else if (colorName == "off-black") cA = newArray(10,10,10);
+		else if (colorName == "light_gray") cA = newArray(200,200,200);
+		else if (colorName == "gray") cA = newArray(127,127,127);
+		else if (colorName == "dark_gray") cA = newArray(51,51,51);
+		else if (colorName == "off-black") cA = newArray(10,10,10);
 		else if (colorName == "light_gray") cA = newArray(200,200,200);
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
@@ -1092,6 +1094,7 @@ macro "Line Color Coder with Labels"{
 		else if (colorName == "Shocking Pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
 		else if (colorName == "Razzle Dazzle Rose") cA = newArray(238,52,210); 	/* #EE34D2 */
 		else if (colorName == "Hot Magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
+		else restoreExit("No color match to " + colorName);
 		return cA;
 	}
 	function setColorFromColorName(colorName) {

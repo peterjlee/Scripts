@@ -50,6 +50,7 @@
 	+ v180926 Added coded range option.
 	+ v180928 Fixed 2 lines of missing code.
 	+ v181003 Restored autocrop, updated functions.
+	+ v181018 Autocrop now a function.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -643,9 +644,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 		}
 		else { /* need to left align if labels are longer and increase distance from ramp */
-			if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
-			run("Auto Crop (guess background color)"); /* not reliable in batch mode */
-			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+			autoCropGuessBackgroundSafe();	/* toggles batch mode */
 			getDisplayedArea(null, null, canvasW, canvasH);
 			run("Rotate 90 Degrees Left");
 			canvasW = getHeight + round(2.5*fontSize);
@@ -657,9 +656,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 			run("Rotate 90 Degrees Right");
 		}
-		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
-		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
-		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on *
+		autoCropGuessBackgroundSafe();	/* toggles batch mode */
 		/* add padding to legend box - better than expanding crop selection as is adds padding to all sides */
 		getDisplayedArea(null, null, canvasW, canvasH);
 		canvasW += round(imageWidth/150);
@@ -728,8 +725,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.setInsets(0, 150, 6);
 			Dialog.addCheckbox("Add feature labels to each ROI?", true);
 			if (lut!="Grays")
-				colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
-			else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
+				colorChoice = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
+			else colorChoice = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
 			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
 			minROIFont = round(imageWidth/90);
@@ -1513,7 +1510,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage"); 
 	}
-	
+	function autoCropGuessBackgroundSafe() {
+		if (is("Batch Mode")==true) setBatchMode(false);	/* toggle batch mode off */
+		run("Auto Crop (guess background color)"); /* not reliable in batch mode */
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+	}	
  	function autoCalculateDecPlaces(dP,min,max,numberOfLabels){
 		/* v180316 4 input version */
 		step = (max-min)/numberOfLabels;
@@ -1528,8 +1529,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return dP;
 	}
 	function binaryCheck(windowTitle) { /* For black objects on a white background */
-		/* v180104 added line to remove inverting LUT and changed to auto default threshold 
-		v180602 Added dialog option to opt out of inverting image */
+		/* v180601 added choice to invert or not */
+		/* v180907 added choice to revert to the true LUT, changed border pixel check to array stats */
 		selectWindow(windowTitle);
 		if (is("binary")==0) run("8-bit");
 		/* Quick-n-dirty threshold if not previously thresholded */
@@ -1538,20 +1539,25 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			run("8-bit");
 			run("Auto Threshold", "method=Default");
 			run("Convert to Mask");
-			}
+		}
+		if (is("Inverting LUT")==true)  {
+			trueLUT = getBoolean("The LUT appears to be inverted, do you want the true LUT?", "Yes Please", "No Thanks");
+			if (trueLUT==true) run("Invert LUT");
+		}
 		/* Make sure black objects on white background for consistency */
-		if (((getPixel(0, 0))==0 || (getPixel(0, 1))==0 || (getPixel(1, 0))==0 || (getPixel(1, 1))==0)) {
+		cornerPixels = newArray(getPixel(0, 0), getPixel(0, 1), getPixel(1, 0), getPixel(1, 1));
+		Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
+		if (cornerMax!=cornerMin) restoreExit("Problem with image border: Different pixel intensities at corners");
+		/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
+			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
+		if (cornerMean==0) {
 			inversion = getBoolean("The background appears to have intensity zero, do you want the intensities inverted?", "Yes Please", "No Thanks");
 			if (inversion==true) run("Invert"); 
 		}
-		/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
-			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
-		if (((getPixel(0, 0))+(getPixel(0, 1))+(getPixel(1, 0))+(getPixel(1, 1))) != 4*(getPixel(0, 0)) ) 
-				restoreExit("Border Issue"); 	
-		if (is("Inverting LUT")==true) run("Invert LUT");
 	}
 	function checkForPlugin(pluginName) {
-		/* v161102 changed to true-false */
+		/* v161102 changed to true-false
+			v180831 some cleanup */
 		var pluginCheck = false, subFolderCount = 0;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -1566,10 +1572,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			for (i=0; i<lengthOf(pluginList); i++) {
 				if (endsWith(pluginList[i], "/")) {
 					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount = subFolderCount +1;
+					subFolderCount += 1;
 				}
 			}
-			subFolderList = Array.slice(subFolderList, 0, subFolderCount);
+			subFolderList = Array.trim(subFolderList, subFolderCount);
 			for (i=0; i<lengthOf(subFolderList); i++) {
 				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
 					pluginCheck = true;
@@ -1581,7 +1587,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		return pluginCheck;
 	}
 	function checkForPluginNameContains(pluginNamePart) {
-		/* v180831 1st version to check for partial names so avoid versioning problems */
+		/* v180831 1st version to check for partial names so avoid versioning problems
+			v181005 1st version that works correctly ? */
 		var pluginCheck = false, subFolderCount = 0;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -1598,20 +1605,19 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		/* If not in the root try the subfolders */
 		if (!pluginCheck) {
+			subFolderList = newArray(0);
 			for (i=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount += 1;
-				}
+				if (endsWith(pluginList[i], "/")) subFolderList = Array.concat(subFolderList, pluginList[i]);
 			}
-			subFolderList = Array.trim(subFolderList, subFolderCount);
-			for (j=0; i<lengthOf(subFolderList); i++) {
+			for (i=0; i<lengthOf(subFolderList); i++) {
 				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
-				for (i=0; j<lengthOf(subFolderPluginList); j++) {
-					if (indexOf(subFolderPluginList[j], pluginNamePart)>=0 && endsWith(subFolderPluginList[j], ".jar")) {
-						pluginCheck = true;
-						i=lengthOf(subFolderList);
-						j=lengthOf(subFolderPluginList);
+				for (j=0; j<lengthOf(subFolderPluginList); j++) {
+					if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class")) {
+						if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) {
+							pluginCheck = true;
+							i=lengthOf(subFolderList);
+							j=lengthOf(subFolderPluginList);
+						}
 					}
 				}
 			}
@@ -1681,8 +1687,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 	}
 	function cleanLabel(string) {
-		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters
-		v180317 */
+		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
+		v180611 added "degreeC" */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
@@ -1694,8 +1700,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
-		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
+		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
@@ -1838,10 +1845,17 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	 Macro Color Functions
  */
 	function getColorArrayFromColorName(colorName) {
-		/* v180828 added Fluorescent Colors */
-		cA = newArray(255,255,255);
+		/* v180828 added Fluorescent Colors
+		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
+		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
+		else if (colorName == "off-white") cA = newArray(245,245,245);
+		else if (colorName == "off-black") cA = newArray(10,10,10);
+		else if (colorName == "light_gray") cA = newArray(200,200,200);
+		else if (colorName == "gray") cA = newArray(127,127,127);
+		else if (colorName == "dark_gray") cA = newArray(51,51,51);
+		else if (colorName == "off-black") cA = newArray(10,10,10);
 		else if (colorName == "light_gray") cA = newArray(200,200,200);
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
@@ -1888,6 +1902,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		else if (colorName == "Shocking Pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
 		else if (colorName == "Razzle Dazzle Rose") cA = newArray(238,52,210); 	/* #EE34D2 */
 		else if (colorName == "Hot Magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
+		else restoreExit("No color match to " + colorName);
 		return cA;
 	}
 	function setColorFromColorName(colorName) {
@@ -1950,12 +1965,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	/*
 	End of Color Functions 
 	*/
-	function getFontChoiceList() {
-		/* v180723 first version */
+  	function getFontChoiceList() {
+		/*	v180723 first version
+			v180828 Changed order of favorites
+		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "SansSerif", "Arial Black", "Open Sans ExtraBold", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Helvetica");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Arial Black", "SansSerif", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Helvetica");
 		faveFontListCheck = newArray(faveFontList.length);
 		counter = 0;
 		for (i=0; i<faveFontList.length; i++) {

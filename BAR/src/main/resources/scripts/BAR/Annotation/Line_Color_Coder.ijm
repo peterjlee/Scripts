@@ -58,7 +58,7 @@ macro "Line Color Coder with Labels"{
 	checkForAnyResults();
 	nRes= nResults;
 	setBatchMode(true);
-	tN = stripKnownExtensionFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
+	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
 	tN = unCleanLabel(tN); /* remove special characters to might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */

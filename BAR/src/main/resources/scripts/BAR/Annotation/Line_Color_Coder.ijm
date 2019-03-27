@@ -18,6 +18,7 @@
 	+ v181002-3 Minor fixes.
 	+ v181004 Major overhaul of menus for better fit on smaller screen and to allow editing of labels. Also added option to change line drawing order.
 	+ v181016-7 Restricted memory flush use to greatly improve speed. Fixed missing last animation frame. Original selection restored.
+	+ v190327 Fixed accidental closure of output window when no combination chosen. Fixed variable ramp height. Fixed text location on ramp.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -125,7 +126,7 @@ macro "Line Color Coder with Labels"{
 		fromY = Dialog.getChoice;
 		toX = Dialog.getChoice;
 		toY = Dialog.getChoice;
-		if (lcf!=1 && Dialog.getCheckbox) ccf = lcf;
+		if ((lcf!=1) && Dialog.getCheckbox) ccf = lcf;
 		else ccf = 1;
 		parameterWithLabel= Dialog.getChoice;
 		parameter= substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
@@ -200,7 +201,7 @@ macro "Line Color Coder with Labels"{
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice= Dialog.getChoice;
-		rampChoice= parseFloat(Dialog.getChoice);
+		rampHChoice= parseInt(Dialog.getChoice);
 		fontStyle = Dialog.getChoice;
 			if (fontStyle=="unstyled") fontStyle="";
 		fontName= Dialog.getChoice;
@@ -216,8 +217,8 @@ macro "Line Color Coder with Labels"{
 		if (makeAnimStack) closeImageByTitle("animStack");
 		if (!overwriteImage) closeImageByTitle(tN+"_Lines");
 		
-		if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
-		else rampH = rampChoice;
+		if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
+		else rampH = rampHChoice;
 	
 		fontSR2 = fontSize * thinLinesFontSTweak/100;		
 		
@@ -264,7 +265,11 @@ macro "Line Color Coder with Labels"{
 	if (isNaN(maxCoded)) maxCoded = arrayMax;
 
 	/*	Create LUT-map legend	*/
-	rampW = round(rampH/8); canvasH = round(4 * fontSize + rampH); canvasW = round(rampH/2); tickL = round(rampW/4);
+	rampTBMargin = 2 * fontSize;
+	rampW = round(rampH/8);
+	canvasH = round(2 * rampTBMargin + rampH);
+	canvasW = round(rampH/2);
+	tickL = round(rampW/4);
 	if (statsRampLines || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
 	tickLR = round(tickL * statsRampTicks/100);
 	getLocationAndSize(imgx, imgy, imgwidth, imgheight);
@@ -284,12 +289,12 @@ macro "Line Color Coder with Labels"{
 		drawRect(0, 0, rampH, rampW);
 		/* The next steps add the top and bottom ticks */
 		rampWT = rampW + 2*rampLW;
-		run("Canvas Size...", "width="+ rampH +" height="+ rampWT +" position=Top-Center");
+		run("Canvas Size...", "width=&rampH height=&rampWT position=Top-Center");
 		drawLine(0, rampW-1, 0,  rampW-1 + 2*rampLW); /* left/bottom tick - remember coordinate range is one less then max dimension because coordinates start at zero */
 		drawLine(rampH-1, rampW-1, rampH-1, rampW + 2*rampLW - 1); /* right/top tick */
 	}
 	run("Rotate 90 Degrees Left");
-	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center-Left");
+	run("Canvas Size...", "width=&canvasW height=&canvasH position=Center-Left");
 	if (dpChoice=="Auto")
 		decPlaces = autoCalculateDecPlaces(min, max, numLabels);
 	else if (dpChoice=="Manual") 
@@ -300,34 +305,33 @@ macro "Line Color Coder with Labels"{
 	if (parameter=="Object") decPlaces = 0; /* This should be an integer */
 	/*
 	draw ticks and values */
-	rampOffset = (getHeight-rampH)/2; /* getHeight-rampH ~ 2 * fontSize */
 	step = rampH;
 	if (numLabels>2) step /= (numLabels-1);
 	setLineWidth(rampLW);
 	/* now to see if the selected range values are within 98% of actual */
-	if (0.98*min>arrayMin || max<0.98*arrayMax) minmaxOOR = true;
+	if (((0.995*min)>arrayMin) || (max<(0.995*arrayMax))) minmaxOOR = true;
 	else minmaxOOR = false;
-	if (min<0.98*arrayMin || 0.98*max>arrayMax) minmaxIOR = true;
+	if ((min<(0.995*arrayMin)) || ((0.995*max)>arrayMax)) minmaxIOR = true;
 	else minmaxIOR = false;
 	if (minmaxIOR && minmaxLines) minmaxLines = true;
 	else minmaxLines = false;
 	for (i=0; i<numLabels; i++) {
-		yPos = rampH + rampOffset - i*step -1; /* minus 1 corrects for coordinates starting at zero */
+		yPos = rampH + rampTBMargin - i*step -1; /* minus 1 corrects for coordinates starting at zero */
 		rampLabel = min + (max-min)/(numLabels-1) * i;
 		rampLabelString = removeTrailingZerosAndPeriod(d2s(rampLabel,decPlaces));
 		if (minmaxIOR) {
 			/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
-			if (i==0 && min>arrayMin) {
+			if ((i==0) && (min>arrayMin)) {
 				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
 				rampLabelString = rampExt + "-" + rampLabelString; 
-			}if (i==numLabels-1 && max<arrayMax) {
+			}if ((i==(numLabels-1)) && (max<arrayMax)) {
 				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
 				rampLabelString += "-" + rampExt; 
 			}
 		}
-		drawString(rampLabelString, rampW+4*rampLW, round(yPos+fontSize/2));
+		drawString(rampLabelString, rampW+4*rampLW, yPos+fontSize/1.5);
 		if (ticks) {
-			if (i > 0 && i < numLabels-1) {
+			if ((i>0) && (i<(numLabels-1))) {
 				setLineWidth(rampLW);
 				drawLine(0, yPos, tickL, yPos);					/* left tick */
 				drawLine(rampW-1-tickL, yPos, rampW, yPos);
@@ -337,11 +341,11 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	/* draw minor ticks */
-	if (ticks && minorTicks > 0) {
+	if (ticks && (minorTicks>0)) {
 		minorTickStep = step/minorTicks;
 		for (i=0; i<numLabels*minorTicks; i++) {
-			if (i > 0 && i < (((numLabels-1)*minorTicks))) {
-				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
+			if ((i>0) && (i<(((numLabels-1)*minorTicks)))) {
+				yPos = rampH + rampTBMargin - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 				setLineWidth(maxOf(1,round(rampLW/2)));
 				drawLine(0, yPos, tickL/3, yPos);					/* left minor tick */
 				drawLine(rampW-tickL/3-1, yPos, rampW-1, yPos);		/* right minor tick */
@@ -357,18 +361,20 @@ macro "Line Color Coder with Labels"{
 		if (minmaxLines) {
 			if (min==max) restoreExit("Something terribly wrong with this range!");
 			trueMaxFactor = (arrayMax-min)/(max-min);
-			maxPos= round(fontSize/2 + (rampH * (1 - trueMaxFactor)) +1.5*fontSize);
+			maxPos= rampTBMargin + (rampH * (1 - trueMaxFactor));
 			trueMinFactor = (arrayMin-min)/(max-min);
-			minPos= round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize);
+			minPos= rampTBMargin + (rampH * (1 - trueMinFactor));
 			if (trueMaxFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("Max", round((rampW-getStringWidth("Max"))/2), round(maxPos+0.5*fontSR2));
+				stringY = round(maxOf(maxPos+0.75*fontSR2,rampTBMargin+0.75*fontSR2));
+				drawString("Max", round((rampW-getStringWidth("Max"))/2), stringY);
 				drawLine(rampLW, maxPos, tickLR, maxPos);
 				drawLine(rampW-1-tickLR, maxPos, rampW-rampLW-1, maxPos);
 			}
 			if (trueMinFactor>0) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("Min", round((rampW-getStringWidth("Min"))/2), round(minPos+0.5*fontSR2));
+				stringY = round(minOf(minPos+0.75*fontSR2,rampTBMargin+rampH-0.25*fontSR2));
+				drawString("Min", (rampW-getStringWidth("Min"))/2, stringY);
 				drawLine(rampLW, minPos, tickLR, minPos);
 				drawLine(rampW-1-tickLR, minPos, rampW-rampLW-1, minPos);
 			}
@@ -377,22 +383,23 @@ macro "Line Color Coder with Labels"{
 			meanFactor = (arrayMean-min)/(max-min);
 			plusSDFactor =  (arrayMean+arraySD-min)/(max-min);
 			minusSDFactor =  (arrayMean-arraySD-min)/(max-min);
-			meanPos= round(fontSize/2 + (rampH * (1 - meanFactor)) +1.5*fontSize);
-			plusSDPos= round(fontSize/2 + (rampH * (1 - plusSDFactor)) +1.5*fontSize);
-			minusSDPos= round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize);
-			setFont(fontName, 0.9*fontSR2, fontStyle);
-			drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos+0.4*fontSR2));
+			meanPos = rampTBMargin + (rampH * (1 - meanFactor));
+			plusSDPos = rampTBMargin + (rampH * (1 - plusSDFactor));
+			minusSDPos = rampTBMargin + (rampH * (1 - minusSDFactor));
+			mFS = 0.9*fontSR2;
+			setFont(fontName, mFS, fontStyle);
+			drawString("Mean", (rampW-getStringWidth("Mean"))/2, meanPos+0.75*mFS);
 			drawLine(rampLW, meanPos, tickLR, meanPos);
 			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);	
 			if (plusSDFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("+SD", round((rampW-getStringWidth("+SD"))/2), round(plusSDPos+0.5*fontSR2));
+				drawString("+SD", (rampW-getStringWidth("+SD"))/2, round(plusSDPos+0.75*fontSR2));
 				drawLine(rampLW, plusSDPos, tickLR, plusSDPos);
 				drawLine(rampW-1-tickLR, plusSDPos, rampW-rampLW-1, plusSDPos);
 			}
 			if (minusSDFactor>0) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("-SD", round((rampW-getStringWidth("-SD"))/2), round(minusSDPos+0.5*fontSR2));
+				drawString("-SD", (rampW-getStringWidth("-SD"))/2, round(minusSDPos+0.75*fontSR2));
 				drawLine(rampLW, minusSDPos, tickLR, minusSDPos);
 				drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
 			}
@@ -405,7 +412,7 @@ macro "Line Color Coder with Labels"{
 		selectWindow(tR);
 		run("Select None");
 		getSelectionFromMask("label_mask");
-		if (rampOutlineStroke>0) run("Enlarge...", "enlarge=[rampOutlineStroke] pixel");
+		if (rampOutlineStroke>0) run("Enlarge...", "enlarge=&rampOutlineStroke pixel");
 		setBackgroundFromColorName("black"); /* functionoutlineColor]") */
 		run("Clear");
 		run("Select None");
@@ -422,7 +429,7 @@ macro "Line Color Coder with Labels"{
 	/*
 	parse symbols in unit and draw final label below ramp */
 	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
-	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
+	if ((rampW>getStringWidth(rampUnitLabel)) && (rampW>getStringWidth(rampParameterLabel)) && !rotLegend) { /* can center align if labels shorter than ramp width */
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 	}
@@ -435,7 +442,7 @@ macro "Line Color Coder with Labels"{
 		rampParameterLabel = expandLabel(rampParameterLabel);
 		rampParameterLabel = replace(rampParameterLabel, fromCharCode(0x2009), " "); /* expand again now we have the space */
 		rampParameterLabel = replace(rampParameterLabel, "px", "pixels"); /* expand "px" that was used to keep the Results columns narrower */
-		run("Canvas Size...", "width="+ canvasH +" height="+ canvasW+" position=Bottom-Center");
+		run("Canvas Size...", "width=&canvasH height=&canvasW position=Bottom-Center");
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((canvasH-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		run("Rotate 90 Degrees Right");
 	}
@@ -444,7 +451,7 @@ macro "Line Color Coder with Labels"{
 	/* add padding to legend box - better than expanding crop selection as is adds padding to all sides */
 	canvasW += round(imageWidth/150);
 	canvasH += round(imageHeight/150);
-	run("Canvas Size...", "width="+ canvasW +" height="+ canvasH +" position=Center");
+	run("Canvas Size...", "width=&canvasW height=&canvasH position=Center");
 	tR = getTitle;
 	/* End of Ramp Creation */
 	/* Beginning of Line Drawing */
@@ -459,7 +466,7 @@ macro "Line Color Coder with Labels"{
 		else {
 			copyImage(t,tN+"_Lines");
 			if (originalImageDepth==16 || originalImageDepth==32) run("8-bit"); /* No need for excessive bit depth here */
-			if (bitDepth()==8 && lut!="Grays") run("RGB Color"); /* converts image to RGB if not using grays only */
+			if ((bitDepth()==8) && (lut!="Grays")) run("RGB Color"); /* converts image to RGB if not using grays only */
 		}
 	} 
 	workingT=getTitle();
@@ -476,7 +483,7 @@ macro "Line Color Coder with Labels"{
 	for (d=0; d<nRes; d++) {
 		i = drawOrder[d];
 		showProgress(i, nRes);
-		if (!isNaN(values[i]) && values[i]>=minCoded && values[i]<=maxCoded) {
+		if (!isNaN(values[i]) && (values[i]>=minCoded) && (values[i]<=maxCoded)) {
 			if (values[i]<=min)
 				lutIndex= 0;
 			else if (values[i]>max)
@@ -491,7 +498,7 @@ macro "Line Color Coder with Labels"{
 			X2 = toXs[i]/ccf;
 			Y2 = toYs[i]/ccf;
 			makeFrames[i] = false;
-			if (X1<=imageWidth && X2<=imageWidth && Y1<=imageHeight && Y2 <imageHeight) { /* this allows you to crop image from top left if necessary */
+			if ((X1<=imageWidth) && (X2<=imageWidth) && (Y1<=imageHeight) && (Y2 <imageHeight)) { /* this allows you to crop image from top left if necessary */
 				selectWindow(workingT);
 				if 	(restrictLines=="No") {
 					drawLine(X1, Y1, X2, Y2);
@@ -499,7 +506,7 @@ macro "Line Color Coder with Labels"{
 					frameCount += 1;
 				}
 				else {
-					if (X1>=selEX && X1<=selEX2 && X2>=selEX && X2<=selEX2 && Y1>=selEY && Y1<=selEY2 && Y2>=selEY && Y2<=selEY2) {
+					if ((X1>=selEX) && (X1<=selEX2) && (X2>=selEX) && (X2<=selEX2) && (Y1>=selEY) && (Y1<=selEY2) && (Y2>=selEY) && (Y2<=selEY2)) {
 						drawLine(X1, Y1, X2, Y2);
 						makeFrames[i] = true;
 						frameCount += 1;
@@ -549,7 +556,7 @@ macro "Line Color Coder with Labels"{
 		if (indexOf(createCombo, "Scaled")<=0) rampScale =  1;
 		selectWindow(tR);
 		tRS = "scaled_ramp"; 
-		run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title="+tRS);
+		run("Scale...", "x=&rampScale y=&rampScale interpolation=Bicubic average create title=&tRS");
 		canvasH = getHeight(); /* update ramp height */
 		canvasW = getWidth(); /* update ramp width */
 		if (indexOf(createCombo, "Current")>0) {
@@ -559,11 +566,11 @@ macro "Line Color Coder with Labels"{
 		}
 		else comboW += canvasW;
 		selectWindow(comboImage);
-		run("Canvas Size...", "width="+comboW+" height="+comboH+" position=Top-Left");
+		run("Canvas Size...", "width=&comboW height=&comboH position=Top-Left");
 		makeRectangle(comboW-canvasW, round((comboH-canvasH)/2), canvasW, canvasH);
-		run("Image to Selection...", "image="+tRS+" opacity=100");
+		run("Image to Selection...", "image=&tRS opacity=100");
 		run("Flatten");
-		if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+		if ((originalImageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 		rename(workingT + "+ramp");
 		closeImageByTitle(tRS);
 		closeImageByTitle("temp_combo");
@@ -604,7 +611,7 @@ macro "Line Color Coder with Labels"{
 				OKZoom = 75*screenH/tFHeight;
 				run("Set... ", "zoom="+OKZoom/10+" x=0 y=0"); /* Use zoom to hide image */
 				selectWindow(t);
-				if (restrictLines!="No" && selEType>=0) makeRectangle(selEX, selEY, selEWidth, selEHeight);
+				if ((restrictLines!="No") && (selEType>=0)) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 				msgtitle="Select area to crop for animation frames";
 				if (restrictLines!="No") msg = "Previous restricted lines box shown";
 				else msg = "Select an area in image window " + t + " for the animation frames";
@@ -612,7 +619,7 @@ macro "Line Color Coder with Labels"{
 				getSelectionBounds(cX1, cY1, cW, cH);
 				run("Select None");
 				selectWindow("tempFrame1");
-				run("Set... ", "zoom="+OKZoom+" x="+tFWidth/2+" y="+tFHeight/2); /* Use zoom to hide image */
+				run("Set... ", "zoom=&OKZoom x="+tFWidth/2+" y="+tFHeight/2); /* Use zoom to hide image */
 			}
 		}
 		animScaleF = 1; /* Default to no scaling */
@@ -635,7 +642,7 @@ macro "Line Color Coder with Labels"{
 				run("Crop");
 				run("Select None");
 			}
-			if(animResize) run("Scale...", "x="+animScaleF+" y="+animScaleF+" interpolation=Bicubic average create title=frame1");
+			if(animResize) run("Scale...", "x=&animScaleF y=&animScaleF interpolation=Bicubic average create title=frame1");
 			else run("Duplicate...", "title=frame1");
 		}
 		else copyImage("tempFrame1", "frame1");
@@ -648,7 +655,7 @@ macro "Line Color Coder with Labels"{
 			selectWindow(tR);
 			canvasH = getHeight(); /* update ramp height */
 			rampScale = animFrameHeight/canvasH;
-			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title="+tRA);
+			run("Scale...", "x=&rampScale y=&rampScale interpolation=Bicubic average create title=&tRA");
 			selectWindow(tRA);
 			sarW = getWidth;
 			sarH = getHeight;
@@ -656,11 +663,11 @@ macro "Line Color Coder with Labels"{
 			selectWindow("frame1");
 			copyImage("frame1","temp_combo");
 			selectWindow("temp_combo");
-			run("Canvas Size...", "width="+animComboW+" height="+animFrameHeight+" position=Top-Left");
+			run("Canvas Size...", "width=&animComboW height=&animFrameHeight position=Top-Left");
 			makeRectangle(animFrameNoRampWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
 			run("Image to Selection...", "image=Scaled_Anim_Ramp opacity=100");
 			run("Flatten");
-			if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+			if ((originalImageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 			rename("frame1_combo");
 			closeImageByTitle(tRA);
 			closeImageByTitle("temp_combo");
@@ -691,7 +698,7 @@ macro "Line Color Coder with Labels"{
 			Y2 = animScaleF * ((toYs[j]/ccf)-cY1);
 			if (reuseLines) reuseLine = makeFrames[j];
 			else reuseLine = true;
-			if (X1>=0 && Y1 >=0 && X2 <= animFrameNoRampWidth && Y2 <= animFrameHeight && reuseLine){
+			if ((X1>=0) && (Y1>=0) && (X2<=animFrameNoRampWidth) && (Y2<=animFrameHeight) && reuseLine){
 				animMakeFrame[j] = true;
 				lineCounter += 1;
 			}
@@ -711,13 +718,13 @@ macro "Line Color Coder with Labels"{
 		setLineWidth(animLineWidth);
 		progressWindowTitleS = "Animation_Frame_Creation_Progress";
 		progressWindowTitle = "[" + progressWindowTitleS + "]";
-		run("Text Window...", "name="+ progressWindowTitle +" width=25 height=2 monospaced");
+		run("Text Window...", "name=&progressWindowTitleS width=25 height=2 monospaced");
 		eval("script","f = WindowManager.getWindow('"+progressWindowTitleS+"'); f.setLocation(50,20); f.setSize(550,150);"); 
 		nextMemoryFlushPC = 50; /* 1st memory flush at 50% mem */
 		for (i=0; i<nRes; i++) {
 			if (valueSort!="No") j = valueRank[i];
 			else j = i;
-			if(animMakeFrame[j] && values[j]>0 && values[j]>=minCoded && values[j]<=maxCoded){
+			if(animMakeFrame[j] && (values[j]>0) && (values[j]>=minCoded) && (values[j]<=maxCoded)){
 				if (values[j]<=min)
 					lutIndex= 0;
 				else if (values[j]>max)
@@ -757,7 +764,7 @@ macro "Line Color Coder with Labels"{
 				}
 				timeSinceUpdate = getTime()- previousUpdateTime;
 				linesDrawn += 1;
-				if(timeSinceUpdate>1000 && linesDrawn>1) {
+				if((timeSinceUpdate>1000) && (linesDrawn>1)) {
 					/* The time/memory window and memory flushing was add for some older PC with had limited memory but it is relatively time consuming so it is only updated ~ 1 second */
 					timeTaken = getTime()-loopStart;
 					timePerLoop = timeTaken/(i+1);
@@ -796,14 +803,13 @@ macro "Line Color Coder with Labels"{
 	}
 	run("Select None");
 	/* End Animation Loop */
-	
-	closeImageByTitle(workingT);
+	if (createCombo!="No")closeImageByTitle(workingT);
 	;
 	run("Collect Garbage");
 	/* display result		 */
 	if (isOpen(id)) selectImage(id);
 	restoreSettings;
-	if (restrictLines!="No" && selEType>=0) makeRectangle(selEX, selEY, selEWidth, selEHeight);
+	if ((restrictLines!="No") && (selEType>=0)) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 	if (switchIsOn== "true") {
 		hideResultsAs(tableUsed);
 		restoreResultsFrom(hiddenResults);
@@ -817,7 +823,7 @@ macro "Line Color Coder with Labels"{
 	showStatus("Line Drawing Macro Finished");
 }	
 	function getBar(p1, p2) {
-		/* from https://imagej.nih.gov/ij/macros/ProgressBar.txt */
+		/* from https://wsr.imagej.net//macros/ProgressBar.txt */
         n = 20;
         bar1 = "--------------------";
         bar2 = "********************";
@@ -857,7 +863,7 @@ macro "Line Color Coder with Labels"{
 	}
 	function checkForAnyResults() {
 	/* v180918 uses getResultsTableList function */
-		if (nResults==0 && (getValue("results.count"))==0){
+		if ((nResults==0) && ((getValue("results.count"))==0)){
 			tableList = getResultsTableList();
 			if (lengthOf(tableList)==0) {
 				Dialog.create("No Results to Work With");
@@ -1153,7 +1159,7 @@ macro "Line Color Coder with Labels"{
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Arial Black", "SansSerif", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Helvetica");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Fira Sans Ultra", "Fira Sans Condensed Ultra", "Arial Black", "Myriad Pro Black", "Montserrat Black", "Olympia-Extra Bold", "SansSerif", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Times", "Helvetica");
 		faveFontListCheck = newArray(faveFontList.length);
 		counter = 0;
 		for (i=0; i<faveFontList.length; i++) {

@@ -30,7 +30,7 @@
 
 [RCC page]: http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 
-______________This entire fork merely adds 5 extended versions of the color coding script!
+______________This entire fork merely adds 7 extended versions of the color coding script!
 
 ###[BAR_ROI_Color_Coder53+autoprefs](./BAR_ROI_Color_Coder53+autoprefs_ASC.ijm)
   Additional features include:
@@ -73,26 +73,35 @@ A summary list can be added in the corners, center or a selected location listin
 
 
 ![Color Coder example for autoprefs with summary table version using asc-silver LUT](../../../../../../../images/BAR_ROI_Color_Coder53+autoprefs+Summary_512x156_pal256.png)
-      
+
+     
 ###[BAR_ROI_Color_Coder_with_ROIManagerLabels](./BAR_ROI_Color_Coder_with_ROIManagerLabels_ASC.ijm)
-        Additional features over the autoprefs macro listed above:
+
+        Additional features over the autoprefs macro listed above:
+
         Each ROI is renamed with the chosen feature value and these are used as labels.
+
    ![Color Coder example for ROI-manager selected parameter labels version using Viridus Linear Luminosity LUT](../../../../../../../images/BAR_ROI_Coder_withROIManagerLabels_example_CSA+ramp_VirLinLum_574x192.gif)
         
 ###[BAR_ROI_Color_Coder_with_ScaledLabels](./BAR_ROI_Color_Coder_with_ScaledLabels_ASC.ijm)
-      Additional features over the autoprefs macro listed above:
-      Each ROI is labeled with the chosen feature value using extensive formatting options. If <a href="http://www.mecourse.com/landinig/software/software.html">Gabriel Landini's &quot;Morphology&quot; plugin</a> is installed it will allow you to center the labels at the morphological centers of the objects (better than centroids for complex shapes because these points are always inside the original objects).
 
+      Additional features over the autoprefs macro listed above:
+
+      Each ROI is labeled with the chosen feature value using extensive formatting options. If <a href="http://www.mecourse.com/landinig/software/software.html">Gabriel Landini's &quot;Morphology&quot; plugin</a> is installed it will allow you to center the labels at the morphological centers of the objects (better than centroids for complex shapes because these points are always inside the original objects).
 
 
 ![Color Coder example for scaled labels version using asc-silver LUT](../../../../../../../images/ScaledLabelExample_AR_580x186anim.gif)
 
 
 ###[BAR_ROI_Color_Coder+ScaledLabels+Summary](./BAR_ROI_Color_Coder+ScaledLabels+Summary_ASC.ijm)
+
       As above but now also has the Summary table option.
+
 [Color Coder example for scaled labels and summary version using asc-silver LUT](../../../../../../../images/BAR_ROI_Coder_withScaledLabels_exampleandSummary_anim575x186.gif)
 
 
+
+Links to Original BAR folders:
 
 
 | [Home] | [Analysis] | [Data Analysis] | [Annotation] | [Segmentation] | [Tools] | [Plugins][Java Classes] | [lib] | [Snippets] | [IJ] |

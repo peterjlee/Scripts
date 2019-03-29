@@ -57,13 +57,12 @@ macro "Line Color Coder with Labels"{
 	getPixelSize(unit, pixelWidth, pixelHeight);
 	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor */
 	checkForAnyResults();
-	nRes= nResults;
+	nRes = nResults;
 	setBatchMode(true);
-	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
-	tN = unCleanLabel(tN); /* remove special characters to might cause issues saving file */
+	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
-	fontSize = rampH/28; /* default fonts size based on imageHeight */
+	fontSize = maxOf(8,rampH/28); /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
 	defaultLineWidth = round((imageWidth+imageHeight)/1000);
@@ -200,16 +199,16 @@ macro "Line Color Coder with Labels"{
 		rangeCoded = Dialog.getString; /* Range to be coded */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
-		dpChoice= Dialog.getChoice;
-		rampHChoice= parseInt(Dialog.getChoice);
+		dpChoice = Dialog.getChoice;
+		rampHChoice = parseInt(Dialog.getChoice);
 		fontStyle = Dialog.getChoice;
 			if (fontStyle=="unstyled") fontStyle="";
-		fontName= Dialog.getChoice;
+		fontName = Dialog.getChoice;
 		fontSize = Dialog.getNumber;
-		ticks= Dialog.getCheckbox;
-		rotLegend= Dialog.getCheckbox;
+		ticks = Dialog.getCheckbox;
+		rotLegend = Dialog.getCheckbox;
 		minmaxLines = Dialog.getCheckbox;
-		statsRampLines= Dialog.getCheckbox;
+		statsRampLines = Dialog.getCheckbox;
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
 		
@@ -308,7 +307,7 @@ macro "Line Color Coder with Labels"{
 	step = rampH;
 	if (numLabels>2) step /= (numLabels-1);
 	setLineWidth(rampLW);
-	/* now to see if the selected range values are within 98% of actual */
+	/* now to see if the selected range values are within 99.5% of actual */
 	if (((0.995*min)>arrayMin) || (max<(0.995*arrayMax))) minmaxOOR = true;
 	else minmaxOOR = false;
 	if ((min<(0.995*arrayMin)) || ((0.995*max)>arrayMax)) minmaxIOR = true;
@@ -361,9 +360,9 @@ macro "Line Color Coder with Labels"{
 		if (minmaxLines) {
 			if (min==max) restoreExit("Something terribly wrong with this range!");
 			trueMaxFactor = (arrayMax-min)/(max-min);
-			maxPos= rampTBMargin + (rampH * (1 - trueMaxFactor));
+			maxPos = rampTBMargin + (rampH * (1 - trueMaxFactor));
 			trueMinFactor = (arrayMin-min)/(max-min);
-			minPos= rampTBMargin + (rampH * (1 - trueMinFactor));
+			minPos = rampTBMargin + (rampH * (1 - trueMinFactor));
 			if (trueMaxFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
 				stringY = round(maxOf(maxPos+0.75*fontSR2,rampTBMargin+0.75*fontSR2));
@@ -386,9 +385,9 @@ macro "Line Color Coder with Labels"{
 			meanPos = rampTBMargin + (rampH * (1 - meanFactor));
 			plusSDPos = rampTBMargin + (rampH * (1 - plusSDFactor));
 			minusSDPos = rampTBMargin + (rampH * (1 - minusSDFactor));
-			mFS = 0.9*fontSR2;
-			setFont(fontName, mFS, fontStyle);
-			drawString("Mean", (rampW-getStringWidth("Mean"))/2, meanPos+0.75*mFS);
+			meanFS = 0.9*fontSR2;
+			setFont(fontName, meanFS, fontStyle);
+			drawString("Mean", (rampW-getStringWidth("Mean"))/2, meanPos+0.75*meanFS);
 			drawLine(rampLW, meanPos, tickLR, meanPos);
 			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);	
 			if (plusSDFactor<1) {
@@ -469,7 +468,7 @@ macro "Line Color Coder with Labels"{
 			if ((bitDepth()==8) && (lut!="Grays")) run("RGB Color"); /* converts image to RGB if not using grays only */
 		}
 	} 
-	workingT=getTitle();
+	workingT = getTitle();
 	selectWindow(workingT);
 	run("Select None");
 	linesPerFrameCounter = 0;
@@ -818,6 +817,7 @@ macro "Line Color Coder with Labels"{
 		hideResultsAs(tableUsed);
 	}
 	setBatchMode("exit & display");
+	showStatus("Line Color Coder completed.");																			 
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage");
 	showStatus("Line Drawing Macro Finished");
@@ -971,8 +971,8 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	function cleanLabel(string) {
-		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters
-		v180317 */
+		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
+		v180611 added "degreeC" */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
@@ -984,12 +984,12 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
-		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
+		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
-	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
 		/* v181002 reselects original image at end if open */
 		oIID = getImageID();
@@ -1283,7 +1283,7 @@ macro "Line Color Coder with Labels"{
 		else stringLabel = string;
 		return stringLabel;
 	}
-	function unCleanLabel(string) { 
+	function unCleanLabel(string) {
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
 	/* mod 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */

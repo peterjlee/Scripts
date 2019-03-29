@@ -46,6 +46,8 @@ ______________This entire fork merely adds 4 extended versions of the color codi
 
 5. Parameter and unit labels added to the top an bottom of ramp respectively.
 
+![Main Appearance Menu for ASC Autoprefs version](../../../../../../../images/BAR_ROI_Coder_ASC_Auto_Menu2-Labeled_032919_Smaller_anigif.gif)
+
 6. Overrun labels are added to the ramp if the true range exceeds the range chosen for the ramp (see example below). This is useful when there are just a few outliers that would otherwise reduce the contrast variation for the majority of the features.
 
 7. Any previous ramp is closed before creation of a new ramp.

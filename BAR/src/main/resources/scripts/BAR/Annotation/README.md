@@ -34,19 +34,33 @@ ______________This entire fork merely adds 5 extended versions of the color codi
 
 ###[BAR_ROI_Color_Coder53+autoprefs](./BAR_ROI_Color_Coder53+autoprefs_ASC.ijm)
   Additional features include:
-   1. The measured range of values is shown for all measurements in the Measurement selector (this makes it easier to manually select a range for the color ramp).
-   2. The selected LUT (color lookup table) can be reversed.
-   3. An automatic suggested value for the decimal places can be selected (based on the magnitude and range of the values).
-   4. A ramp height is suggested base on the image height.
-   5. Parameter and unit labels added to the top an bottom of ramp respectively.
-   6. Overrun labels are added to the ramp if the true range exceeds the range chosen for the ramp (see example below). This is useful when there are just a few outliers that would otherwise reduce the contrast variation for the majority of the features.
-   7. Any previous ramp is closed before creation of a new ramp.      
-   8. Provides an option at the end to create a new merged image combining labeled image and legend (the legend/ramp height is scaled to match the height of the image).   
+
+  1. The measured range of values is shown for all measurements in the Measurement selector (this makes it easier to manually select a range for the color ramp).
+
+2. The selected LUT (color lookup table) can be reversed.
+
+3. An automatic suggested value for the decimal places can be selected (based on the magnitude and range of the values).
+
+4. A ramp height is suggested base on the image height.
+
+5. Parameter and unit labels added to the top an bottom of ramp respectively.
+
+6. Overrun labels are added to the ramp if the true range exceeds the range chosen for the ramp (see example below). This is useful when there are just a few outliers that would otherwise reduce the contrast variation for the majority of the features.
+
+7. Any previous ramp is closed before creation of a new ramp.
+
+8. Provides an option at the end to create a new merged image combining labeled image and legend (the legend/ramp height is scaled to match the height of the image).
+
 
 ###[BAR_ROI_Color_Coder+autoprefs_ASC](./BAR_ROI_Color_Coder+autoprefs_ASC.ijm)
-  Additional features include:
-   1. Select any system font (and have favorites list).
-   2. LUTs list has preferred LUTs at top (edit getLutsList function).
+
+Additional features include:
+
+1. Select any system font (and have favorites list).
+
+2. LUTs list has preferred LUTs at top (edit getLutsList function).
+
+
 
 ![Color Coder example for autoprefs version using asc-silver LUT](../../../../../../../images/BAR_ROI_Color_Coder53+autoprefs_example_609x256_pal256.png)
 
@@ -54,7 +68,7 @@ ______________This entire fork merely adds 5 extended versions of the color codi
 
 Additional feature over those listed above:
       
-A label can be added in the corners, center or a selected location listing up to 6 lines of statistics.
+A summary list can be added in the corners, center or a selected location listing up to 6 lines of statistics.
 
 
 

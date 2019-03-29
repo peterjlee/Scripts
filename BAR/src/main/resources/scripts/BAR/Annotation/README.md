@@ -31,6 +31,7 @@
 [RCC page]: http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 
 ______________This entire fork merely adds 5 extended versions of the color coding script!
+
 ###[BAR_ROI_Color_Coder53+autoprefs](./BAR_ROI_Color_Coder53+autoprefs_ASC.ijm)
   Additional features include:
    1. The measured range of values is shown for all measurements in the Measurement selector (this makes it easier to manually select a range for the color ramp).
@@ -42,7 +43,10 @@ ______________This entire fork merely adds 5 extended versions of the color codi
    7. Any previous ramp is closed before creation of a new ramp.      
    8. Provides an option at the end to create a new merged image combining labeled image and legend (the legend/ramp height is scaled to match the height of the image).   
 
-
+###[BAR_ROI_Color_Coder+autoprefs_ASC](./BAR_ROI_Color_Coder+autoprefs_ASC.ijm)
+  Additional features include:
+   1. Select any system font (and have favorites list).
+   2. LUTs list has preferred LUTs at top (edit getLutsList function).
 
 ![Color Coder example for autoprefs version using asc-silver LUT](../../../../../../../images/BAR_ROI_Color_Coder53+autoprefs_example_609x256_pal256.png)
 

@@ -16,7 +16,8 @@
 	 + v180104 Updated functions to latest versions.
 	 + v180228 Fixed missing ramp labels.
 	 + v180316 Fixed min-max label issue, reordered 1st menu
-	+ v180831 Added check for Fiji_Plugins.	 
+	+ v180831 Added check for Fiji_Plugins.
+	+ v190329 Added expanded font choice (edit getFontChoiceList function to put favorites first in list). Updated functions.
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
@@ -110,7 +111,7 @@
 	Dialog.addMessage(rampH + " pxls suggested\nby image height");
 	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
 	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
-	fontNameChoice = newArray("SansSerif", "Serif", "Monospaced");
+	fontNameChoice = getFontChoiceList();
 	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
 	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
 	Dialog.setInsets(-25, 205, 0);
@@ -496,6 +497,7 @@
 			( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
 */
 	function autoCalculateDecPlaces(dP){
+		/* requires min,max,numLabels variables */
 		step = (max-min)/numLabels;
 		stepSci = d2s(step, -1);
 		iExp = indexOf(stepSci, "E");
@@ -508,7 +510,8 @@
 		return dP;
 	}
 	function checkForPluginNameContains(pluginNamePart) {
-		/* v180831 1st version to check for partial names so avoid versioning problems */
+		/* v180831 1st version to check for partial names so avoid versioning problems
+			v181005 1st version that works correctly ? */
 		var pluginCheck = false, subFolderCount = 0;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -525,20 +528,19 @@
 		}
 		/* If not in the root try the subfolders */
 		if (!pluginCheck) {
+			subFolderList = newArray(0);
 			for (i=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount += 1;
-				}
+				if (endsWith(pluginList[i], "/")) subFolderList = Array.concat(subFolderList, pluginList[i]);
 			}
-			subFolderList = Array.trim(subFolderList, subFolderCount);
-			for (j=0; i<lengthOf(subFolderList); i++) {
+			for (i=0; i<lengthOf(subFolderList); i++) {
 				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
-				for (i=0; j<lengthOf(subFolderPluginList); j++) {
-					if (indexOf(subFolderPluginList[j], pluginNamePart)>=0 && endsWith(subFolderPluginList[j], ".jar")) {
-						pluginCheck = true;
-						i=lengthOf(subFolderList);
-						j=lengthOf(subFolderPluginList);
+				for (j=0; j<lengthOf(subFolderPluginList); j++) {
+					if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class")) {
+						if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) {
+							pluginCheck = true;
+							i=lengthOf(subFolderList);
+							j=lengthOf(subFolderPluginList);
+						}
 					}
 				}
 			}
@@ -625,10 +627,13 @@
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
+		/* v181002 reselects original image at end if open */
+		oIID = getImageID();
         if (isOpen(windowTitle)) {
-		selectWindow(windowTitle);
-        close();
+			selectWindow(windowTitle);
+			close();
 		}
+		if (isOpen(oIID)) selectImage(oIID);
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
@@ -646,6 +651,29 @@
 		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
 		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
+	}
+	function getFontChoiceList() {
+		/*	v180723 first version
+			v180828 Changed order of favorites
+		*/
+		systemFonts = getFontList();
+		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
+		fontNameChoice = Array.concat(IJFonts,systemFonts);
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Fira Sans Ultra", "Fira Sans Condensed Ultra", "Arial Black", "Myriad Pro Black", "Montserrat Black", "Olympia-Extra Bold", "SansSerif", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Times", "Helvetica");
+		faveFontListCheck = newArray(faveFontList.length);
+		counter = 0;
+		for (i=0; i<faveFontList.length; i++) {
+			for (j=0; j<fontNameChoice.length; j++) {
+				if (faveFontList[i] == fontNameChoice[j]) {
+					faveFontListCheck[counter] = faveFontList[i];
+					counter +=1;
+					j = fontNameChoice.length;
+				}
+			}
+		}
+		faveFontListCheck = Array.trim(faveFontListCheck, counter);
+		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
+		return fontNameChoice;
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs */
@@ -714,13 +742,15 @@
 		exit(message);
 	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
+	/* v180104 */
 	    run("Blobs (25K)");
-		setThreshold(126, 255);
-		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitray scale to demonstrate unit usage. */
+		run("Auto Threshold", "method=Default");
 		run("Convert to Mask");
-		run("Analyze Particles...", "display clear add");
+		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
+		run("Analyze Particles...", "display exclude clear add");
 		resetThreshold();
-	}
+		if (is("Inverting LUT")==true) run("Invert LUT");
+	} 
 	function stripExtensionsFromString(string) {
 		while (lastIndexOf(string, ".")!=-1) {
 			index = lastIndexOf(string, ".");
@@ -760,6 +790,7 @@
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
+	/* v180404 added Feret_MinDAngle_Offset */
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
@@ -776,9 +807,9 @@
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
 			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
 			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90") unitLabel = fromCharCode(0x00B0);
+			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90" || string=="Feret_MinDAngle_Offset" || string=="MinDistAngle") unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 		}
-	return unitLabel;
+		return unitLabel;
 	}

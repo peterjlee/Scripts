@@ -95,7 +95,12 @@ A summary list can be added in the corners, center or a selected location listin
 
       As above but now also has the Summary table option.
 
-[Color Coder example for scaled labels and summary version using asc-silver LUT](../../../../../../../images/BAR_ROI_Coder_withScaledLabels_exampleandSummary_anim575x186.gif)
+[Color Coder example for scaled labels and summary version using asc-silver LUT with ramp frequency plot and ln stats](../../../../../../../images/BAR_ROI_Coder_withScaledLabels_example_LnHistSummary_crop575x186.gif)
+
+
+###[Line Color Twist](./Line_Color_Coder.ijm)
+
+      Inspired by the BAR ROI Color Coder this macro color codes lines according to any Results table parameter.
 
 
 

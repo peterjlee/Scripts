@@ -102,7 +102,7 @@ A summary list can be added in the corners, center or a selected location listin
 
       Inspired by the BAR ROI Color Coder this macro color codes lines according to any Results table parameter.
 
-<p><img src="https://fs.magnet.fsu.edu/~lee/asc/ImageJUtilities/IA_Images/LineCoderExample_ViridsLin_1280x218_pal256.png" alt="Line Coder example using Viridis Linear Luminosity LUT" width="95%" /></p>
+![Line Color Coder example using Viridis LUT](../../../../../../../images/LineCoderExample_ViridsLin_1280x218_pal256.png")
 
 Links to Original BAR folders:
 

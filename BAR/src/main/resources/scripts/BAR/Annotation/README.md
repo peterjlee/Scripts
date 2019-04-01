@@ -98,11 +98,11 @@ A summary list can be added in the corners, center or a selected location listin
 [Color Coder example for scaled labels and summary version using asc-silver LUT with ramp frequency plot and ln stats](../../../../../../../images/BAR_ROI_Coder_withScaledLabels_example_LnHistSummary_crop575x186.gif)
 
 
-###[Line Color Twist](./Line_Color_Coder.ijm)
+###[LineColorCoder](./Line_Color_Coder.ijm)
 
       Inspired by the BAR ROI Color Coder this macro color codes lines according to any Results table parameter.
 
-
+<p><img src="https://fs.magnet.fsu.edu/~lee/asc/ImageJUtilities/IA_Images/LineCoderExample_ViridsLin_1280x218_pal256.png" alt="Line Coder example using Viridis Linear Luminosity LUT" width="95%" /></p>
 
 Links to Original BAR folders:
 

@@ -1,6 +1,6 @@
 /*	Fork of ROI_Color_Coder.ijm IJ BAR: https://github.com/tferr/Scripts#scripts
 	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
-	Colorizes ROIs by matching LUT indexes to measurements in the antiAliasedResults table.
+	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	+ Peter J. Lee mods 6/16/16-6/30/2016 to automate defaults and add labels to ROIs
 	+ add scaled labels 7/7/2016 
@@ -51,6 +51,7 @@
 	+ v180928 Fixed 2 lines of missing code.
 	+ v181003 Restored autocrop, updated functions.
 	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
+	+ v190509-10 Minor cleanup
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -64,7 +65,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
         + "Run demo? (Results Table and ROI Manager will be cleared)");
 	    runDemo();
 	}
-	/* Check to see if there is a location already set for the summary */
+	/* Check to see if there is a rectangular location already set for the summary */
 	if (selectionType()==0) {
 		getSelectionBounds(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 		selectionExists = true;
@@ -916,7 +917,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				textDrop = maxOf(0, textDrop);
 				textDrop = minOf(imageHeight,textDrop);
 				/* draw object label */
-				setColorFromColorName("white");
+				setColor(255,255,255);
 				drawString(labelString, textOffset, textDrop);
 				fontArray[i] = lFontS;
 			}
@@ -1264,7 +1265,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			if ((endX+offsetX)>imageWidth) posStartX = imageWidth - longestStringWidth - offsetX;
 			paraLabelX = posStartX;
 			paraLabelY = posStartY;
-			setColorFromColorName("white");
+			setColor(255,255,255);
 		}
 		/* Draw summary over top of object labels */
 		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */

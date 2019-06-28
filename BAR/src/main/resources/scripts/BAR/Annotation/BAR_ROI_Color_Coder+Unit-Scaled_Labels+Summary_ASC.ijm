@@ -1,57 +1,9 @@
 /*	Fork of ROI_Color_Coder.ijm IJ BAR: https://github.com/tferr/Scripts#scripts
-	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
+	https://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on Tiago Ferreira, v.5.4 2017.03.10
-	+ Peter J. Lee mods 6/16/16-6/30/2016 to automate defaults and add labels to ROIs
-	+ add scaled labels 7/7/2016 
-	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
- 	+ min and max lines for ramp
-	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
-	+ added the ability to add lines on ramp for statistics
- 	+ min and max lines for ramp
-	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
-	+ added the ability to add lines on ramp for statistics
-	This version adds a summary table anywhere you want it but the dialog box may be too long for some monitors: 8/9/2016
-	Adjusted to allow Grays-only if selected and default to white background.
-	Added the ability to added user-text to summary and data preview in summary dialog.
-	+ adds choice for number of lines of statistics (not really needed)
-	+ v161117 adds more decimal place control
-	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
-	+ v171024 Added an option to just label the objects without color coding
-	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
-	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
-	+ v180104 Updated functions to latest versions.
-	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
-	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
-	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
-	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
-	+ v180302 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.
-	+ v180315 Reordered 1st menu.
-	+ v180316 added option of adding colored outline around outliers.
-	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
-	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
-	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
-	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
-	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
-	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
-	+ v180326 Restored missing frequency distribution column.
-	+ v180329 Changed line width for frequency plot to work better for very large images.
-	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
-	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
-	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
-	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
-	+ v180717 More fixes for small distributions that do not produce an interquartile range.
-	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
-	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
-	+ v180722 Allows any system font to be used. Fixed selected positions.
-	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
-	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
-	+ v180831 Added check for Fiji_Plugins and corrected missing "pixel" argument in final margin enlargement.
-	+ v180926 Added coded range option.
-	+ v180928 Fixed 2 lines of missing code.
-	+ v181003 Restored autocrop, updated functions.
-	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
-	+ v190509-10 Minor cleanup
+	Peter J. Lee Applied Superconductivity Center, NHMFL  v190628
+	Full history at the bottom of the file.
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -77,8 +29,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* Do not use Inverting LUT */
-	if (is("Inverting LUT")==true) run("Invert LUT"); /* more effectively removes Inverting LUT */
+	run("Appearance...", " "); if(is("Inverting LUT")) run("Invert LUT"); /* do not use Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
@@ -88,11 +39,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
-	nRES = nResults;
+	nRes = nResults;
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
 	numLabels = 10; /* default number of ramp labels */
-	if (nRES!=nROIs) restoreExit("Exit: Results table \(" + nRES + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
+	if (nRes!=nROIs) restoreExit("Exit: Results table \(" + nRes + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	setBatchMode(true);
@@ -1622,11 +1573,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	}
 	function checkForResults() {
 		nROIs = roiManager("count");
-		nRES = nResults;
-		if (nRES==0)	{
+		nRes = nResults;
+		if (nRes==0)	{
 			Dialog.create("No Results to Work With");
 			Dialog.addCheckbox("Run Analyze-particles to generate table?", true);
-			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRES +"   results.\nThere are    " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRes +"   results.\nThere are    " + nROIs +"   ROIs.");
 			Dialog.show();
 			analyzeNow = Dialog.getCheckbox(); /* If (analyzeNow==true), ImageJ Analyze Particles will be performed, otherwise exit */
 			if (analyzeNow==true) {
@@ -1642,29 +1593,58 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	}
 	function checkForRoiManager() {
 		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . .
-			v180104 only asks about ROIs if there is a mismatch with the results */
+			v180104 only asks about ROIs if there is a mismatch with the results
+			v190628 adds option to import saved ROI set */
 		nROIs = roiManager("count");
-		nRES = nResults; /* Used to check for ROIs:Results mismatch */
-		if(nROIs==0) runAnalyze = true; /* Assumes that ROIs are required and that is why this function is being called */
-		else if(nROIs!=nRES) runAnalyze = getBoolean("There are " + nRES + " results and " + nROIs + " ROIs; do you want to clear the ROI manager and reanalyze?");
-		else runAnalyze = false;
-		if (runAnalyze) {
-			roiManager("reset");
-			Dialog.create("Analysis check");
-			Dialog.addCheckbox("Run Analyze-particles to generate new roiManager values?", true);
-			Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
+		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0 || nROIs!=nRes){
+			Dialog.create("ROI options");
+				Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRes +"   results.\nThere are   " + nROIs +"   ROIs.\nDo you want to:");
+				if(nROIs==0) Dialog.addCheckbox("Import a saved ROI list",false);
+				else Dialog.addCheckbox("Replace the current ROI list with a saved ROI list",false);
+				if(nRes==0) Dialog.addCheckbox("Import a Results Table \(csv\) file",false);
+				else Dialog.addCheckbox("Clear Results Table and import saved csv",false);
+				Dialog.addCheckbox("Clear ROI list and Results Table and reanalyze \(overrides above selections\)",true);
+				Dialog.addCheckbox("Get me out of here, I am having second thoughts . . .",false);
 			Dialog.show();
-			analyzeNow = Dialog.getCheckbox();
-			if (analyzeNow) {
+				importROI = Dialog.getCheckbox;
+				importResults = Dialog.getCheckbox;
+				runAnalyze = Dialog.getCheckbox;
+				if (Dialog.getCheckbox) restoreExit("Sorry this did not work out for you.");
+			if (runAnalyze) {
+				if (isOpen("ROI Manager"))	roiManager("reset");
 				setOption("BlackBackground", false);
-				if (nResults==0)
-					run("Analyze Particles...", "display add");
-				else run("Analyze Particles..."); /* Let user select settings */
+				if (isOpen("Results")) {
+					selectWindow("Results");
+					run("Close");
+				}
+				run("Analyze Particles..."); /* Let user select settings */
 				if (nResults!=roiManager("count"))
 					restoreExit("Results and ROI Manager counts do not match!");
 			}
-			else restoreExit("Goodbye, your previous setting will be restored.");
+			else {
+				if (importROI) {
+					if (isOpen("ROI Manager"))	roiManager("reset");
+					msg = "Import ROI set \(zip file\), click \"OK\" to continue to file chooser";
+					showMessage(msg);
+					roiManager("Open", "");
+				}
+				if (importResults){
+					if (isOpen("Results")) {
+						selectWindow("Results");
+						run("Close");
+					}
+					msg = "Import Results Table, click \"OK\" to continue to file chooser";
+					showMessage(msg);
+					open("");
+					Table.rename(Table.title, "Results");
+				}
+			}
 		}
+		nROIs = roiManager("count");
+		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0 || nROIs!=nRes)
+			restoreExit("Goodbye, your previous setting will be restored.");
 		return roiManager("count"); /* Returns the new count of entries */
 	}
 	function checkForUnits() {  /* Generic version 
@@ -2026,7 +2006,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
 		run("Analyze Particles...", "display exclude clear add");
 		resetThreshold();
-		if (is("Inverting LUT")==true) run("Invert LUT");
+		if(is("Inverting LUT")) run("Invert LUT");
 	}
 	function stripKnownExtensionFromString(string) {
 		if (lastIndexOf(string, ".")!=-1) {
@@ -2057,8 +2037,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
@@ -2093,3 +2073,56 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		return unitLabel;
 	}
+	/* History:
+	+ Peter J. Lee mods 6/16/16-6/30/2016 to automate defaults and add labels to ROIs
+	+ add scaled labels 7/7/2016 
+	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
+ 	+ min and max lines for ramp
+	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
+	+ added the ability to add lines on ramp for statistics
+ 	+ min and max lines for ramp
+	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
+	+ added the ability to add lines on ramp for statistics
+	This version adds a summary table anywhere you want it but the dialog box may be too long for some monitors: 8/9/2016
+	Adjusted to allow Grays-only if selected and default to white background.
+	Added the ability to added user-text to summary and data preview in summary dialog.
+	+ adds choice for number of lines of statistics (not really needed)
+	+ v161117 adds more decimal place control
+	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
+	+ v171024 Added an option to just label the objects without color coding
+	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
+	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
+	+ v180104 Updated functions to latest versions.
+	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
+	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
+	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
+	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
+	+ v180302 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.
+	+ v180315 Reordered 1st menu.
+	+ v180316 added option of adding colored outline around outliers.
+	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
+	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
+	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
+	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
+	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
+	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
+	+ v180326 Restored missing frequency distribution column.
+	+ v180329 Changed line width for frequency plot to work better for very large images.
+	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
+	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
+	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
+	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
+	+ v180717 More fixes for small distributions that do not produce an interquartile range.
+	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
+	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
+	+ v180722 Allows any system font to be used. Fixed selected positions.
+	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
+	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
+	+ v180831 Added check for Fiji_Plugins and corrected missing "pixel" argument in final margin enlargement.
+	+ v180926 Added coded range option.
+	+ v180928 Fixed 2 lines of missing code.
+	+ v181003 Restored autocrop, updated functions.
+	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
+	+ v190509-10 Minor cleanup
+	+ v190628 Add options to import ROI sets and Results table if either are empty or there is a count mismatch.
+	*/

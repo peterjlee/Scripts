@@ -1,52 +1,9 @@
 /*	Fork of ROI_Color_Coder.ijm IJ BAR: https://github.com/tferr/Scripts#scripts
-	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
+	https://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on Tiago Ferreira, v.5.4 2017.03.10
-	+ Peter J. Lee mods 6/16/16-6/30/2016 to automate defaults and add labels to ROIs
-	+ add scaled labels 7/7/2016 
-	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
- 	+ min and max lines for ramp
-	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
-	+ added the ability to add lines on ramp for statistics
- 	+ min and max lines for ramp
-	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
-	+ added the ability to add lines on ramp for statistics
-	+ v161117 adds more decimal place control
-	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
-	+ v171024 Added an option to just label the objects without color coding
-	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
-	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
-	+ v180104 Updated functions to latest versions.
-	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
-	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
-	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
-	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
-	+ v180302 Object Labels: moved formatting to function and unitless comma removed from ramp label.
-	+ v180315 Reordered 1st menu.
-	+ v180316 added option of adding colored outline around outliers.
-	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
-	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
-	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
-	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
-	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
-	+ v180326 Restored missing frequency distribution column.
-	+ v180329 Changed line width for frequency plot to work better for very large images.
-	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
-	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
-	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
-	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
-	+ v180717 More fixes for small distributions that do not produce an interquartile range.
-	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
-	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
-	+ v180722 Allows any system font to be used. Fixed selected positions.
-	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
-	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
-	+ v180831 Added check for Fiji_Plugins and corrected missing "pixel" argument in final margin enlargement.
-	+ v180926 Added coded range option.
-	+ v180928 Fixed 2 lines of missing code.
-	+ v181003 Restored autocrop, updated functions.
-	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
-	+ v190509-10 Minor cleanup
+	Peter J. Lee Applied Superconductivity Center, NHMFL  v190628
+	Full history at the bottom of the file.
  */
  
 macro "ROI Color Coder with Scaled Labels"{
@@ -60,13 +17,19 @@ macro "ROI Color Coder with Scaled Labels"{
         + "Run demo? (Results Table and ROI Manager will be cleared)");
 	    runDemo();
 	}
+	/* Check to see if there is a rectangular location already set for the parameter label */
+	if (selectionType()==0) {
+		getSelectionBounds(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
+		selectionExists = true;
+	} else selectionExists = false;
+	run("Select None");
+	if (roiManager("count")>0) roiManager("deselect");
 	/*
 	Set options for black objects on white background as this works better for publications */
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* Do not use Inverting LUT */
-	if (is("Inverting LUT")==true) run("Invert LUT"); /* more effectively removes Inverting LUT */
+	run("Appearance...", " "); if(is("Inverting LUT")) run("Invert LUT"); /* do not use Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
@@ -76,19 +39,19 @@ macro "ROI Color Coder with Scaled Labels"{
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
-	nRES = nResults;
+	nRes = nResults;
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
 	numLabels = 10; /* default number of ramp labels */
-	if (nRES!=nROIs) restoreExit("Exit: Results table \(" + nRES + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
+	if (nRes!=nROIs) restoreExit("Exit: Results table \(" + nRes + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	setBatchMode(true);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
-	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
+	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	acceptMinFontSize = true;
-	fontSize = maxOf(10,rampH/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(10,imageHeight/28); /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray(lengthOf(headings));
@@ -125,6 +88,15 @@ macro "ROI Color Coder with Scaled Labels"{
 		Dialog.setInsets(20, 120, 10);
 		Dialog.addCheckbox("Make copy of image with scaled labels?", true);
 		Dialog.setInsets(6, 120, 10);
+		if (selectionExists) {
+			Dialog.addCheckbox("Parameter label at selected location \(below\)?", true); 
+			Dialog.addNumber("Starting",selPosStartX,0,5,"X");
+			Dialog.setInsets(-28, 150, 0);
+			Dialog.addNumber("Starting",selPosStartY,0,5,"Y");
+			Dialog.addNumber("Selected",originalSelEWidth,0,5,"Width");
+			Dialog.setInsets(-28, 150, 0);
+			Dialog.addNumber("Selected",originalSelEHeight,0,5,"Height");
+		}
 	Dialog.show;
 		imageChoice = Dialog.getChoice;
 		parameterWithLabel = Dialog.getChoice;
@@ -134,6 +106,13 @@ macro "ROI Color Coder with Scaled Labels"{
 		stroke = Dialog.getNumber;
 		alpha = pad(toHex(255*Dialog.getNumber/100));
 		addLabels = Dialog.getCheckbox;
+		if (selectionExists) {
+			selectionExists = Dialog.getCheckbox; 
+			selPosStartX = Dialog.getNumber;
+			selPosStartY = Dialog.getNumber;
+			originalSelEWidth = Dialog.getNumber;
+			originalSelEHeight = Dialog.getNumber;
+		}
 	unitLabel = unitLabelFromString(parameter, unit);
 	/* get values for chosen parameter */
 	values= newArray(items);
@@ -166,8 +145,8 @@ macro "ROI Color Coder with Scaled Labels"{
 		outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
 		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values \("+fromCharCode(0x03C3)+" = "+arraySD+"\):", outlierOptions, 1, 5, "No");
 		Dialog.setInsets(3, 0, 15);
-		colorChoice = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
-		Dialog.addChoice("Outliers: Outline:", colorChoice, colorChoice[0]);
+		allColors = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
+		Dialog.addChoice("Outliers: Outline:", allColors, allColors[0]);
 		Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 		Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
 		Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
@@ -228,8 +207,13 @@ macro "ROI Color Coder with Scaled Labels"{
 		acceptMinFontSize = getBoolean("A font size of 10 is the minimum recommended font size for the macro; increase font size to 10?");
 		if (acceptMinFontSize) fontSize = 10;
 	}
-	if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
+	rampParameterLabel= cleanLabel(parameterLabel);
+	rampW = round(rampH/8); /* this will be updated later */ 
+	if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
+	if ((rotLegend && (rampHChoice==rampH)) || (rampW < maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel)))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampHChoice;
+	rampW = round(rampH/8); 
 	range = split(rangeS, "-");
 	if (lengthOf(range)==1) {
 		rampMin= NaN; rampMax= parseFloat(range[0]);
@@ -253,7 +237,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	if (isNaN(minCoded)) minCoded = arrayMin;
 	if (isNaN(maxCoded)) maxCoded = arrayMax;
 	coeffVar = arraySD*100/arrayMean;
-	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
+	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* for median and quartiles without sorting the original array! */
 	arrayQuartile = newArray(3);
 	for (q=0; q<3; q++) arrayQuartile[q] = sortedValues[round((q+1)*items/4)];
 	IQR = arrayQuartile[2] - arrayQuartile[0];
@@ -285,7 +269,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		meanPlusSDs[s] = arrayMean+(s*arraySD);
 		meanMinusSDs[s] = arrayMean-(s*arraySD);
 	}
-	/* Calculate ln stats and also ramp if requested */
+	/* Calculate ln stats for ramp if requested */
 	lnValues = lnArray(values);
 	Array.getStatistics(lnValues, null, null, lnMean, lnSD);
 	expLnMeanPlusSDs = newArray(10);
@@ -310,7 +294,6 @@ macro "ROI Color Coder with Scaled Labels"{
 	if (stroke>=0) {
 		/*	Create LUT-map legend	*/
 		rampTBMargin = 2 * fontSize;
-		rampW = round(rampH/8);
 		canvasH = round(2 * rampTBMargin + rampH);
 		canvasH = round(4 * fontSize + rampH);
 		canvasW = round(rampH/2);
@@ -609,10 +592,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		setColor(0, 0, 0);
 		/*	parse symbols in unit and draw final label below ramp */
 		selectWindow(tR);
-		rampParameterLabel= cleanLabel(parameterLabel);
-		if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
-		rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
-		if ((rampW>getStringWidth(rampUnitLabel)) && (rampW>getStringWidth(rampParameterLabel)) && !rotLegend) { /* can center align if labels shorter than ramp width */
+		if ((rampW > maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel))) && !rotLegend) { /* can center align if labels shorter than ramp width */
 			if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 			if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 		}
@@ -671,8 +651,8 @@ macro "ROI Color Coder with Scaled Labels"{
 	/* End of object coloring */
 
 	/* recombine units and labels that were used in Ramp */
-	if (unitLabel!="") paraLabel = parameterLabel + ", " + unitLabel;
-	else paraLabel = parameterLabel;
+	if (unitLabel!="") textLabel = parameterLabel + ", " + unitLabel;
+	else textLabel = parameterLabel;
 	if (!addLabels) {
 		roiManager("show all with labels");
 		run("Flatten"); /* creates an RGB copy of the image with color coded objects or not */
@@ -697,9 +677,10 @@ macro "ROI Color Coder with Scaled Labels"{
 		Dialog.create("Feature Label Formatting Options");
 			Dialog.setInsets(0, 150, 6);
 			Dialog.addCheckbox("Add feature labels to each ROI?", true);
+			allGrays = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
 			if (lut!="Grays")
-				colorChoice = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
-			else colorChoice = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
+				colorChoice = Array.concat(allGrays,allColors);
+			else colorChoice = allGrays;
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
 			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
 			minROIFont = round(imageWidth/90);
@@ -712,10 +693,9 @@ macro "ROI Color Coder with Scaled Labels"{
 			fontStyleChoice = newArray("bold", "bold antialiased", "italic", "bold italic", "unstyled");
 			Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);  /* Reuse font list from previous dialog */
 			Dialog.addChoice("Font name:", fontNameChoice, fontName); /* Default to previous fontName */
-			if (outlierChoice!="No") {
-				colorChoice2 = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
+			if (outlierChoice!="No") {	
 				Dialog.setInsets(0, 0, 8);
-				Dialog.addChoice("Outlier outline color:", colorChoice2, colorChoice2[0]);
+				Dialog.addChoice("Outlier outline color:", allColors, allColors[0]);
 				Dialog.addNumber("Outlier object outline stroke:", outlierStrokePC,0,3,"% of auto font size");
 			}
 			Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2"), dpChoice); /* reuse previous dpChoice as default */
@@ -741,11 +721,10 @@ macro "ROI Color Coder with Scaled Labels"{
 				Dialog.addMessage("Morphology plugin not available to find morphological centers");
 			}
 			else Dialog.addChoice("Object Label At:", newArray("ROI Center", "Morphological Center"), "Morphological Center");
-			Dialog.addCheckbox("Add Parameter Label Title \("+paraLabel+"\)?", true);
-			paraLocChoice = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
-			Dialog.addChoice("Title and Summary table Location:", paraLocChoice, paraLocChoice[0]);
-			if (menuLimit > 752)	Dialog.addNumber("How many rows in table?", 12, 0, 2, "");
-			else Dialog.addNumber("How many rows in table?", 6, 0, 2, "");
+			Dialog.addCheckbox("Add Parameter Label Title \("+textLabel+"\)?", true);
+			if (selectionExists) paraLocChoice = newArray("Current Selection", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
+			else paraLocChoice = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
+			Dialog.addChoice("On-image parameter label location:", paraLocChoice, paraLocChoice[0]);
 		Dialog.show();
 			addLabels = Dialog.getCheckbox;
 			fontColor = Dialog.getChoice(); /* Object label color */
@@ -772,7 +751,6 @@ macro "ROI Color Coder with Scaled Labels"{
 			ctrChoice = Dialog.getChoice(); /* Choose ROI or morphological centers for object labels */
 			paraLabAdd = Dialog.getCheckbox();
 			paraLabPos = Dialog.getChoice(); /* Parameter Label Position */
-			statsChoiceLines = Dialog.getNumber();
 			if (isNaN(getResult("mc_X\(px\)",0)) && (ctrChoice=="Morphological Center")) AddMCsToResultsTable ();
 		selectWindow(t);
 		if (dpChoice=="Manual") 
@@ -927,6 +905,236 @@ macro "ROI Color Coder with Scaled Labels"{
 			End of optional parameter label section
 		*/
 	}
+	titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
+	/*	
+		Start of optional on-image parameter label section
+	*/
+	if (paraLabAdd) {
+		Dialog.create("On-image parameter label options");
+			Dialog.addString("Parameter Label or Title:",textLabel,12);
+			Dialog.addNumber("Parameter label font size:", paraLabFontSize);	
+			Dialog.addChoice("Parameter label font color:", colorChoice, "white");
+			Dialog.addChoice("Parameter label outline color:", colorChoice, "black");
+			if (menuLimit>=796) { /* room to show full dialog */
+				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of parameter label font size");
+				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of parameter label font size");
+				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of parameter label font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of parameter label font size");
+				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
+				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of parameter label font size");
+				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of parameter label font size");
+				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
+				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
+				Dialog.show();
+			}
+			else Dialog.show(); /* Sorry, only an abbreviated menu for small screens */
+			
+			textLabel = Dialog.getString();
+			paraLabFontSize =  Dialog.getNumber();
+			fontColor = Dialog.getChoice();
+			outlineColor = Dialog.getChoice();
+			if (menuLimit>=796) {
+				outlineStrokePC = Dialog.getNumber();
+				shadowDrop = Dialog.getNumber();
+				shadowDisp = Dialog.getNumber();
+				shadowBlur = Dialog.getNumber();
+				textLabelShadowDarkness = Dialog.getNumber();
+				innerShadowDrop = Dialog.getNumber();
+				innerShadowDisp = Dialog.getNumber();
+				innerShadowBlur = Dialog.getNumber();
+				textLabelInnerShadowDarkness = Dialog.getNumber();
+			}
+			else {
+				Dialog.create("Parameter label optional tweaks");
+				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
+				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
+				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
+				Dialog.show();
+				outlineStrokePC = Dialog.getNumber();
+				shadowDrop = Dialog.getNumber();
+				shadowDisp = Dialog.getNumber();
+				shadowBlur = Dialog.getNumber();
+				shadowDarkness = Dialog.getNumber();
+				innerShadowDrop = Dialog.getNumber();
+				innerShadowDisp = Dialog.getNumber();
+				innerShadowBlur = Dialog.getNumber();
+				innerShadowDarkness = Dialog.getNumber();
+			}
+		/* End optional parameter label dialog */
+		if (shadowDrop<0) textLabelShadowDrop = round(shadowDrop * negAdj);
+		else textLabelShadowDrop = shadowDrop;
+		if (shadowDisp<0) textLabelShadowDisp = round(shadowDisp * negAdj);
+		else textLabelShadowDisp = shadowDisp;
+		if (shadowBlur<0) textLabelShadowBlur = round(shadowBlur *negAdj);
+		else textLabelShadowBlur = shadowBlur;
+		if (innerShadowDrop<0) textLabelInnerShadowDrop = round(innerShadowDrop * negAdj);
+		else textLabelInnerShadowDrop = innerShadowDrop;
+		if (innerShadowDisp<0) textLabelInnerShadowDisp = round(innerShadowDisp * negAdj);
+		else textLabelInnerShadowDisp = innerShadowDisp;
+		if (innerShadowBlur<0) textLabelInnerShadowBlur = round(innerShadowBlur * negAdj);
+		else textLabelInnerShadowBlur = innerShadowBlur;
+		/* convert font percentages to pixels */
+		fontFactor = paraLabFontSize/100;
+		outlineStroke = round(fontFactor * outlineStrokePC);
+		textLabelShadowDrop = floor(fontFactor * textLabelShadowDrop);
+		textLabelShadowDisp = floor(fontFactor * textLabelShadowDisp);
+		textLabelShadowBlur = floor(fontFactor * textLabelShadowBlur);
+		textLabelInnerShadowDrop = floor(fontFactor * textLabelInnerShadowDrop);
+		textLabelInnerShadowDisp = floor(fontFactor * textLabelInnerShadowDisp);
+		textLabelInnerShadowBlur = floor(fontFactor * textLabelInnerShadowBlur);
+		paraOutlineStroke = outlineStroke * paraLabFontSize/minLFontS;
+		longestStringWidth = getStringWidth(textLabel);
+		setFont(fontName,paraLabFontSize, fontStyle);
+		fH = getValue("font.height");
+		just = "center"; /* set default justification */
+		if (paraLabPos == "Top Left") {
+			posStartX = offsetX;
+			posStartY = offsetY;
+			just = "left";
+		} else if (paraLabPos == "Top Right") {
+			posStartX = imageWidth - longestStringWidth - offsetX;
+			posStartY = offsetY;
+			just = "right";
+		} else if (paraLabPos == "Center") {
+			posStartX = round((imageWidth - longestStringWidth)/2);
+			posStartY = round((imageHeight - fH)/2);
+		} else if (paraLabPos == "Bottom Left") {
+			posStartX = offsetX;
+			posStartY = imageHeight - offsetY - fH/2;
+			just = "left";
+		} else if (paraLabPos == "Bottom Right") {
+			posStartX = imageWidth - longestStringWidth - offsetX;
+			posStartY = imageHeight - offsetY - fH/2;
+			just = "right";
+		} else if (paraLabPos == "Center of New Selection"){
+			batchOn = is("Batch Mode");
+			if (batchOn) setBatchMode("exit & display"); /* need to see what you are selecting */
+			setTool("rectangle");
+			msgtitle="Location for the on-image parameter label...";
+			msg = "Draw a box in the image where you want to center the parameter label...";
+			waitForUser(msgtitle, msg);
+			getSelectionBounds(selPosStartX, selPosStartY, posWidth, posHeight);
+			run("Select None");
+			posStartX = selPosStartX;
+			posStartY = selPosStartY;
+			if (batchOn) setBatchMode(true); /* Return to original batch mode setting */
+		} else if (paraLabPos == "Current Selection"){
+			posStartX = selPosStartX;
+			posStartY = selPosStartY;
+			posWidth = originalSelEWidth;
+			posHeight = originalSelEHeight;
+		}
+		if (endsWith(paraLabPos, "election")) {
+			shrinkX = minOf(1,posWidth/longestStringWidth);
+			shrinkY = minOf(1,posHeight/fH);
+			shrinkF = minOf(shrinkX, shrinkY);
+			shrunkFont = shrinkF * paraLabFontSize;
+			if (shrinkF < 1) {
+				Dialog.create("Shrink Text");
+				Dialog.addCheckbox("Text will not fit inside selection; Reduce font size from " + paraLabFontSize+ "?", true);
+				Dialog.addNumber("Choose new font size; font size for fit =",round(shrunkFont));
+				Dialog.show;
+				reduceFontSize = Dialog.getCheckbox();
+				shrunkFont = Dialog.getNumber();
+				shrinkF = shrunkFont/paraLabFontSize;
+			}
+			else reduceFontSize = false;
+			if (reduceFontSize == true) {
+				paraLabFontSize = shrunkFont;
+				setFont("",paraLabFontSize,"");
+				longestStringWidth = getStringWidth(textLabel);
+				fH = getValue("font.height");
+				fontFactor = paraLabFontSize/100;
+				if (paraOutlineStroke>1) paraOutlineStroke = maxOf(1,round(fontFactor * paraOutlineStroke));
+				else outlineStroke = round(fontFactor * outlineStroke);
+				if (textLabelShadowDrop>1) textLabelShadowDrop = maxOf(1,round(fontFactor * textLabelShadowDrop));
+				else textLabelShadowDrop = round(fontFactor * textLabelShadowDrop);
+				if (textLabelShadowDisp>1) textLabelShadowDisp = maxOf(1,round(fontFactor * textLabelShadowDisp));
+				else textLabelShadowDisp = round(fontFactor * textLabelShadowDisp);
+				if (textLabelShadowBlur>1) textLabelShadowBlur = maxOf(1,round(fontFactor * textLabelShadowBlur));
+				else textLabelShadowBlur = round(fontFactor * textLabelShadowBlur);
+				textLabelInnerShadowDrop = floor(fontFactor * textLabelInnerShadowDrop);
+				textLabelInnerShadowDisp = floor(fontFactor * textLabelInnerShadowDisp);
+				textLabelInnerShadowBlur = floor(fontFactor * textLabelInnerShadowBlur);
+			}
+			posStartX = posStartX + round((posWidth/2) - longestStringWidth/2);
+			posStartY = posStartY + round((posHeight/2) - (fH/2) + fontSize);
+			if (just=="auto") {
+				if (posStartX<imageWidth*0.4) just = "left";
+				else if (posStartX>imageWidth*0.6) just = "right";
+				else just = "center";
+			}
+		}
+		run("Select None");
+		if (posStartY<=1.5*paraLabFontSize)
+			posStartY += paraLabFontSize;
+		if (posStartX<offsetX) posStartX = offsetX;
+		endX = posStartX + longestStringWidth;
+		if ((endX+offsetX)>imageWidth) posStartX = imageWidth - longestStringWidth - offsetX;
+		textLabelX = posStartX;
+		textLabelY = posStartY;
+		setColor(255,255,255);
+		/* Draw parameter label over top of object labels */
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+		textImages = newArray("textImage","antiAliased");
+		/* Create Label Mask */
+		newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
+		roiManager("deselect");
+		run("Select None");
+		if (paraLabFontSize>=0) {
+			setFont(fontName,paraLabFontSize, fontStyle);
+			newImage("antiAliased", originalImageDepth, imageWidth, imageHeight, 1);
+			/* Draw text for mask and antiAliased tweak */
+			/* determine font color intensities settings for antialiased tweak */
+			fontColorArray = getColorArrayFromColorName(fontColor);
+			Array.getStatistics(fontColorArray,fontIntMean);
+			fontInt = floor(fontIntMean);
+			outlineColorArray = getColorArrayFromColorName(outlineColor);
+			Array.getStatistics(outlineColorArray,outlineIntMean);
+			outlineInt = floor(outlineIntMean);
+			textLabelY1 = textLabelY;
+			for (t=0; t<2; t++) {
+				selectWindow(textImages[t]);
+				if (t==0) setColor("white");
+				else {
+					textLabelY = textLabelY1;
+					run("Select All");
+					setColorFromColorName(outlineColor);
+					fill();
+					roiManager("deselect");
+					run("Select None");
+					setColorFromColorName(fontColor);
+				}
+				setFont(fontName,paraLabFontSize, fontStyle);
+				if (just=="left") drawString(textLabel, textLabelX, textLabelY);
+				else if (just=="right") drawString(textLabel, textLabelX + (longestStringWidth - getStringWidth(textLabel)), textLabelY);
+				else drawString(textLabel, textLabelX + (longestStringWidth-getStringWidth(textLabel))/2, textLabelY);
+			}
+			fancyTextOverImage(textLabelShadowDrop,textLabelShadowDisp,textLabelShadowBlur,shadowDarkness,outlineStroke,textLabelInnerShadowDrop,textLabelInnerShadowDisp,textLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */			
+			if (isOpen("antiAliased")) {
+				if (fontInt>=outlineInt){
+					imageCalculator("Max","textImage","antiAliased");
+					imageCalculator("Min",workingImage,"textImage");
+				}
+				else {
+					imageCalculator("Max","textImage","antiAliased");
+					imageCalculator("Min",workingImage,"textImage");
+				}
+			}		
+			closeImageByTitle("textImage");
+			closeImageByTitle("label_mask");
+			closeImageByTitle("antiAliased");
+		}
+	}
+/*	
+		End of 0ptional on-image parameter label section
+*/
 	if (stroke>=0) {
 		run("Colors...", "foreground=black background=white selection=yellow"); /* reset colors */
 		selectWindow(workingImage);
@@ -1009,9 +1217,10 @@ macro "ROI Color Coder with Scaled Labels"{
 			}
 		}
 	}
+	if (selectionExists) makeRectangle(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 	setBatchMode("exit & display");
 	restoreSettings;
-	showStatus("ROI Color Coder with Scaled Labels Macro Finished");
+	showStatus("ROI Color Coder with Scaled Labels macro finished");
 	beep(); wait(300); beep(); wait(300); beep();
 	run("Collect Garbage");
 }
@@ -1213,11 +1422,11 @@ macro "ROI Color Coder with Scaled Labels"{
 	}
 	function checkForResults() {
 		nROIs = roiManager("count");
-		nRES = nResults;
-		if (nRES==0)	{
+		nRes = nResults;
+		if (nRes==0)	{
 			Dialog.create("No Results to Work With");
 			Dialog.addCheckbox("Run Analyze-particles to generate table?", true);
-			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRES +"   results.\nThere are    " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRes +"   results.\nThere are    " + nROIs +"   ROIs.");
 			Dialog.show();
 			analyzeNow = Dialog.getCheckbox(); /* If (analyzeNow==true), ImageJ Analyze Particles will be performed, otherwise exit */
 			if (analyzeNow==true) {
@@ -1233,29 +1442,58 @@ macro "ROI Color Coder with Scaled Labels"{
 	}
 	function checkForRoiManager() {
 		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . .
-			v180104 only asks about ROIs if there is a mismatch with the results */
+			v180104 only asks about ROIs if there is a mismatch with the results
+			v190628 adds option to import saved ROI set */
 		nROIs = roiManager("count");
-		nRES = nResults; /* Used to check for ROIs:Results mismatch */
-		if(nROIs==0) runAnalyze = true; /* Assumes that ROIs are required and that is why this function is being called */
-		else if(nROIs!=nRES) runAnalyze = getBoolean("There are " + nRES + " results and " + nROIs + " ROIs; do you want to clear the ROI manager and reanalyze?");
-		else runAnalyze = false;
-		if (runAnalyze) {
-			roiManager("reset");
-			Dialog.create("Analysis check");
-			Dialog.addCheckbox("Run Analyze-particles to generate new roiManager values?", true);
-			Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
+		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0 || nROIs!=nRes){
+			Dialog.create("ROI options");
+				Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRes +"   results.\nThere are   " + nROIs +"   ROIs.\nDo you want to:");
+				if(nROIs==0) Dialog.addCheckbox("Import a saved ROI list",false);
+				else Dialog.addCheckbox("Replace the current ROI list with a saved ROI list",false);
+				if(nRes==0) Dialog.addCheckbox("Import a Results Table \(csv\) file",false);
+				else Dialog.addCheckbox("Clear Results Table and import saved csv",false);
+				Dialog.addCheckbox("Clear ROI list and Results Table and reanalyze \(overrides above selections\)",true);
+				Dialog.addCheckbox("Get me out of here, I am having second thoughts . . .",false);
 			Dialog.show();
-			analyzeNow = Dialog.getCheckbox();
-			if (analyzeNow) {
+				importROI = Dialog.getCheckbox;
+				importResults = Dialog.getCheckbox;
+				runAnalyze = Dialog.getCheckbox;
+				if (Dialog.getCheckbox) restoreExit("Sorry this did not work out for you.");
+			if (runAnalyze) {
+				if (isOpen("ROI Manager"))	roiManager("reset");
 				setOption("BlackBackground", false);
-				if (nResults==0)
-					run("Analyze Particles...", "display add");
-				else run("Analyze Particles..."); /* Let user select settings */
+				if (isOpen("Results")) {
+					selectWindow("Results");
+					run("Close");
+				}
+				run("Analyze Particles..."); /* Let user select settings */
 				if (nResults!=roiManager("count"))
 					restoreExit("Results and ROI Manager counts do not match!");
 			}
-			else restoreExit("Goodbye, your previous setting will be restored.");
+			else {
+				if (importROI) {
+					if (isOpen("ROI Manager"))	roiManager("reset");
+					msg = "Import ROI set \(zip file\), click \"OK\" to continue to file chooser";
+					showMessage(msg);
+					roiManager("Open", "");
+				}
+				if (importResults){
+					if (isOpen("Results")) {
+						selectWindow("Results");
+						run("Close");
+					}
+					msg = "Import Results Table, click \"OK\" to continue to file chooser";
+					showMessage(msg);
+					open("");
+					Table.rename(Table.title, "Results");
+				}
+			}
 		}
+		nROIs = roiManager("count");
+		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0 || nROIs!=nRes)
+			restoreExit("Goodbye, your previous setting will be restored.");
 		return roiManager("count"); /* Returns the new count of entries */
 	}
 	function checkForUnits() {  /* Generic version 
@@ -1617,7 +1855,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
 		run("Analyze Particles...", "display exclude clear add");
 		resetThreshold();
-		if (is("Inverting LUT")==true) run("Invert LUT");
+		if(is("Inverting LUT")) run("Invert LUT");
 	}
 	function stripKnownExtensionFromString(string) {
 		if (lastIndexOf(string, ".")!=-1) {
@@ -1648,8 +1886,8 @@ macro "ROI Color Coder with Scaled Labels"{
 	+ 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
@@ -1684,3 +1922,55 @@ macro "ROI Color Coder with Scaled Labels"{
 		}
 		return unitLabel;
 	}
+	/* History (this macro history is for the full + summary version but with the summary table option removed:
+	+ Peter J. Lee mods 6/16/16-6/30/2016 to automate defaults and add labels to ROIs
+	+ add scaled labels 7/7/2016 
+	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
+ 	+ min and max lines for ramp
+	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
+	+ added the ability to add lines on ramp for statistics
+ 	+ min and max lines for ramp
+	+ added option to make a new combined image that combines the labeled image with the legend 10/1/2016
+	+ added the ability to add lines on ramp for statistics
+	Adjusted to allow Grays-only if selected and default to white background.
+	+ adds choice for number of lines of statistics (not really needed)
+	+ v161117 adds more decimal place control
+	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
+	+ v171024 Added an option to just label the objects without color coding
+	+ v171114 Added screen height sensitive menus (also tweaked for less bloat in v171117).
+	+ v171117 Ramp improvements: Added minor tick labels, changed label spacing to "intervals", corrected label locations.
+	+ v180104 Updated functions to latest versions.
+	+ v180105 Restrict labels to within frame and fixed issue with very small font sizes.
+	+ v180108 Fixed shadow/function mismatch that produced poor shading of text.
+	+ v180215 Replaces all instances of array.length with lengthOf function to workaround bug in ImageJ 1.51u.
+	+ v180228 Ramp: Improved text quality for statistics labels and improved tick marks.
+	+ v180302 Object and Summary Labels: moved formatting to function and unitless comma removed from ramp label.
+	+ v180315 Reordered 1st menu.
+	+ v180316 added option of adding colored outline around outliers.
+	+ v180317 Corrected yellow color and added primary colors as better outlier highlights.
+	+ v180319 Added log stats output options, increased sigma option up to 4sigma and further refined initial dialog.
+	+ v180321 Added mode statistics.
+	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
+	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
+	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
+	+ v180326 Restored missing frequency distribution column.
+	+ v180329 Changed line width for frequency plot to work better for very large images.
+	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
+	+ v180403 Changed min-max and SD label limits to prevent overlap of SD and min-max labels (min-max labels take priority).
+	+ v180404 Fixed above. 	+ v180601 Adds choice to invert and choice of images. + v180602 Added MC-Centroid 0.5 pixel offset.
+	+ v180716 Fixed unnecessary bailout for small distributions that do not produce an interquartile range.
+	+ v180717 More fixes for small distributions that do not produce an interquartile range.
+	+ v180718 Reorganized ramp options to make ramp labels easy to edit.
+	+ v180719 Fixed formatting so that Labels and Summaries have different settings. Added title-only option. Added margin to auto-crop.
+	+ v180722 Allows any system font to be used. Fixed selected positions.
+	+ v180725 Adds outlier color to right hand ticks within outlier range in ramp.
+	+ v180810 Set minimum label font size to 10 as anything less is not very useful.
+	+ v180831 Added check for Fiji_Plugins and corrected missing "pixel" argument in final margin enlargement.
+	+ v180926 Added coded range option.
+	+ v180928 Fixed 2 lines of missing code.
+	+ v181003 Restored autocrop, updated functions.
+	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
+	+ v190509-10 Minor cleanup
+	+ v190628 Add options to import ROI sets and Results table if either are empty or there is a count mismatch.
+	+v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
+	*/

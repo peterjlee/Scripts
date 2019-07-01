@@ -4,6 +4,7 @@
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL  v190628
 	Full history at the bottom of the file.
+	v190701
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -49,9 +50,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	setBatchMode(true);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
-	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
+	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	acceptMinFontSize = true;
-	fontSize = maxOf(10,rampH/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(10,imageHeight/28); /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray(lengthOf(headings));
@@ -145,8 +146,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
 		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values \("+fromCharCode(0x03C3)+" = "+arraySD+"\):", outlierOptions, 1, 5, "No");
 		Dialog.setInsets(3, 0, 15);
-		colorChoice = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
-		Dialog.addChoice("Outliers: Outline:", colorChoice, colorChoice[0]);
+		allColors = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
+		Dialog.addChoice("Outliers: Outline:", allColors, allColors[0]);
 		Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 		Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
 		Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
@@ -207,8 +208,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		acceptMinFontSize = getBoolean("A font size of 10 is the minimum recommended font size for the macro; increase font size to 10?");
 		if (acceptMinFontSize) fontSize = 10;
 	}
-	if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
+	rampParameterLabel= cleanLabel(parameterLabel);
+	rampW = round(rampH/8); /* this will be updated later */ 
+	if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
+	if ((rotLegend && (rampHChoice==rampH)) || (rampW < maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel)))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampHChoice;
+	rampW = round(rampH/8); 
 	range = split(rangeS, "-");
 	if (lengthOf(range)==1) {
 		rampMin= NaN; rampMax= parseFloat(range[0]);
@@ -289,7 +295,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (stroke>=0) {
 		/*	Create LUT-map legend	*/
 		rampTBMargin = 2 * fontSize;
-		rampW = round(rampH/8);
 		canvasH = round(2 * rampTBMargin + rampH);
 		canvasH = round(4 * fontSize + rampH);
 		canvasW = round(rampH/2);
@@ -588,10 +593,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		setColor(0, 0, 0);
 		/*	parse symbols in unit and draw final label below ramp */
 		selectWindow(tR);
-		rampParameterLabel= cleanLabel(parameterLabel);
-		if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
-		rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
-		if ((rampW>getStringWidth(rampUnitLabel)) && (rampW>getStringWidth(rampParameterLabel)) && !rotLegend) { /* can center align if labels shorter than ramp width */
+		if ((rampW > maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel))) && !rotLegend) { /* can center align if labels shorter than ramp width */
 			if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 			if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
 		}
@@ -676,9 +678,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.create("Feature Label Formatting Options");
 			Dialog.setInsets(0, 150, 6);
 			Dialog.addCheckbox("Add feature labels to each ROI?", true);
+			allGrays = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
 			if (lut!="Grays")
-				colorChoice = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
-			else colorChoice = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
+				colorChoice = Array.concat(allGrays,allColors);
+			else colorChoice = allGrays;
 			Dialog.addChoice("Object label color:", colorChoice, colorChoice[0]);
 			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
 			minROIFont = round(imageWidth/90);
@@ -691,10 +694,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			fontStyleChoice = newArray("bold", "bold antialiased", "italic", "bold italic", "unstyled");
 			Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);  /* Reuse font list from previous dialog */
 			Dialog.addChoice("Font name:", fontNameChoice, fontName); /* Default to previous fontName */
-			if (outlierChoice!="No") {
-				colorChoice2 = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
+			if (outlierChoice!="No") {	
 				Dialog.setInsets(0, 0, 8);
-				Dialog.addChoice("Outlier outline color:", colorChoice2, colorChoice2[0]);
+				Dialog.addChoice("Outlier outline color:", allColors, allColors[0]);
 				Dialog.addNumber("Outlier object outline stroke:", outlierStrokePC,0,3,"% of auto font size");
 			}
 			Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2"), dpChoice); /* reuse previous dpChoice as default */
@@ -909,6 +911,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			End of optional parameter label section
 		*/
 	}
+	titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
 	/*	
 		Start of Optional Summary section
 	*/
@@ -927,7 +930,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		median = d2s(arrayQuartile[1],summaryDP);
 		if (IQR!=0) mode = d2s(mode,summaryDP);
 	}
-	titleAbbrev = substring(tN, 0, minOf(15, lengthOf(tN))) + "...";
+
 	if (summaryAdd || paraLabAdd) {
 		/* Then Statistics Summary Options Dialog . . . */
 		Dialog.create("Statistics Summary Options");
@@ -1011,11 +1014,11 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				shadowDrop = Dialog.getNumber();
 				shadowDisp = Dialog.getNumber();
 				shadowBlur = Dialog.getNumber();
-				summLabelShadowDarkness = Dialog.getNumber();
+				textLabelShadowDarkness = Dialog.getNumber();
 				innerShadowDrop = Dialog.getNumber();
 				innerShadowDisp = Dialog.getNumber();
 				innerShadowBlur = Dialog.getNumber();
-				summLabelInnerShadowDarkness = Dialog.getNumber();
+				textLabelInnerShadowDarkness = Dialog.getNumber();
 			}
 			else {
 				Dialog.create("Statistics Summary Options Tweaks");
@@ -1041,26 +1044,26 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			}
 		/* End optional parameter label dialog */
 		if (shadowDrop<0) summLabelShadowDrop = round(shadowDrop * negAdj);
-		else summLabelShadowDrop = shadowDrop;
-		if (shadowDisp<0) summLabelShadowDisp = round(shadowDisp * negAdj);
-		else summLabelShadowDisp = shadowDisp;
-		if (shadowBlur<0) summLabelShadowBlur = round(shadowBlur *negAdj);
-		else summLabelShadowBlur = shadowBlur;
-		if (innerShadowDrop<0) summLabelInnerShadowDrop = round(innerShadowDrop * negAdj);
-		else summLabelInnerShadowDrop = innerShadowDrop;
-		if (innerShadowDisp<0) summLabelInnerShadowDisp = round(innerShadowDisp * negAdj);
-		else summLabelInnerShadowDisp = innerShadowDisp;
-		if (innerShadowBlur<0) summLabelInnerShadowBlur = round(innerShadowBlur * negAdj);
-		else summLabelInnerShadowBlur = innerShadowBlur;
+		else textLabelShadowDrop = shadowDrop;
+		if (shadowDisp<0) textLabelShadowDisp = round(shadowDisp * negAdj);
+		else textLabelShadowDisp = shadowDisp;
+		if (shadowBlur<0) textLabelShadowBlur = round(shadowBlur *negAdj);
+		else textLabelShadowBlur = shadowBlur;
+		if (innerShadowDrop<0) textLabelInnerShadowDrop = round(innerShadowDrop * negAdj);
+		else textLabelInnerShadowDrop = innerShadowDrop;
+		if (innerShadowDisp<0) textLabelInnerShadowDisp = round(innerShadowDisp * negAdj);
+		else textLabelInnerShadowDisp = innerShadowDisp;
+		if (innerShadowBlur<0) textLabelInnerShadowBlur = round(innerShadowBlur * negAdj);
+		else textLabelInnerShadowBlur = innerShadowBlur;
 		/* convert font percentages to pixels */
 		fontFactor = statsLabFontSize/100;
 		outlineStroke = round(fontFactor * outlineStrokePC);
-		summLabelShadowDrop = floor(fontFactor * summLabelShadowDrop);
-		summLabelShadowDisp = floor(fontFactor * summLabelShadowDisp);
-		summLabelShadowBlur = floor(fontFactor * summLabelShadowBlur);
-		summLabelInnerShadowDrop = floor(fontFactor * summLabelInnerShadowDrop);
-		summLabelInnerShadowDisp = floor(fontFactor * summLabelInnerShadowDisp);
-		summLabelInnerShadowBlur = floor(fontFactor * summLabelInnerShadowBlur);
+		textLabelShadowDrop = floor(fontFactor * textLabelShadowDrop);
+		textLabelShadowDisp = floor(fontFactor * textLabelShadowDisp);
+		textLabelShadowBlur = floor(fontFactor * textLabelShadowBlur);
+		textLabelInnerShadowDrop = floor(fontFactor * textLabelInnerShadowDrop);
+		textLabelInnerShadowDisp = floor(fontFactor * textLabelInnerShadowDisp);
+		textLabelInnerShadowBlur = floor(fontFactor * textLabelInnerShadowBlur);
 		paraOutlineStroke = outlineStroke * paraLabFontSize/minLFontS;
 		/*
 		Count lines of summary label */
@@ -1190,15 +1193,15 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					fontFactor = fontSize/100;
 					if (paraOutlineStroke>1) paraOutlineStroke = maxOf(1,round(fontFactor * paraOutlineStroke));
 					else outlineStroke = round(fontFactor * outlineStroke);
-					if (summLabelShadowDrop>1) summLabelShadowDrop = maxOf(1,round(fontFactor * summLabelShadowDrop));
-					else summLabelShadowDrop = round(fontFactor * summLabelShadowDrop);
-					if (summLabelShadowDisp>1) summLabelShadowDisp = maxOf(1,round(fontFactor * summLabelShadowDisp));
-					else summLabelShadowDisp = round(fontFactor * summLabelShadowDisp);
-					if (summLabelShadowBlur>1) summLabelShadowBlur = maxOf(1,round(fontFactor * summLabelShadowBlur));
-					else summLabelShadowBlur = round(fontFactor * summLabelShadowBlur);
-					summLabelInnerShadowDrop = floor(fontFactor * summLabelInnerShadowDrop);
-					summLabelInnerShadowDisp = floor(fontFactor * summLabelInnerShadowDisp);
-					summLabelInnerShadowBlur = floor(fontFactor * summLabelInnerShadowBlur);
+					if (textLabelShadowDrop>1) textLabelShadowDrop = maxOf(1,round(fontFactor * textLabelShadowDrop));
+					else textLabelShadowDrop = round(fontFactor * textLabelShadowDrop);
+					if (textLabelShadowDisp>1) textLabelShadowDisp = maxOf(1,round(fontFactor * textLabelShadowDisp));
+					else textLabelShadowDisp = round(fontFactor * textLabelShadowDisp);
+					if (textLabelShadowBlur>1) textLabelShadowBlur = maxOf(1,round(fontFactor * textLabelShadowBlur));
+					else textLabelShadowBlur = round(fontFactor * textLabelShadowBlur);
+					textLabelInnerShadowDrop = floor(fontFactor * textLabelInnerShadowDrop);
+					textLabelInnerShadowDisp = floor(fontFactor * textLabelInnerShadowDisp);
+					textLabelInnerShadowBlur = floor(fontFactor * textLabelInnerShadowBlur);
 				}
 				posStartX = posStartX + round((posWidth/2) - longestStringWidth/2);
 				posStartY = posStartY + round((posHeight/2) - (linesSpace/2) + fontSize);
@@ -1266,7 +1269,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					}
 				}
 			}
-			fancyTextOverImage(summLabelShadowDrop,summLabelShadowDisp,summLabelShadowBlur,shadowDarkness,outlineStroke,summLabelInnerShadowDrop,summLabelInnerShadowDisp,summLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */
+			fancyTextOverImage(textLabelShadowDrop,textLabelShadowDisp,textLabelShadowBlur,shadowDarkness,outlineStroke,textLabelInnerShadowDrop,textLabelInnerShadowDisp,textLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */
 			
 			if (isOpen("antiAliased")) {
 				if (fontInt>=outlineInt){
@@ -2125,4 +2128,5 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
 	+ v190509-10 Minor cleanup
 	+ v190628 Add options to import ROI sets and Results table if either are empty or there is a count mismatch.
+	+v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
 	*/

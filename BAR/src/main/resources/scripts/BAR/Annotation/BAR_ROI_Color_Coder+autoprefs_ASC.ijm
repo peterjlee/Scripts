@@ -18,6 +18,7 @@
 	 + v180316 Fixed min-max label issue, reordered 1st menu
 	+ v180831 Added check for Fiji_Plugins.
 	+ v190329 Added expanded font choice (edit getFontChoiceList function to put favorites first in list). Updated functions.
+	+ 070119 Expanded ROI check function with import options. Tweak ramp size.
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
@@ -36,8 +37,7 @@
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* Do not use Inverting LUT */
-	if (is("Inverting LUT")==true) run("Invert LUT"); /* more effectively removes Inverting LUT */										   
+	run("Appearance...", " "); if(is("Inverting LUT")) run("Invert LUT"); /* do not use Inverting LUT */										   
 	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
@@ -46,18 +46,18 @@
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
-	nRES = nResults;
+	nRes = nResults;
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
-	if (nRES!=nROIs) restoreExit("Exit: Results table \(" + nRES + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
+	if (nRes!=nROIs) restoreExit("Exit: Results table \(" + nRes + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	setBatchMode(true);
 	tN = stripExtensionsFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
 	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
-	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
-	fontSize = rampH/28; /* default fonts size based on imageHeight */
+	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
+	fontSize = imageHeight/28; /* default fonts size based on imageHeight */
 	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray(lengthOf(headings));
@@ -138,7 +138,7 @@
 		minmaxLines= Dialog.getCheckbox;
 		numLabels= Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice= Dialog.getChoice;
-		rampChoice= parseFloat(Dialog.getChoice);
+		rampHChoice= parseFloat(Dialog.getChoice);
 		fontStyle= Dialog.getChoice;
 			if (fontStyle=="unstyled") fontStyle="";
 		fontName= Dialog.getChoice;
@@ -149,9 +149,11 @@
 		statsRampTicks= Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
 //
-	if (rotLegend && rampChoice==rampH) rampH = imageHeight - 2 * fontSize; /* tweaks automatic height selection for vertical legend */
-	else rampH = rampChoice;
-//
+	rampW = round(rampH/8); /* this will be updated later */ 
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely Â° symbol */
+	if ((rotLegend && (rampHChoice==rampH)) || (rampW < getStringWidth(rampUnitLabel))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
+	else rampH = rampHChoice;
+	rampW = round(rampH/8); 
 	range = split(rangeS, "-");
 	if (lengthOf(range)==1) {
 		min= NaN;
@@ -549,11 +551,11 @@
 	}
 	function checkForResults() {
 		nROIs = roiManager("count");
-		nRES = nResults;
-		if (nRES==0)	{
+		nRes = nResults;
+		if (nRes==0)	{
 			Dialog.create("No Results to Work With");
 			Dialog.addCheckbox("Run Analyze-particles to generate table?", true);
-			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRES +"   results.\nThere are    " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRes +"   results.\nThere are    " + nROIs +"   ROIs.");
 			Dialog.show();
 			analyzeNow = Dialog.getCheckbox(); /* If (analyzeNow==true), ImageJ Analyze Particles will be performed, otherwise exit */
 			if (analyzeNow==true) {
@@ -569,29 +571,58 @@
 	}
 	function checkForRoiManager() {
 		/* v161109 adds the return of the updated ROI count and also adds dialog if there are already entries just in case . .
-			v180104 only asks about ROIs if there is a mismatch with the results */
+			v180104 only asks about ROIs if there is a mismatch with the results
+			v190628 adds option to import saved ROI set */
 		nROIs = roiManager("count");
-		nRES = nResults; /* Used to check for ROIs:Results mismatch */
-		if(nROIs==0) runAnalyze = true; /* Assumes that ROIs are required and that is why this function is being called */
-		else if(nROIs!=nRES) runAnalyze = getBoolean("There are " + nRES + " results and " + nROIs + " ROIs; do you want to clear the ROI manager and reanalyze?");
-		else runAnalyze = false;
-		if (runAnalyze) {
-			roiManager("reset");
-			Dialog.create("Analysis check");
-			Dialog.addCheckbox("Run Analyze-particles to generate new roiManager values?", true);
-			Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRES +"   results.\nThere are   " + nROIs +"   ROIs.");
+		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0 || nROIs!=nRes){
+			Dialog.create("ROI options");
+				Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRes +"   results.\nThere are   " + nROIs +"   ROIs.\nDo you want to:");
+				if(nROIs==0) Dialog.addCheckbox("Import a saved ROI list",false);
+				else Dialog.addCheckbox("Replace the current ROI list with a saved ROI list",false);
+				if(nRes==0) Dialog.addCheckbox("Import a Results Table \(csv\) file",false);
+				else Dialog.addCheckbox("Clear Results Table and import saved csv",false);
+				Dialog.addCheckbox("Clear ROI list and Results Table and reanalyze \(overrides above selections\)",true);
+				Dialog.addCheckbox("Get me out of here, I am having second thoughts . . .",false);
 			Dialog.show();
-			analyzeNow = Dialog.getCheckbox();
-			if (analyzeNow) {
+				importROI = Dialog.getCheckbox;
+				importResults = Dialog.getCheckbox;
+				runAnalyze = Dialog.getCheckbox;
+				if (Dialog.getCheckbox) restoreExit("Sorry this did not work out for you.");
+			if (runAnalyze) {
+				if (isOpen("ROI Manager"))	roiManager("reset");
 				setOption("BlackBackground", false);
-				if (nResults==0)
-					run("Analyze Particles...", "display add");
-				else run("Analyze Particles..."); /* Let user select settings */
+				if (isOpen("Results")) {
+					selectWindow("Results");
+					run("Close");
+				}
+				run("Analyze Particles..."); /* Let user select settings */
 				if (nResults!=roiManager("count"))
 					restoreExit("Results and ROI Manager counts do not match!");
 			}
-			else restoreExit("Goodbye, your previous setting will be restored.");
+			else {
+				if (importROI) {
+					if (isOpen("ROI Manager"))	roiManager("reset");
+					msg = "Import ROI set \(zip file\), click \"OK\" to continue to file chooser";
+					showMessage(msg);
+					roiManager("Open", "");
+				}
+				if (importResults){
+					if (isOpen("Results")) {
+						selectWindow("Results");
+						run("Close");
+					}
+					msg = "Import Results Table, click \"OK\" to continue to file chooser";
+					showMessage(msg);
+					open("");
+					Table.rename(Table.title, "Results");
+				}
+			}
 		}
+		nROIs = roiManager("count");
+		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		if(nROIs==0 || nROIs!=nRes)
+			restoreExit("Goodbye, your previous setting will be restored.");
 		return roiManager("count"); /* Returns the new count of entries */
 	}
 	function checkForUnits() {  /* Generic version 
@@ -622,10 +653,13 @@
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0)); /* Remove space before degree symbol */
-		string= replace(string, " °", fromCharCode(0x2009)+"°"); /* Remove space before degree symbol */
+		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */																																		
+		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x00B0));
+		/* Replace normal space before degree symbol with thin space */
+		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
+		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
-	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
 		/* v181002 reselects original image at end if open */
 		oIID = getImageID();
@@ -749,7 +783,7 @@
 		run("Set Scale...", "distance=10 known=1 unit=um"); /* Add an arbitrary scale to demonstrate unit usage. */
 		run("Analyze Particles...", "display exclude clear add");
 		resetThreshold();
-		if (is("Inverting LUT")==true) run("Invert LUT");
+		if(is("Inverting LUT")) run("Invert LUT");
 	} 
 	function stripExtensionsFromString(string) {
 		while (lastIndexOf(string, ".")!=-1) {
@@ -777,11 +811,11 @@
 	/* mod 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
-		string= replace(string, fromCharCode(0x2009)+"fromCharCode(0x00B0)", "deg"); /* replace thin spaces degrees combination */
+		string= replace(string, fromCharCode(0x2009)+fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
 		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */

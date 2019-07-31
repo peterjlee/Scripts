@@ -19,6 +19,7 @@
 	+ v180831 Added check for Fiji_Plugins.
 	+ v190329 Added expanded font choice (edit getFontChoiceList function to put favorites first in list). Updated functions.
 	+ 070119 Expanded ROI check function with import options. Tweak ramp size.
+	+ v190731 Fixed issue with coloring loop not advancing as expected for some conditions.
 */
 /* assess required conditions before proceeding */
 	requires("1.47r");
@@ -425,9 +426,9 @@
 		legendMin = min;
 		legendMax = max;
 	}
-	for (countNaN=0, i=0; i<items; i++) {
+	for (i=0; i<items; i++) {
 		showStatus("Coloring object " + i + ", " + (nROIs-i) + " more to go");
-		if (isNaN(values[i])) countNaN++;
+		if (isNaN(values[i])) countNaN += 1;
 		if (values[i]<=legendMin)
 			lutIndex= 0;
 		else if (values[i]>legendMax)

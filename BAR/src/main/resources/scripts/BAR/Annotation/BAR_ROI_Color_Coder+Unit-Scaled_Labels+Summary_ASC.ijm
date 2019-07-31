@@ -4,7 +4,7 @@
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL  v190628
 	Full history at the bottom of the file.
-	v190701
+	v190731
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -47,6 +47,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (nRes!=nROIs) restoreExit("Exit: Results table \(" + nRes + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
+	run("Remove Overlay");
 	setBatchMode(true);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
@@ -259,7 +260,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		/* use adjacent bin estimate for mode */
 		if (modalBin > 0) 
-			mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1])/((arrayDistFreq[modalBin]-arrayDistFreq[modalBin-1]) + (arrayDistFreq[modalBin]-arrayDistFreq[modalBin+1])));
+			mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[maxOf(0,modalBin-1)])/((arrayDistFreq[modalBin]-arrayDistFreq[maxOf(0,modalBin-1)]) + (arrayDistFreq[modalBin]-arrayDistFreq[minOf(arrayDistFreq.length-1,modalBin+1)])));
 		Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
 		/* End of frequency/distribution section */
 	}
@@ -620,34 +621,33 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			iterate through the ROI Manager list and colorize ROIs
 		*/
 		selectImage(id);
-		for (countNaN=0, i=0; i<items; i++) {
+		for (i=0; i<items; i++) {
 			if ((values[i]>=minCoded) && (values[i]<=maxCoded)) {
 				showStatus("Coloring object " + i + ", " + (nROIs-i) + " more to go");
-				if (isNaN(values[i])) countNaN++;
+				roiManager("select", i);
+				if (isNaN(values[i])) countNaN += 1;
 				if (!revLut) {
 					if (values[i]<=rampMin) lutIndex= 0;
 					else if (values[i]>rampMax) lutIndex= 255;
-					else lutIndex= round(255 * (values[i] - rampMin) / (rampMax - rampMin));
+					else lutIndex = 255 * (values[i] - rampMin) / (rampMax - rampMin);
 				}
 				else {
 					if (values[i]<=rampMin) lutIndex= 255;
 					else if (values[i]>rampMax) lutIndex= 0;
-					else lutIndex= round(255 * (rampMax - values[i]) / (rampMax - rampMin));
+					else lutIndex= 255 * (rampMax - values[i]) / (rampMax - rampMin);
 				}
-				roiManager("select", i);
 				if (stroke>0) {
-					roiManager("Set Line Width", stroke);
-					roiManager("Set Color", alpha+roiColors[lutIndex]);
+					Roi.setStrokeWidth(stroke);
+					Roi.setStrokeColor(alpha+roiColors[lutIndex]);
 				} else
-					roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
+					Roi.setFillColor(alpha+roiColors[lutIndex]);
 				labelValue = values[i];
 				labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
 				labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
-				// roiManager("Rename", labelString); /* label roi with feature value: not necessary if creating new labels */
+				roiManager('update');
 				Overlay.show;
 			}
 		}
-		// roiManager("Show All without labels");
 	}
 	/* End of object coloring */
 
@@ -802,7 +802,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			outlierStroke = maxOf(1,round(fontSize/100 * outlierStrokePC));
 			run("Line Width...", "line=&outlierStroke");
 			outlierCounter = 0;
-			for (countNaN=0, i=0; i<items; i++) {
+			for (i=0; i<items; i++) {
 				roiManager("select", i);
 				if (outlierChoice=="Range") {
 					if (values[i]<rampMin || values[i]>rampMax) {
@@ -2128,5 +2128,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v190328 Fixed font color selection for non-standard colors. Tweaked ramp text alignment.
 	+ v190509-10 Minor cleanup
 	+ v190628 Add options to import ROI sets and Results table if either are empty or there is a count mismatch.
-	+v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
+	+ v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
+	+ v190731 Fixed modalBin error exception. Fixed issue with ROI coloring loop not advancing as expected in some conditions.
 	*/

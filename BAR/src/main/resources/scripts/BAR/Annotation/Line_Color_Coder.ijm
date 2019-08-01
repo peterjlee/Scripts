@@ -19,6 +19,8 @@
 	+ v181004 Major overhaul of menus for better fit on smaller screen and to allow editing of labels. Also added option to change line drawing order.
 	+ v181016-7 Restricted memory flush use to greatly improve speed. Fixed missing last animation frame. Original selection restored.
 	+ v190327 Fixed accidental closure of output window when no combination chosen. Fixed variable ramp height. Fixed text location on ramp.
+	+ v190423 Updated indexOfArrayThatContains function so it stops searching after finding the first match.
+	+ v190506 Removed redundant function.
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -30,8 +32,8 @@ macro "Line Color Coder with Labels"{
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	run("Appearance...", " "); /* Do not use Inverting LUT */
-	/*	The above should be the defaults but this makes sure (black particles on a white background)	http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
+	run("Appearance...", " "); if(is("Inverting LUT")) run("Invert LUT"); /* do not use Inverting LUT */
+	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	switchIsOn = "false";
 	activateIsOn = "false";
@@ -934,7 +936,7 @@ macro "Line Color Coder with Labels"{
 				}
 			}
 		}
-		/* If not in the root try the subfolders */
+		/* If not in the root try the sub-folders */
 		if (!pluginCheck) {
 			subFolderList = newArray(0);
 			for (i=0; i<lengthOf(pluginList); i++) {
@@ -990,6 +992,7 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
+	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
 		/* v181002 reselects original image at end if open */
 		oIID = getImageID();
@@ -1041,7 +1044,7 @@ macro "Line Color Coder with Labels"{
 		outputArray = Array.slice(outputArray, 0, pointsRowCounter);
 		return outputArray;
 	}
-		/* ASC Color Functions */
+		/* ASC mod BAR Color Functions */
 	function getColorArrayFromColorName(colorName) {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
@@ -1103,10 +1106,6 @@ macro "Line Color Coder with Labels"{
 		else restoreExit("No color match to " + colorName);
 		return cA;
 	}
-	function setColorFromColorName(colorName) {
-		colorArray = getColorArrayFromColorName(colorName);
-		setColor(colorArray[0], colorArray[1], colorArray[2]);
-	}
 	function setBackgroundFromColorName(colorName) {
 		colorArray = getColorArrayFromColorName(colorName);
 		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
@@ -1150,7 +1149,7 @@ macro "Line Color Coder with Labels"{
 		return hexColors;
 	}
 	/*
-	End of Color Functions 
+	End of ASC mod BAR Color Functions 
 	*/
   	function getFontChoiceList() {
 		/*	v180723 first version
@@ -1219,9 +1218,15 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	function indexOfArrayThatContains(array, value) {
+		/* Like indexOfArray but partial matches possible
+			v190423 Only first match returned */
 		indexFound = -1;
-		for (i=0; i<lengthOf(array); i++)
-			if (indexOf(array[i], value)>=0) indexFound = i;
+		for (i=0; i<lengthOf(array); i++){
+			if (indexOf(array[i], value)>=0){
+				indexFound = i;
+				i = lengthOf(array);
+			}
+		}
 		return indexFound;
 	}
 	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
@@ -1284,12 +1289,12 @@ macro "Line Color Coder with Labels"{
 		return stringLabel;
 	}
 	function unCleanLabel(string) {
-	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
-	/* mod 041117 to remove spaces as well */
+	/* v161104 This function replaces special characters with standard characters for file system compatible filenames
+	- 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
@@ -1323,4 +1328,4 @@ macro "Line Color Coder with Labels"{
 			else unitLabel = imageUnit;
 		}
 		return unitLabel;
-	}
+	}						   

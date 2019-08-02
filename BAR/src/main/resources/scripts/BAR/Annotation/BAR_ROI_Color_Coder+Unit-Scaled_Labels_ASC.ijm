@@ -3,7 +3,7 @@
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL 
-	v190731
+	v190802
 	Full history at the bottom of the file.
  */
  
@@ -486,7 +486,7 @@ macro "ROI Color Coder with Scaled Labels"{
 							drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
 							lastDrawnPlusSDPos = plusSDPos[s];
 						}
-						if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.93) s = 10;
+						if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.95) s = 10;
 					}
 				}
 				lastDrawnMinusSDPos = minusSDPos[0];
@@ -507,7 +507,7 @@ macro "ROI Color Coder with Scaled Labels"{
 							drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
 							lastDrawnMinusSDPos = minusSDPos[s];
 						}
-						if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
+						if (rampMeanMinusSDs[minOf(9,s+1)]<0.93*rampMin) s = 10;
 					}
 				}
 			}
@@ -550,6 +550,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			/* Color right sigma tick mark with outlier color for outlier range */ 
 			if(statsRampLines!="No"){
 				setColorFromColorName(outlierColor);
+				lastDrawnPlusSDPos = plusSDPos[0];
 				for (s=1; s<10; s++) {
 					if ((outlierChoice!="No") && (s>=sigmaR)) {
 						if ((rampMeanPlusSDFactors[s]<=1) && (plusSDPos[s]<=(rampH - fontSR2)) && (abs(plusSDPos[s]-lastDrawnPlusSDPos)>0.75*fontSR2)) {
@@ -564,7 +565,7 @@ macro "ROI Color Coder with Scaled Labels"{
 								drawLine(rampW-1-tickLR, plusSDPos[s]-rampLW*0.75, rampW-rampLW-1, plusSDPos[s]-rampLW*0.75);
 								lastDrawnPlusSDPos = plusSDPos[s];
 							}
-							if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.93) s = 10;
+							if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.95) s = 10;
 						}
 					}
 				}
@@ -584,7 +585,7 @@ macro "ROI Color Coder with Scaled Labels"{
 								drawLine(rampW-1-tickLR, minusSDPos[s]-rampLW*0.75, rampW-rampLW-1, minusSDPos[s]-rampLW*0.75);
 								lastDrawnMinusSDPos = minusSDPos[s];
 							}
-							if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
+							if (rampMeanMinusSDs[minOf(9,s+1)]<0.93*rampMin) s = 10;
 						}
 					}
 				}
@@ -1282,7 +1283,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				/* Now measure min and max radii from M-Centroid */
 				rMin = Rwidth + Rheight; rMax = 0;
 				for (j=0 ; j<(lengthOf(xPoints)); j++) {
-					dist = sqrt((centroidX-xPoints[j])*(centroidX-xPoints[j])+(centroidY-yPoints[j])*(centroidY-yPoints[j]));
+					dist = sqrt(pow(centroidX-xPoints[j],2)+pow(centroidY-yPoints[j],2));
 					if (dist < rMin) { rMin = dist; rMinX = xPoints[j]; rMinY = yPoints[j];}
 					if (dist > rMax) { rMax = dist; rMaxX = xPoints[j]; rMaxY = yPoints[j];}
 				}
@@ -1975,4 +1976,5 @@ macro "ROI Color Coder with Scaled Labels"{
 	+ v190628 Add options to import ROI sets and Results table if either are empty or there is a count mismatch.
 	+ v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
 	+ v190731 Fixed modalBin error exception. Fixed issue with ROI coloring loop not advancing as expected in some conditions.
+	+ v190802 Fixed missing +1 sigma outlier ramp labels. Adjusted sigma range to allow display closer to top of ramp.
 	*/

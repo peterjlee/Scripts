@@ -4,7 +4,7 @@
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL  v190628
 	Full history at the bottom of the file.
-	v190731
+	v190802
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -459,7 +459,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				for (s=0; s<10; s++) {
 					rampMeanPlusSDFactors[s] = (rampMeanPlusSDs[s]-rampMin)/rampRange;
 					rampMeanMinusSDFactors[s] = (rampMeanMinusSDs[s]-rampMin)/rampRange;
-					plusSDPos[s] = rampTBMargin + (rampH * (1 - rampMeanPlusSDFactors[s]))-1;
+					plusSDPos[s] = rampTBMargin + (rampH * (1 - rampMeanPlusSDFactors[s])) -1;
 					minusSDPos[s] = rampTBMargin + (rampH * (1 - rampMeanMinusSDFactors[s])) -1;
 				}
 				meanFS = 0.9*fontSR2;
@@ -487,7 +487,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 							drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
 							lastDrawnPlusSDPos = plusSDPos[s];
 						}
-						if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.93) s = 10;
+						if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.98) s = 10;
 					}
 				}
 				lastDrawnMinusSDPos = minusSDPos[0];
@@ -508,7 +508,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 							drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
 							lastDrawnMinusSDPos = minusSDPos[s];
 						}
-						if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
+						if (rampMeanMinusSDs[minOf(9,s+1)]<0.93*rampMin) s = 10;
 					}
 				}
 			}
@@ -548,8 +548,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
 			setColor(0,0,0);
-			/* Color right sigma tick mark with outlier color for outlier range */ 
+			/* Color right sigma tick mark with outlier color for outlier range */
 			if(statsRampLines!="No"){
+				lastDrawnPlusSDPos = plusSDPos[0];
 				setColorFromColorName(outlierColor);
 				for (s=1; s<10; s++) {
 					if ((outlierChoice!="No") && (s>=sigmaR)) {
@@ -565,7 +566,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 								drawLine(rampW-1-tickLR, plusSDPos[s]-rampLW*0.75, rampW-rampLW-1, plusSDPos[s]-rampLW*0.75);
 								lastDrawnPlusSDPos = plusSDPos[s];
 							}
-							if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.93) s = 10;
+							if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.98) s = 10;
 						}
 					}
 				}
@@ -585,7 +586,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 								drawLine(rampW-1-tickLR, minusSDPos[s]-rampLW*0.75, rampW-rampLW-1, minusSDPos[s]-rampLW*0.75);
 								lastDrawnMinusSDPos = minusSDPos[s];
 							}
-							if (rampMeanMinusSDs[minOf(9,s+1)]<0.92*rampMin) s = 10;
+							if (rampMeanMinusSDs[minOf(9,s+1)]<0.93*rampMin) s = 10;
 						}
 					}
 				}
@@ -1390,6 +1391,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		v180104 Removed unnecessary changes to settings.
 		v180312 Add minimum and maximum morphological radii.
 		v180602 Add 0.5 pixels to output co-ordinates to match X,Y, XM and YM system for ImageJ results
+		v190802 Updated distance measurement to use more compact pow equation.
 	*/
 		workingTitle = getTitle();
 		if (!checkForPlugin("morphology_collection")) restoreExit("Exiting: Gabriel Landini's morphology suite is needed to run this function.");
@@ -1435,7 +1437,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				/* Now measure min and max radii from M-Centroid */
 				rMin = Rwidth + Rheight; rMax = 0;
 				for (j=0 ; j<(lengthOf(xPoints)); j++) {
-					dist = sqrt((centroidX-xPoints[j])*(centroidX-xPoints[j])+(centroidY-yPoints[j])*(centroidY-yPoints[j]));
+					dist = sqrt(pow(centroidX-xPoints[j],2)+pow(centroidY-yPoints[j],2));
 					if (dist < rMin) { rMin = dist; rMinX = xPoints[j]; rMinY = yPoints[j];}
 					if (dist > rMax) { rMax = dist; rMaxX = xPoints[j]; rMaxY = yPoints[j];}
 				}
@@ -2130,4 +2132,5 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v190628 Add options to import ROI sets and Results table if either are empty or there is a count mismatch.
 	+ v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
 	+ v190731 Fixed modalBin error exception. Fixed issue with ROI coloring loop not advancing as expected in some conditions.
+	+ v190802 Fixed missing +1 sigma outlier ramp labels. Adjusted sigma range to allow display closer to top of ramp.
 	*/

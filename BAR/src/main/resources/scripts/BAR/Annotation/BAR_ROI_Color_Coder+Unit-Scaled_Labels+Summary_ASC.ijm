@@ -1391,7 +1391,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		v180104 Removed unnecessary changes to settings.
 		v180312 Add minimum and maximum morphological radii.
 		v180602 Add 0.5 pixels to output co-ordinates to match X,Y, XM and YM system for ImageJ results
-		v190802 Updated distance measurement to use more compact pow equation.
+		v190802 Updated distance measurement to use more compact pow function.
 	*/
 		workingTitle = getTitle();
 		if (!checkForPlugin("morphology_collection")) restoreExit("Exiting: Gabriel Landini's morphology suite is needed to run this function.");

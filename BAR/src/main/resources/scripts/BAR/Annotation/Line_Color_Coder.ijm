@@ -21,6 +21,7 @@
 	+ v190327 Fixed accidental closure of output window when no combination chosen. Fixed variable ramp height. Fixed text location on ramp.
 	+ v190423 Updated indexOfArrayThatContains function so it stops searching after finding the first match.
 	+ v190506 Removed redundant function.
+	+ v200123 Nested if that caused issues with dialog removed
  */
 macro "Line Color Coder with Labels"{
 	requires("1.47r");
@@ -90,60 +91,70 @@ macro "Line Color Coder with Labels"{
 		parameterIndex = maxOf(parameterIndex,indexOfArrayThatContains(headingsWithRange, lineParameters[i]));
 	/* create the dialog prompt */
 	Dialog.create("Line Color Coder: " + tN);
-	macroP = getInfo("macro.filepath");
-	/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
-	if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
-	else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
-	Dialog.setInsets(6, 0, 0);
-	Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
-	Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[0]);
-	Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[1]);
-	Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
-	Dialog.setInsets(-1, 20, 6);
-	if (lcf!=1) Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false); 
-	Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
-	unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
-	Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
-	// Dialog.setInsets(-40, 197, -5);
-	// Dialog.addMessage("Auto based on\nselected parameter");
-	luts=getLutsList();
-	Dialog.addChoice("LUT:", luts, luts[0]);
-	Dialog.setInsets(0, 120, 0);
-	Dialog.addCheckbox("Reverse LUT?", false); 
-	Dialog.setInsets(6, 0, 6);
-	if (selEType>=0)
-		Dialog.addRadioButtonGroup("Restrict Lines to Area?", newArray("No", "Current Selection", "New Selection"), 1, 3, "Current Selection"); 
-	else Dialog.addRadioButtonGroup("Restrict Lines to Area?", newArray("No", "New Selection"), 1, 3, "No"); 
-	Dialog.addCheckbox("Overwrite Active Image?", false); 
-	Dialog.addCheckbox("Lines on white background?", false); 
-	Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
-	Dialog.addCheckbox("Create a stack for animation?", false); 
-	Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?", false); /* Using individual non-disposing lines can reduce the size of gif animation files */
-	Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
-	Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
+		macroP = getInfo("macro.filepath");
+		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
+		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
+		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
+		Dialog.setInsets(6, 0, 0);
+		Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
+		Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[0]);
+		Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[1]);
+		Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
+		Dialog.setInsets(-1, 20, 6);
+		if (lcf!=1) Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false); 
+		Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
+		unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
+		Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
+		// Dialog.setInsets(-40, 197, -5);
+		// Dialog.addMessage("Auto based on\nselected parameter");
+		luts=getLutsList();
+		Dialog.addChoice("LUT:", luts, luts[0]);
+		Dialog.setInsets(0, 120, 0);
+		Dialog.addCheckbox("Reverse LUT?", false); 
+		Dialog.setInsets(6, 0, 6);
+		defaultR = "Current Selection";
+		if (selEType>=0) restrictions =  newArray("No", "Current Selection", "New Selection");
+		else {
+			restrictions = newArray("No", "New Selection");
+			defaultR = "No";
+		}
+		Dialog.addRadioButtonGroup("Restrict Lines to Area?", restrictions, 1, restrictions.length, defaultR); 
+		Dialog.addCheckbox("Overwrite Active Image?",false);
+		Dialog.addCheckbox("Draw coded lines on a white background",false);	
+		Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
+		Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
+		Dialog.addCheckbox("Make animation stack?",false);
+
 	Dialog.show;
-	
-		fromX = Dialog.getChoice;
-		fromY = Dialog.getChoice;
-		toX = Dialog.getChoice;
-		toY = Dialog.getChoice;
-		if ((lcf!=1) && Dialog.getCheckbox) ccf = lcf;
-		else ccf = 1;
-		parameterWithLabel= Dialog.getChoice;
-		parameter= substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
-		unitLabel = Dialog.getChoice;
-		lut= Dialog.getChoice;
-		revLut= Dialog.getCheckbox;
-		restrictLines= Dialog.getRadioButton;
-		overwriteImage= Dialog.getCheckbox;
-		linesOnWhiteBG= Dialog.getCheckbox;
-		makeAnimStack= Dialog.getCheckbox;
-		linesOnWhite= Dialog.getCheckbox;
-		drawSequence = Dialog.getRadioButton;
-		linesPerFrame= maxOf(1,Dialog.getNumber);
-		lineWidth= Dialog.getNumber;
-		if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
-	
+		fromX = Dialog.getChoice();
+		fromY = Dialog.getChoice();
+		toX = Dialog.getChoice();
+		toY = Dialog.getChoice();
+		ccf = 1;
+		useLCF = false;
+		if (lcf!=1) useLCF = Dialog.getCheckbox);
+		if (useLCF) ccf = lcf;
+		parameterWithLabel= Dialog.getChoice();
+		parameter = substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
+		unitLabel = Dialog.getChoice();
+		lut = Dialog.getChoice();
+		revLut = Dialog.getCheckbox();
+		restrictLines = Dialog.getRadioButton();
+		overwriteImage = Dialog.getCheckbox();
+		linesOnWhiteBG = Dialog.getCheckbox();
+		drawSequence = Dialog.getRadioButton();
+		lineWidth = Dialog.getNumber();
+		makeAnimStack = Dialog.getCheckbox();
+	/* end of format menu */
+	if (lineWidth<1) lineWidth = 1(); /* otherwise what is the point? */
+	if (makeAnimStack){
+		Dialog.create("Animation options " + tN);
+		Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?",false); /* Using individual non-disposing lines can reduce the size of gif animation files */
+		Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
+		Dialog.show();	
+		animLinesOnWhite = Dialog.getCheckbox();
+		linesPerFrame = maxOf(1,Dialog.getNumber());
+	}
 	values = Table.getColumn(parameter); 
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	
@@ -584,7 +595,7 @@ macro "Line Color Coder with Labels"{
 		cY1 = 0;
 		copyImage(t,"tempFrame1");
 		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color");
-		if(linesOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
+		if(animLinesOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
 		Dialog.create("Crop Animation Frame?");
 			Dialog.addCheckbox("Would you like to restrict the animation frames to a cropped area?", false);
 			if (restrictLines!="No") {
@@ -735,7 +746,7 @@ macro "Line Color Coder with Labels"{
 				else 
 					lutIndex= round(255 * (max - values[j]) / (max - min));
 				setColor("#"+lineColors[lutIndex]);
-				if (!linesOnWhite) { /* create animation frames lines on original image */
+				if (!animLinesOnWhite) { /* create animation frames lines on original image */
 					/* Keep adding to frame1 to create a cumulative image */
 					selectWindow("frame1");
 					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);

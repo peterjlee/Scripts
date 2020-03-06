@@ -2,13 +2,14 @@
 	https://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on Tiago Ferreira, v.5.4 2017.03.10
-	Peter J. Lee Applied Superconductivity Center, NHMFL  v190628
+	Peter J. Lee Applied Superconductivity Center, NHMFL  v200305
 	Full history at the bottom of the file.
 	v190802
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
 	requires("1.47r");
+	run("Collect Garbage");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
@@ -43,7 +44,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	nRes = nResults;
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
+	// menuLimit = 700; /* for testing only resolution options only */
 	numLabels = 10; /* default number of ramp labels */
+	sup2 = fromCharCode(178);
+	ums = getInfo("micrometer.abbreviation");
 	if (nRes!=nROIs) restoreExit("Exit: Results table \(" + nRes + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
@@ -68,14 +72,17 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	imageList = getList("image.titles");
 	/* Create initial dialog prompt to determine parameters */
+	macroP = getInfo("macro.filepath");
+	macroL = substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" ));
+	if (macroL.length>43) macroL = macroL.substring(0,21) + "..." + macroL.substring(macroL.length-21);
+	tNL = tN;
+	if (tN.length>43) tNL = tNL.substring(0,21) + "..." + tNL.substring(tNL.length-21);
 	Dialog.create("ROI Color Coder: " + tN);
-		macroP = getInfo("macro.filepath");
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
 		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
-		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
+		else Dialog.addMessage("Macro: " + macroL);
 		Dialog.setInsets(6, 0, 0);
-		if (lengthOf(tN)<=47) Dialog.addMessage("Filename: " + tN);
-		else Dialog.addMessage("Filename: " + substring(tN, 0, 43) + "...");
+		Dialog.addMessage("Filename: " + tNL);
 		Dialog.addMessage("Image has " + nROIs + " ROIs that will be color coded.");
 		Dialog.setInsets(10, 0, 10);
 		Dialog.addChoice("Image for Coloring", imageList, t);
@@ -87,8 +94,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?");
 		Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
 		Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
-		Dialog.setInsets(20, 120, 10);
-		Dialog.addCheckbox("Make copy of image with scaled labels?", true);
+		outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Ramp_Range", "Manual_Input");
+		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values:", outlierOptions, 2, 4, "No");
+		Dialog.setInsets(3, 0, 15);
+		allColors = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
+		Dialog.addChoice("Outliers: Outline:", allColors, allColors[0]);
+		Dialog.addCheckbox("Apply colors and labels to image copy \(no change to original\)", true);
 		Dialog.setInsets(6, 120, 10);
 		if (selectionExists) {
 			Dialog.addCheckbox("Summary/Parameter at selected location \(below\)?", true); 
@@ -107,6 +118,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		revLut = Dialog.getCheckbox;
 		stroke = Dialog.getNumber;
 		alpha = pad(toHex(255*Dialog.getNumber/100));
+		outlierChoice =  Dialog.getRadioButton;
+		if (outlierChoice!="No") sigmaR = (parseInt(substring(outlierChoice,0,1)));
+		else sigmaR = NaN;
+		outlierColor = Dialog.getChoice(); /* Outline color for outliers */
 		addLabels = Dialog.getCheckbox;
 		if (selectionExists) {
 			selectionExists = Dialog.getCheckbox; 
@@ -133,7 +148,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.setInsets(-42, 315, -5);
 		Dialog.addMessage("Edit for\nramp label");
 		autoUnit = unitLabelFromString(parameter, unit);
-		unitChoice = newArray(autoUnit, "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
+		unitChoice = newArray(autoUnit, "Manual", unit, unit+sup2, "None", "pixels", "pixels"+sup2, fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
+		if (unit=="microns" && (autoUnit!=ums || autoUnit!=ums+sup2)) unitChoice = Array.concat(newArray(ums,ums+sup2),unitChoice);
 		Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 		Dialog.setInsets(-42, 215, -5);
 		Dialog.addMessage("Auto based on\nselected parameter");
@@ -144,11 +160,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.addMessage("(e.g., 10-100)");
 		Dialog.setInsets(-4, 120, 0);
 		Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
-		outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Range", "Select");
-		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values \("+fromCharCode(0x03C3)+" = "+arraySD+"\):", outlierOptions, 1, 5, "No");
-		Dialog.setInsets(3, 0, 15);
-		allColors = newArray("red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "Radical Red", "Wild Watermelon", "Outrageous Orange", "Atomic Tangerine", "Neon Carrot", "Sunglow", "Laser Lemon", "Electric Lime", "Screamin' Green", "Magic Mint", "Blizzard Blue", "Shocking Pink", "Razzle Dazzle Rose", "Hot Magenta");
-		Dialog.addChoice("Outliers: Outline:", allColors, allColors[0]);
 		Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
 		Dialog.addNumber("Minor tick intervals:", 0, 0, 3, "5 would add 4 ticks between labels ");
 		Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
@@ -164,12 +175,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.addCheckbox("Draw tick marks", true);
 		Dialog.setInsets(2, 120, 0);
 		Dialog.addCheckbox("Force clockwise rotated legend label", false);
-		Dialog.setInsets(6, 0, -2);
-		Dialog.addMessage("Ramp Stats Labels:");
-		Dialog.setInsets(4, 120, 0);
+		Dialog.setInsets(3, 0, -2);
+		// Dialog.addMessage("Statistics labels added to legend \(ramp\):");
+		// Dialog.setInsets(6, 120, -20);
 		rampStatsOptions = newArray("No", "Linear", "Ln");
-		Dialog.setInsets(-6, 15, 18);
-		Dialog.addRadioButtonGroup("Ramp Stats:\n Mean and " + fromCharCode(0x00B1) + fromCharCode(0x03C3) + " on ramp \(if \"Ln\" then outlier " + fromCharCode(0x03C3) + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "No");
+		Dialog.setInsets(-20, 15, 18);
+		Dialog.addRadioButtonGroup("Ramp Stats: Mean and " + fromCharCode(0x00B1) + fromCharCode(0x03C3) + " on ramp \(if \"Ln\" then outlier " + fromCharCode(0x03C3) + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "No");
 		/* will be used for sigma outlines too */
 		Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
@@ -182,10 +193,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		rangeCoded = Dialog.getString;
 		minmaxLines = Dialog.getCheckbox;
-		outlierChoice =  Dialog.getRadioButton;
-		if (outlierChoice!="No") sigmaR = (parseInt(substring(outlierChoice,0,1)));
-		else sigmaR = NaN;
-		outlierColor = Dialog.getChoice(); /* Outline color for outliers */
 		numLabels = Dialog.getNumber + 1; /* The number of major ticks/labels is one more than the intervals */
 		minorTicks = Dialog.getNumber; /* The number of major ticks/labels is one more than the intervals */
 		dpChoice = Dialog.getChoice;
@@ -703,14 +710,17 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2"), dpChoice); /* reuse previous dpChoice as default */
 			Dialog.addNumber("Label outline stroke:", outlineStrokePC,0,3,"% of auto mean size");
 			Dialog.addChoice("Label Outline (background) color:", colorChoice, colorChoice[1]);
-			Dialog.addNumber("Shadow drop: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
-			Dialog.addNumber("Shadow displacement Right: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
-			Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of mean font size");
-			Dialog.addNumber("Shadow darkness \(darkest = 100%\):", 50,0,3,"%, neg.= glow");
-			Dialog.addNumber("Inner shadow drop: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
-			Dialog.addNumber("Inner displacement right: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
-			Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
-			Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 15,0,3,"%");
+			if (menuLimit > 796){
+				Dialog.addNumber("Shadow drop: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
+				Dialog.addNumber("Shadow displacement Right: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of mean font size");
+				Dialog.addNumber("Shadow darkness \(darkest = 100%\):", 50,0,3,"%, neg.= glow");
+				Dialog.addNumber("Inner shadow drop: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
+				Dialog.addNumber("Inner displacement right: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
+				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
+				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 15,0,3,"%");
+			}
+			else Dialog.addCheckbox("Tweak label format?", false);
 			Dialog.setInsets(3, 0, 3);
 			if (isNaN(getResult("mc_X\(px\)",0)) && (checkForPlugin("morphology_collection"))) {
 				Dialog.addChoice("Object labels at: ", newArray("ROI Center", "Morphological Center"), "ROI Center");
@@ -745,19 +755,55 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			dpChoice = Dialog.getChoice();
 			outlineStrokePC = Dialog.getNumber();
 			outlineColor = Dialog.getChoice();
-			shadowDrop = Dialog.getNumber();
-			shadowDisp = Dialog.getNumber();
-			shadowBlur = Dialog.getNumber();
-			shadowDarkness = Dialog.getNumber();
-			innerShadowDrop = Dialog.getNumber();
-			innerShadowDisp = Dialog.getNumber();
-			innerShadowBlur = Dialog.getNumber();
-			innerShadowDarkness = Dialog.getNumber();
+			if (menuLimit > 800){
+				shadowDrop = Dialog.getNumber();
+				shadowDisp = Dialog.getNumber();
+				shadowBlur = Dialog.getNumber();
+				shadowDarkness = Dialog.getNumber();
+				innerShadowDrop = Dialog.getNumber();
+				innerShadowDisp = Dialog.getNumber();
+				innerShadowBlur = Dialog.getNumber();
+				innerShadowDarkness = Dialog.getNumber();
+				tweakLabels = false;
+			}
+			else tweakLabels = Dialog.getCheckbox();
 			ctrChoice = Dialog.getChoice(); /* Choose ROI or morphological centers for object labels */
 			paraLabAdd = Dialog.getCheckbox();
 			summaryAdd = Dialog.getCheckbox();
 			paraLabPos = Dialog.getChoice(); /* Parameter Label Position */
 			statsChoiceLines = Dialog.getNumber();
+			if (menuLimit <= 796){
+				if (tweakLabels){
+					Dialog.create("Label tweak options for low resolution monitors");
+					Dialog.addNumber("Shadow drop: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
+					Dialog.addNumber("Shadow displacement Right: "+fromCharCode(0x00B1), shadowDropPC,0,3,"% of mean font size");
+					Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of mean font size");
+					Dialog.addNumber("Shadow darkness \(darkest = 100%\):", 50,0,3,"%, neg.= glow");
+					Dialog.addNumber("Inner shadow drop: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
+					Dialog.addNumber("Inner displacement right: "+fromCharCode(0x00B1), dIShOPC,0,3,"% of min font size");
+					Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
+					Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):",15,0,3,"%");
+					Dialog.show();
+					shadowDrop = Dialog.getNumber();
+					shadowDisp = Dialog.getNumber();
+					shadowBlur = Dialog.getNumber();
+					shadowDarkness = Dialog.getNumber();
+					innerShadowDrop = Dialog.getNumber();
+					innerShadowDisp = Dialog.getNumber();
+					innerShadowBlur = Dialog.getNumber();
+					innerShadowDarkness = Dialog.getNumber();
+				}
+				else {  /* set the default values if no tweaking and lo-res monitor */
+					shadowDrop = shadowDropPC;
+					shadowDisp = shadowDropPC;
+					shadowBlur = 0.75 * shadowDropPC;
+					shadowDarkness = 50;
+					innerShadowDrop = dIShOPC;
+					innerShadowDisp = dIShOPC;
+					innerShadowBlur = floor(dIShOPC/2);
+					innerShadowDarkness = 15;
+				}
+			}
 			if (isNaN(getResult("mc_X\(px\)",0)) && (ctrChoice=="Morphological Center")) AddMCsToResultsTable ();
 		selectWindow(t);
 		if (dpChoice=="Manual") 
@@ -778,7 +824,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		workingImage = getTitle();
 		if (is("Batch Mode")==false) setBatchMode(true);
 		if (outlierChoice!="No")  {
-			if (outlierChoice=="Select") {
+			if (outlierChoice=="Manual_Input") {
 				Dialog.create("Input Outlier Limits");
 				Dialog.addString("Outlier Limits:", "Low-High", 16);
 				Dialog.addMessage("Alternatively enter 4sigma, 5sigma etc. \(up to 9\).");
@@ -805,13 +851,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			outlierCounter = 0;
 			for (i=0; i<items; i++) {
 				roiManager("select", i);
-				if (outlierChoice=="Range") {
+				if (outlierChoice=="Ramp_Range") {
 					if (values[i]<rampMin || values[i]>rampMax) {
 						run("Draw", "slice");
 						outlierCounter +=1;
 					}
 				}
-				else if (outlierChoice=="Select") {
+				else if (outlierChoice=="Manual_Input") {
 					if (values[i]<outlierMin || values[i]>outlierMax) {
 						run("Draw", "slice");
 						outlierCounter +=1;
@@ -920,8 +966,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	/* Reduce decimal places - but not as much as ramp labels */
 		summaryDP = decPlaces + 2;
 		outlierChoiceAbbrev = cleanLabel(outlierChoice);
-		if (outlierChoice=="Select") 	outlierChoiceAbbrev = "<" + outlierMin + " >" + outlierMax + " " + unitLabel;
-		else if (outlierChoice=="Range") 	outlierChoiceAbbrev = "<" + rampMin + " >" + rampMax + " " + unitLabel;
+		if (outlierChoice=="Manual_Input") 	outlierChoiceAbbrev = "<" + outlierMin + " >" + outlierMax + " " + unitLabel;
+		else if (outlierChoice=="Ramp_Range") 	outlierChoiceAbbrev = "<" + rampMin + " >" + rampMax + " " + unitLabel;
 		else outlierChoiceAbbrev = "" + fromCharCode(0x2265) + outlierChoiceAbbrev;
 		arrayMean = d2s(arrayMean,summaryDP);
 		coeffVar = d2s((100/arrayMean)*arraySD,summaryDP);
@@ -992,7 +1038,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
 				Dialog.show();
 			}
-			else Dialog.show(); /* Sorry, only an abbreviated menu for small screens */
+			else Dialog.addCheckbox("Tweak summary format?",false);
+			// else Dialog.show(); /* Sorry, only an abbreviated menu for small screens */
 			
 			if (paraLabAdd) {
 				paraLabel = Dialog.getString();
@@ -1021,7 +1068,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				innerShadowBlur = Dialog.getNumber();
 				textLabelInnerShadowDarkness = Dialog.getNumber();
 			}
-			else {
+			else if (Dialog.getCheckbox){
 				Dialog.create("Statistics Summary Options Tweaks");
 				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of stats label font size");
 				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of stats label font size");
@@ -1031,7 +1078,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of stats label font size");
 				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of stats label font size");
 				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
-				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
+				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):",20,0,3,"%");
 				Dialog.show();
 				outlineStrokePC = Dialog.getNumber();
 				shadowDrop = Dialog.getNumber();
@@ -1042,6 +1089,17 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				innerShadowDisp = Dialog.getNumber();
 				innerShadowBlur = Dialog.getNumber();
 				innerShadowDarkness = Dialog.getNumber();
+			}
+			else {
+				outlineStrokePC = outlineStrokePC;
+				shadowDrop = shadowDropPC;
+				shadowDisp = shadowDropPC;
+				shadowBlur = floor(0.75 * shadowDropPC);
+				shadowDarkness = 50;
+				innerShadowDrop = dIShOPC;
+				innerShadowDisp = dIShOPC;
+				innerShadowBlur = floor(dIShOPC/2);
+				innerShadowDarkness = 20;
 			}
 		/* End optional parameter label dialog */
 		if (shadowDrop<0) summLabelShadowDrop = round(shadowDrop * negAdj);
@@ -1375,9 +1433,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	if (selectionExists) makeRectangle(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 	setBatchMode("exit & display");
 	restoreSettings;
+	memFlush(200);
 	showStatus("ROI Color Coder with Scaled Labels and Summary Macro Finished");
 	beep(); wait(300); beep(); wait(300); beep();
-	run("Collect Garbage");
 }
 	/*
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
@@ -1981,11 +2039,19 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
 	function lnArray(arrayName) {
-	/* 1st version: v180318 */
-	outputArray = Array.copy(arrayName);
-	for (i=0; i<lengthOf(arrayName); i++)
-		  outputArray[i] = log(arrayName[i]);
-	return outputArray;
+		/* 1st version: v180318 */
+		outputArray = Array.copy(arrayName);
+		for (i=0; i<lengthOf(arrayName); i++)
+			  outputArray[i] = log(arrayName[i]);
+		return outputArray;
+		}
+	function memFlush(waitTime) {
+		run("Reset...", "reset=[Undo Buffer]"); 
+		wait(waitTime);
+		run("Reset...", "reset=[Locked Image]"); 
+		wait(waitTime);
+		call("java.lang.System.gc"); /* force a garbage collection */
+		wait(waitTime);
 	}
 	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
 		while (endsWith(string,".0")) {
@@ -1996,11 +2062,19 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		}
 		return string;
 	}
+	function memFlush(waitTime) {
+		run("Reset...", "reset=[Undo Buffer]"); 
+		wait(waitTime);
+		run("Reset...", "reset=[Locked Image]"); 
+		wait(waitTime);
+		call("java.lang.System.gc"); /* force a garbage collection */
+		wait(waitTime);
+	}
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
-		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
+		/* v200305 1st version using memFlush function */
 		restoreSettings(); /* Restore previous settings before exiting */
 		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
-		run("Collect Garbage");
+		memFlush(200);
 		exit(message);
 	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
@@ -2110,7 +2184,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v180321 Added mode statistics to summary and fixed inconsistent decimal places in summary.
 	+ v180323 Further tweaks to the histogram appearance and a fix for instances where the mode is in the 1st bin.
 	+ v180323b Adds options to crop image before combining with ramp. Also add options to skip adding labels.
-	+ v180326 Adds "select" option to outliers (use this option for sigma>3).
+	+ v180326 Adds "Manual_Input" option to outliers (use this option for sigma>3).
 	+ v180326 Restored missing frequency distribution column.
 	+ v180329 Changed line width for frequency plot to work better for very large images.
 	+ v180402 Reordered dialogs for space efficiency, fixed outlier choice menu item, described font size basis in menu.
@@ -2133,4 +2207,5 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v190701 Tweaked ramp height, removed duplicate color array, changed label alignment.
 	+ v190731 Fixed modalBin error exception. Fixed issue with ROI coloring loop not advancing as expected in some conditions.
 	+ v190802 Fixed missing +1 sigma outlier ramp labels. Adjusted sigma range to allow display closer to top of ramp.
+	+ v200305 Added shorter dialogs for lower resolution screens and added memory flushing function.
 	*/

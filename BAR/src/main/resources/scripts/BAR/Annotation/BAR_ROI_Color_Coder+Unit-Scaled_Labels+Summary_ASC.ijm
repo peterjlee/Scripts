@@ -9,7 +9,7 @@
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
 	requires("1.47r");
-	run("Collect Garbage");
+	call("java.lang.System.gc");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
 	saveSettings;
@@ -190,6 +190,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	Dialog.show;
 		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
+		if (unitLabel=="None") unitLabel = ""; 
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		rangeCoded = Dialog.getString;
 		minmaxLines = Dialog.getCheckbox;
@@ -219,8 +220,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	rampParameterLabel= cleanLabel(parameterLabel);
 	rampW = round(rampH/8); /* this will be updated later */ 
 	if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
-	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
-	if ((rotLegend && (rampHChoice==rampH)) || (rampW < maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel)))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely Â° symbol */
+	if (((rotLegend && rampHChoice==rampH)) || (rampW < maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel)))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampHChoice;
 	rampW = round(rampH/8); 
 	range = split(rangeS, "-");
@@ -297,7 +298,6 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.show();
 			unitLabel = Dialog.getString();
 	}
-	if (unitLabel=="None") unitLabel = ""; 
 	unitLabel= cleanLabel(unitLabel);
 	/* Begin object color coding if stroke set */
 	if (stroke>=0) {
@@ -1028,12 +1028,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			Dialog.addChoice("Summary and parameter outline color:", colorChoice, "black");
 			if (menuLimit>=796) { /* room to show full dialog */
 				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of summary font size");
-				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of summary font size");
-				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of summary font size");
+				Dialog.addNumber("Shadow drop: Â±", shadowDropPC,0,3,"% of summary font size");
+				Dialog.addNumber("Shadow displacement Right: Â±", shadowDropPC,0,3,"% of summary font size");
 				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of summary font size");
 				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
-				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of summary font size");
-				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of summary font size");
+				Dialog.addNumber("Inner shadow drop: Â±", dIShOPC,0,3,"% of summary font size");
+				Dialog.addNumber("Inner displacement right: Â±", dIShOPC,0,3,"% of summary font size");
 				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
 				Dialog.show();
@@ -1071,12 +1071,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			else if (Dialog.getCheckbox){
 				Dialog.create("Statistics Summary Options Tweaks");
 				Dialog.addNumber("Outline stroke:", outlineStrokePC,0,3,"% of stats label font size");
-				Dialog.addNumber("Shadow drop: ±", shadowDropPC,0,3,"% of stats label font size");
-				Dialog.addNumber("Shadow displacement Right: ±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow drop: Â±", shadowDropPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Shadow displacement Right: Â±", shadowDropPC,0,3,"% of stats label font size");
 				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDropPC),0,3,"% of stats label font size");
 				Dialog.addNumber("Shadow darkness \(darkest = 100\):",50,0,3,"%, neg.= glow");
-				Dialog.addNumber("Inner shadow drop: ±", dIShOPC,0,3,"% of stats label font size");
-				Dialog.addNumber("Inner displacement right: ±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner shadow drop: Â±", dIShOPC,0,3,"% of stats label font size");
+				Dialog.addNumber("Inner displacement right: Â±", dIShOPC,0,3,"% of stats label font size");
 				Dialog.addNumber("Inner shadow mean blur:",floor(dIShOPC/2),1,2,"pixels");
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):",20,0,3,"%");
 				Dialog.show();
@@ -1518,7 +1518,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (!batchMode) setBatchMode(false); /* Toggle batch mode off */
 		showStatus("MC Function Finished: " + roiManager("count") + " objects analyzed in " + (getTime()-start)/1000 + "s.");
 		beep(); wait(300); beep(); wait(300); beep();
-		run("Collect Garbage"); 
+		call("java.lang.System.gc"); 
 	}
  	function autoCalculateDecPlaces4(dP,min,max,numberOfLabels){
 		/* v180316 4 variable version */
@@ -1735,15 +1735,15 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ã…ngstrÃ¶m unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		string= replace(string, " Â°", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "Â±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -1821,10 +1821,10 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string = replace(string, "Dp", "Diam:perim.");
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
-		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
-		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		string = replace(string, "Â°", "degrees");
+		string = replace(string, "0-90", "0-90Â°"); /* An exception to the above */
+		string = replace(string, "Â°, degrees", "Â°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Ã‚ */
 		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
@@ -2119,7 +2119,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* Ã…ngstrÃ¶m unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */

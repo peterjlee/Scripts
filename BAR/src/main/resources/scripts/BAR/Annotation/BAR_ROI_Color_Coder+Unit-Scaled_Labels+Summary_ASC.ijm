@@ -4,10 +4,11 @@
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL  v200305
 	Full history at the bottom of the file.
-	v190802
+	v200604
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
+	macroL = "BAR_ROI_Color_Coder+Unit-Scaled_Labels+Summary_ASC_v200604";
 	requires("1.47r");
 	call("java.lang.System.gc");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
@@ -72,15 +73,12 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	imageList = getList("image.titles");
 	/* Create initial dialog prompt to determine parameters */
-	macroP = getInfo("macro.filepath");
-	macroL = substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" ));
 	if (macroL.length>43) macroL = macroL.substring(0,21) + "..." + macroL.substring(macroL.length-21);
 	tNL = tN;
 	if (tN.length>43) tNL = tNL.substring(0,21) + "..." + tNL.substring(tNL.length-21);
 	Dialog.create("ROI Color Coder: " + tN);
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
-		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
-		else Dialog.addMessage("Macro: " + macroL);
+		Dialog.addMessage("Macro: " + macroL);
 		Dialog.setInsets(6, 0, 0);
 		Dialog.addMessage("Filename: " + tNL);
 		Dialog.addMessage("Image has " + nROIs + " ROIs that will be color coded.");
@@ -2208,4 +2206,5 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v190731 Fixed modalBin error exception. Fixed issue with ROI coloring loop not advancing as expected in some conditions.
 	+ v190802 Fixed missing +1 sigma outlier ramp labels. Adjusted sigma range to allow display closer to top of ramp.
 	+ v200305 Added shorter dialogs for lower resolution screens and added memory flushing function.
+	+ v200604 Removed troublesome macro-path determination
 	*/

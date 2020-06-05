@@ -38,6 +38,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
 	getPixelSize(unit, pixelWidth, pixelHeight);
+
 	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
@@ -128,7 +129,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 			originalSelEWidth = Dialog.getNumber;
 			originalSelEHeight = Dialog.getNumber;
 		}
-	unitLabel = unitLabelFromString(parameter, unit);
+	unitLabel = cleanLabel(unitLabelFromString(parameter, unit));
 	/* get values for chosen parameter */
 	values= newArray(items);
 	if (parameter=="Object") for (i=0; i<items; i++) values[i]= i+1;
@@ -145,6 +146,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		Dialog.addString("Parameter label", parameter, 24);
 		Dialog.setInsets(-42, 315, -5);
 		Dialog.addMessage("Edit for\nramp label");
+		Dialog.addMessage("Do not include unit in Parameter label as it will be added from options below");
 		autoUnit = unitLabelFromString(parameter, unit);
 		unitChoice = newArray(autoUnit, "Manual", unit, unit+sup2, "None", "pixels", "pixels"+sup2, fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 		if (unit=="microns" && (autoUnit!=ums || autoUnit!=ums+sup2)) unitChoice = Array.concat(newArray(ums,ums+sup2),unitChoice);
@@ -219,6 +221,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	rampW = round(rampH/8); /* this will be updated later */ 
 	if (statsRampLines=="Ln") rampParameterLabel= rampParameterLabel + "\(ln stats\)";
 	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
+	rampUnitLabel = replace(rampUnitLabel,"^-","-");
 	if (((rotLegend && rampHChoice==rampH)) || (rampW < maxOf(getStringWidth(rampUnitLabel), getStringWidth(rampParameterLabel)))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampHChoice;
 	rampW = round(rampH/8); 
@@ -1725,17 +1728,22 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	}
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
-		v180611 added "degreeC" */
+		v180611 added "degreeC"
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
-		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-"+fromCharCode(178), "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-1", "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-2", "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
 		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
-		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
+		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
@@ -1823,6 +1831,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
 		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
 		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - */
 		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}

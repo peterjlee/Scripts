@@ -4,11 +4,11 @@
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL  v200305
 	Full history at the bottom of the file.
-	v200604
+	v200706
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
-	macroL = "BAR_ROI_Color_Coder+Unit-Scaled_Labels+Summary_ASC_v200604";
+	macroL = "BAR_ROI_Color_Coder+Unit-Scaled_Labels+Summary_ASC_v200706.ijm";
 	requires("1.47r");
 	call("java.lang.System.gc");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
@@ -35,7 +35,8 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	run("Appearance...", " "); if(is("Inverting LUT")) run("Invert LUT"); /* do not use Inverting LUT */
 	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
-	id = getImageID();	t=getTitle(); /* get id of image and title */
+	id = getImageID(); /* get id of image and title */
+	t = getTitle();
 	checkForUnits(); /* Required function */
 	getPixelSize(unit, pixelWidth, pixelHeight);
 
@@ -56,11 +57,13 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	run("Remove Overlay");
 	setBatchMode(true);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
+	if (lengthOf(tN)>43) tNL = substring(tN,0,21) + "..." + substring(tN, lengthOf(tN)-21);
+	else tNL = tN;
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	acceptMinFontSize = true;
 	fontSize = maxOf(10,imageHeight/28); /* default fonts size based on imageHeight */
-	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
+	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray(lengthOf(headings));
 	for (i=0; i<lengthOf(headings); i++) {
@@ -74,13 +77,9 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	imageList = getList("image.titles");
 	/* Create initial dialog prompt to determine parameters */
-	if (macroL.length>43) macroL = macroL.substring(0,21) + "..." + macroL.substring(macroL.length-21);
-	tNL = tN;
-	if (tN.length>43) tNL = tNL.substring(0,21) + "..." + tNL.substring(tNL.length-21);
-	Dialog.create("ROI Color Coder: " + tN);
+
+	Dialog.create("ROI Color Coder: " + macroL);
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
-		Dialog.addMessage("Macro: " + macroL);
-		Dialog.setInsets(6, 0, 0);
 		Dialog.addMessage("Filename: " + tNL);
 		Dialog.addMessage("Image has " + nROIs + " ROIs that will be color coded.");
 		Dialog.setInsets(10, 0, 10);
@@ -355,7 +354,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		numLabelFontSize = minOf(fontSize, rampH/numLabels);
 		if ((numLabelFontSize<10) && acceptMinFontSize) numLabelFontSize = maxOf(10, numLabelFontSize);
 		setFont(fontName, numLabelFontSize, fontStyle);
-		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
+		if (imageDepth!=8 || lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
 		setLineWidth(rampLW*2);
 		if (ticks) {
 			drawRect(0, 0, rampH, rampW);
@@ -817,7 +816,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (stroke>=0) {
 			run("Flatten"); /* Flatten converts to RGB so . . .  */
 			rename(tN + "_" + parameterLabel + "_labels");
-			if ((originalImageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
+			if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 		} else {
 			run("Duplicate...", "title=labeled");
 			rename(tN + "_" + parameterLabel + "_labels");
@@ -1290,7 +1289,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		run("Select None");
 		if (paraLabFontSize>=0) {
 			setFont(fontName,paraLabFontSize, fontStyle);
-			newImage("antiAliased", originalImageDepth, imageWidth, imageHeight, 1);
+			newImage("antiAliased", imageDepth, imageWidth, imageHeight, 1);
 			/* Draw text for mask and antiAliased tweak */
 			/* determine font color intensities settings for antialiased tweak */
 			fontColorArray = getColorArrayFromColorName(fontColor);
@@ -1400,7 +1399,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 				makeRectangle(croppedImageWidth + maxOf(2,croppedImageWidth/500), round((croppedImageHeight-canvasH)/2), srW, croppedImageHeight);
 				run("Image to Selection...", "image=scaled_ramp opacity=100");
 				run("Flatten");
-				if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+				if (imageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 				rename(tNC + "_crop+ramp");
 				closeImageByTitle("scaled_ramp");
 				closeImageByTitle("temp_combo");	
@@ -1423,7 +1422,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					run("Image to Selection...", "image=scaled_ramp opacity=100");
 				else run("Image to Selection...", "image=&tR opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
 				run("Flatten");
-				if (originalImageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+				if (imageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 				rename(tNC + "+ramp");
 				closeImageByTitle("scaled_ramp");
 				closeImageByTitle("temp_combo");
@@ -1762,7 +1761,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		if (isOpen(oIID)) selectImage(oIID);
 	}
 	function createInnerShadowFromMask4(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
-		/* Requires previous run of: originalImageDepth = bitDepth();
+		/* Requires previous run of: imageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls -4- variables: drop, displacement blur and darkness */
 		showStatus("Creating inner shadow for labels . . . ");
@@ -1782,14 +1781,14 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		imageCalculator("Max", "inner_shadow","label_mask");
 		run("Select None");
 		/* The following are needed for different bit depths */
-		if (originalImageDepth==16 || originalImageDepth==32) run(originalImageDepth + "-bit");
+		if (imageDepth==16 || imageDepth==32) run(imageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
 		run("Invert");  /* Create an image that can be subtracted - this works better for color than Min */
 		divider = (100 / abs(iShadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
 	function createShadowDropFromMask5(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
-		/* Requires previous run of: originalImageDepth = bitDepth();
+		/* Requires previous run of: imageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161115 calls -5- variables: drop, displacement blur and darkness */
 		showStatus("Creating drop shadow for labels . . . ");
@@ -1812,7 +1811,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 		run("Clear");
 		run("Select None");
 		/* The following are needed for different bit depths */
-		if (originalImageDepth==16 || originalImageDepth==32) run(originalImageDepth + "-bit");
+		if (imageDepth==16 || imageDepth==32) run(imageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
 		divider = (100 / abs(oShadowDarkness));
 		run("Divide...", "value=[divider]");
@@ -2216,4 +2215,5 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v190802 Fixed missing +1 sigma outlier ramp labels. Adjusted sigma range to allow display closer to top of ramp.
 	+ v200305 Added shorter dialogs for lower resolution screens and added memory flushing function.
 	+ v200604 Removed troublesome macro-path determination
+	+ v200706 Changed imageDepth variable name.
 	*/

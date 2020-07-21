@@ -21,9 +21,11 @@
 	+ v190327 Fixed accidental closure of output window when no combination chosen. Fixed variable ramp height. Fixed text location on ramp.
 	+ v190423 Updated indexOfArrayThatContains function so it stops searching after finding the first match.
 	+ v190506 Removed redundant function.
-	+ v200123 Nested if that caused issues with dialog removed
+	+ v200123 Nested if that caused issues with dialog removed.
+	+ v200707 Changed imageDepth variable name added macro label.
  */
 macro "Line Color Coder with Labels"{
+	macroL = "Line_Color_Coder_v200707";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -63,10 +65,12 @@ macro "Line Color Coder with Labels"{
 	nRes = nResults;
 	setBatchMode(true);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
+	if (lengthOf(tN)>43) tNL = substring(tN,0,21) + "..." + substring(tN, lengthOf(tN)-21);
+	else tNL = tN;
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	fontSize = maxOf(8,rampH/28); /* default fonts size based on imageHeight */
-	originalImageDepth = bitDepth(); /* required for shadows at different bit depths */
+	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
 	defaultLineWidth = round((imageWidth+imageHeight)/1000);
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
@@ -90,11 +94,8 @@ macro "Line Color Coder with Labels"{
 	for (i=0; i<lengthOf(lineParameters); i++)
 		parameterIndex = maxOf(parameterIndex,indexOfArrayThatContains(headingsWithRange, lineParameters[i]));
 	/* create the dialog prompt */
-	Dialog.create("Line Color Coder: " + tN);
-		macroP = getInfo("macro.filepath");
-		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
-		if (macroP=="null") Dialog.addMessage("Macro: ASC fork of BAR ROI Color Coder with Scaled Labels and Summary");
-		else Dialog.addMessage("Macro: " + substring(macroP, lastIndexOf(macroP, "\\") + 1, lastIndexOf(macroP, ".ijm" )));
+	Dialog.create("Line Color Coder: " + macroL);
+		Dialog.addMessage("Image: " + tNL);
 		Dialog.setInsets(6, 0, 0);
 		Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
 		Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[0]);
@@ -440,7 +441,7 @@ macro "Line Color Coder with Labels"{
 	}
 	/*
 	parse symbols in unit and draw final label below ramp */
-	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely Â° symbol */
 	if ((rampW>getStringWidth(rampUnitLabel)) && (rampW>getStringWidth(rampParameterLabel)) && !rotLegend) { /* can center align if labels shorter than ramp width */
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
@@ -477,7 +478,7 @@ macro "Line Color Coder with Labels"{
 		if(linesOnWhiteBG) newImage(tN+"_Lines", "RGB white", imageWidth, imageHeight, 1);
 		else {
 			copyImage(t,tN+"_Lines");
-			if (originalImageDepth==16 || originalImageDepth==32) run("8-bit"); /* No need for excessive bit depth here */
+			if (imageDepth==16 || imageDepth==32) run("8-bit"); /* No need for excessive bit depth here */
 			if ((bitDepth()==8) && (lut!="Grays")) run("RGB Color"); /* converts image to RGB if not using grays only */
 		}
 	} 
@@ -582,7 +583,7 @@ macro "Line Color Coder with Labels"{
 		makeRectangle(comboW-canvasW, round((comboH-canvasH)/2), canvasW, canvasH);
 		run("Image to Selection...", "image=&tRS opacity=100");
 		run("Flatten");
-		if ((originalImageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
+		if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 		rename(workingT + "+ramp");
 		closeImageByTitle(tRS);
 		closeImageByTitle("temp_combo");
@@ -594,7 +595,7 @@ macro "Line Color Coder with Labels"{
 		cX1 = 0;
 		cY1 = 0;
 		copyImage(t,"tempFrame1");
-		if (originalImageDepth!=8 || lut!="Grays") run("RGB Color");
+		if (imageDepth!=8 || lut!="Grays") run("RGB Color");
 		if(animLinesOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
 		Dialog.create("Crop Animation Frame?");
 			Dialog.addCheckbox("Would you like to restrict the animation frames to a cropped area?", false);
@@ -679,7 +680,7 @@ macro "Line Color Coder with Labels"{
 			makeRectangle(animFrameNoRampWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
 			run("Image to Selection...", "image=Scaled_Anim_Ramp opacity=100");
 			run("Flatten");
-			if ((originalImageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
+			if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 			rename("frame1_combo");
 			closeImageByTitle(tRA);
 			closeImageByTitle("temp_combo");
@@ -817,7 +818,7 @@ macro "Line Color Coder with Labels"{
 	/* End Animation Loop */
 	if (createCombo!="No")closeImageByTitle(workingT);
 	;
-	run("Collect Garbage");
+	call("java.lang.System.gc");
 	/* display result		 */
 	if (isOpen(id)) selectImage(id);
 	restoreSettings;
@@ -832,11 +833,11 @@ macro "Line Color Coder with Labels"{
 	setBatchMode("exit & display");
 	showStatus("Line Color Coder completed.");																			 
 	beep(); wait(300); beep(); wait(300); beep();
-	run("Collect Garbage");
+	call("java.lang.System.gc");
 	showStatus("Line Drawing Macro Finished");
 }	
 	function getBar(p1, p2) {
-		/* from https://wsr.imagej.net//macros/ProgressBar.txt */
+		/* from https://imagej.nih.gov/ij//macros/ProgressBar.txt */
         n = 20;
         bar1 = "--------------------";
         bar2 = "********************";
@@ -880,7 +881,7 @@ macro "Line Color Coder with Labels"{
 			tableList = getResultsTableList();
 			if (lengthOf(tableList)==0) {
 				Dialog.create("No Results to Work With");
-				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following columns in any order:\n   1.\) The parameter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
+				Dialog.addMessage("No obvious tables open to work with  Â¯|_(?)_/Â¯\nThis macro needs a table that includes the following columns in any order:\n   1.\) The parameter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
 				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit"); 
 				Dialog.show();
 				tableDecision = Dialog.getRadioButton();
@@ -993,15 +994,15 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ã…ngstrÃ¶m unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		string= replace(string, " Â°", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "Â±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -1023,10 +1024,10 @@ macro "Line Color Coder with Labels"{
 		string = replace(string, "Dp", "Diam:perim.");
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
-		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
-		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		string = replace(string, "Â°", "degrees");
+		string = replace(string, "0-90", "0-90Â°"); /* An exception to the above */
+		string = replace(string, "Â°, degrees", "Â°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Ã‚ */
 		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
@@ -1266,7 +1267,7 @@ macro "Line Color Coder with Labels"{
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* Restore previous settings before exiting */
 		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
-		run("Collect Garbage");
+		call("java.lang.System.gc");
 		exit(message);
 	}
 	function restoreResultsFrom(deactivatedResults) {
@@ -1307,7 +1308,7 @@ macro "Line Color Coder with Labels"{
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* Ã…ngstrÃ¶m unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */

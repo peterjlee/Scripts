@@ -23,9 +23,10 @@
 	+ v190506 Removed redundant function.
 	+ v200123 Nested if that caused issues with dialog removed.
 	+ v200707 Changed imageDepth variable name added macro label.
+	+ v200723 Added Results Table selection. v200729 Removed stray ")"
  */
 macro "Line Color Coder with Labels"{
-	macroL = "Line_Color_Coder_v200707";
+	macroL = "Line_Color_Coder_v200729";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -73,6 +74,7 @@ macro "Line Color Coder with Labels"{
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
 	defaultLineWidth = round((imageWidth+imageHeight)/1000);
+	selectResultsWindow(); /* Just in case there are more than one Results Table open */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
 	headingsWithX= filterArrayByContents(headings,"X", "x");
@@ -133,7 +135,7 @@ macro "Line Color Coder with Labels"{
 		toY = Dialog.getChoice();
 		ccf = 1;
 		useLCF = false;
-		if (lcf!=1) useLCF = Dialog.getCheckbox);
+		if (lcf!=1) useLCF = Dialog.getCheckbox();
 		if (useLCF) ccf = lcf;
 		parameterWithLabel= Dialog.getChoice();
 		parameter = substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
@@ -1276,6 +1278,28 @@ macro "Line Color Coder with Labels"{
 			IJ.renameResults("Results");
 		}
 	}
+	function selectResultsWindow(){
+		/* selects the Results window
+			v200722: 1st version */
+		nonImageWindows = getList("window.titles");
+		resultsWindows = newArray();
+		if (nonImageWindows.length!=0) {
+			for (i=0; i<nonImageWindows.length; i++){
+				selectWindow(nonImageWindows[i]);
+				
+				
+				if(getInfo("window.type")=="ResultsTable")
+					resultsWindows = Array.concat(resultsWindows,nonImageWindows[i]);    
+			}
+		}
+		if (resultsWindows.length>1){
+			resultsWindows = Array.sort(resultsWindows); /* R for Results comes before S for Summary */
+			Dialog.create("Select table for analysis: v200722");
+			Dialog.addChoice("Choose Results Table: ",resultsWindows,resultsWindows[0]);
+			Dialog.show();
+			selectWindow(Dialog.getChoice());
+		}
+  	}
 	function stripKnownExtensionFromString(string) {
 		if (lastIndexOf(string, ".")!=-1) {
 			knownExt = newArray("tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");

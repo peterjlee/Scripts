@@ -4,7 +4,7 @@
 	Based on Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL  v200305
 	Full history at the bottom of the file.
-	v210416b
+	v210417
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary"{
@@ -2221,5 +2221,5 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 	+ v200604 Removed troublesome macro-path determination
 	+ v200706 Changed imageDepth variable name.
 	+ v210415 bug fix in 2nd dialog
-	+ v210416 Improved menu options and various bug fixes
+	+ v210416-7 Improved menu options and various bug fixes
 	*/

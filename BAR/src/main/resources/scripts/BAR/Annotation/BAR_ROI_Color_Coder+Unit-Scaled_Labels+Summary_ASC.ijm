@@ -655,6 +655,7 @@ macro "ROI Color Coder with Scaled Labels and Summary"{
 					if (values[i]<=rampMin) lutIndex= 255;
 					else if (values[i]>rampMax) lutIndex= 0;
 					else lutIndex= 255 * (rampMax - values[i]) / (rampMax - rampMin);
+				}
 				if (stroke>0) {
 					Roi.setStrokeWidth(stroke);
 					Roi.setStrokeColor(alpha+roiColors[lutIndex]);

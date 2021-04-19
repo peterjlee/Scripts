@@ -3,11 +3,11 @@
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL 
-	v210417 
+	v210419
  */
  
 macro "ROI Color Coder with Scaled Labels"{
-	macroL = "BAR_ROI_Color_Coder+Unit-Scaled_Labels_ASC_v210417";
+	macroL = "BAR_ROI_Color_Coder__Unit-Scaled_Labels_ASC_v210419";
 	requires("1.47r");
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -39,7 +39,7 @@ macro "ROI Color Coder with Scaled Labels"{
 	t = getTitle();
 	checkForUnits(); /* Required function */
 	getPixelSize(unit, pixelWidth, pixelHeight);
-	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
+	lcf = (pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
 	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
 	nROIs = roiManager("count"); /* get number of ROIs to colorize */
@@ -282,21 +282,21 @@ macro "ROI Color Coder with Scaled Labels"{
 		Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD); 
 		/* End of frequency/distribution section */
 	}
-	else freqDistRamp=false;
-	sIntervalG = round(rampRange/arraySD);
-	meanPlusSDs = newArray(sIntervalG);
-	meanMinusSDs = newArray(sIntervalG);
-	for (s=0; s<sIntervalG; s++) {
+	else freqDistRamp = false;
+	sIntervalsR = round(rampRange/arraySD);
+	meanPlusSDs = newArray(sIntervalsR);
+	meanMinusSDs = newArray(sIntervalsR);
+	for (s=0; s<sIntervalsR; s++) {
 		meanPlusSDs[s] = arrayMean+(s*arraySD);
 		meanMinusSDs[s] = arrayMean-(s*arraySD);
 	}
 	/* Calculate ln stats for summary and also ramp if requested */
 	lnValues = lnArray(values);
 	Array.getStatistics(lnValues, null, null, lnMean, lnSD);
-	expLnMeanPlusSDs = newArray(sIntervalG);
-	expLnMeanMinusSDs = newArray(sIntervalG);
+	expLnMeanPlusSDs = newArray(sIntervalsR);
+	expLnMeanMinusSDs = newArray(sIntervalsR);
 	expLnSD = exp(lnSD);
-	for (s=0; s<sIntervalG; s++) {
+	for (s=0; s<sIntervalsR; s++) {
 		expLnMeanPlusSDs[s] = exp(lnMean+s*lnSD);
 		expLnMeanMinusSDs[s] = exp(lnMean-s*lnSD);
 	}
@@ -321,7 +321,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		if (statsRampLines!="No" || minmaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
 		tickLR = round(tickL * statsRampTicks/100);
 		getLocationAndSize(imgx, imgy, imgwidth, imgheight);
-		call("ij.gui.ImageWindow.setNextLocation", imgx+imgwidth, imgy);
+		call("ij.gui.ImageWindow.setNextLocation", imgx + imgwidth, imgy);
 		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1); /* Height and width swapped for later rotation */
 		/* ramp color/gray range is horizontal only so must be rotated later */
 		if (revLut) run("Flip Horizontally");
@@ -459,10 +459,10 @@ macro "ROI Color Coder with Scaled Labels"{
 				}
 			}
 			if (statsRampLines!="No") {
-				rampMeanPlusSDFactors = newArray(sIntervalG);
-				rampMeanMinusSDFactors = newArray(sIntervalG);
-				plusSDPos = newArray(sIntervalG);
-				minusSDPos = newArray(sIntervalG);
+				rampMeanPlusSDFactors = newArray(sIntervalsR);
+				rampMeanMinusSDFactors = newArray(sIntervalsR);
+				plusSDPos = newArray(sIntervalsR);
+				minusSDPos = newArray(sIntervalsR);
 				if (statsRampLines=="Ln") {
 					rampSD = exp(lnSD);
 					rampMeanPlusSDs = expLnMeanPlusSDs;
@@ -473,7 +473,7 @@ macro "ROI Color Coder with Scaled Labels"{
 					rampMeanPlusSDs = meanPlusSDs;
 					rampMeanMinusSDs = meanMinusSDs;
 				}
-				for (s=0; s<sIntervalG; s++) {
+				for (s=0; s<sIntervalsR; s++) {
 					rampMeanPlusSDFactors[s] = (rampMeanPlusSDs[s]-rampMin)/rampRange;
 					rampMeanMinusSDFactors[s] = (rampMeanMinusSDs[s]-rampMin)/rampRange;
 					plusSDPos[s] = rampTBMargin + (rampH * (1 - rampMeanPlusSDFactors[s])) -1;
@@ -487,11 +487,11 @@ macro "ROI Color Coder with Scaled Labels"{
 					drawLine(rampW-1-tickLR, plusSDPos[0], rampW-rampLW-1, plusSDPos[0]);
 				}
 				lastDrawnPlusSDPos = plusSDPos[0];
-				for (s=1; s<sIntervalG; s++) {
+				for (s=1; s<sIntervalsR; s++) {
 					if ((rampMeanPlusSDFactors[s]<=1) && (plusSDPos[s]<=(rampH - fontSR2)) && (abs(plusSDPos[s]-lastDrawnPlusSDPos)>0.75*fontSR2)) {
 						setFont(fontName, fontSR2, fontStyle);
 						if (minmaxLines) {
-							if (plusSDPos[s]<=(maxPos-0.75*fontSR2) || plusSDPos[s]>=(maxPos+0.75*fontSR2)) { /* prevent overlap with max line */
+							if (plusSDPos[s]<=(maxPos-0.9*fontSR2) || plusSDPos[s]>=(maxPos+0.9*fontSR2)) { /* prevent overlap with max line */
 								drawString("+"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("+"+s+fromCharCode(0x03C3)))/2), round(plusSDPos[s]+0.75*fontSR2));
 								drawLine(rampLW, plusSDPos[s], tickLR, plusSDPos[s]);
 								drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
@@ -504,15 +504,15 @@ macro "ROI Color Coder with Scaled Labels"{
 							drawLine(rampW-1-tickLR, plusSDPos[s], rampW-rampLW-1, plusSDPos[s]);
 							lastDrawnPlusSDPos = plusSDPos[s];
 						}
-						if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.98) s = 10;
+						if (rampMeanPlusSDFactors[minOf(9,s+1)]>=0.98) s = sIntervalsR;
 					}
 				}
 				lastDrawnMinusSDPos = minusSDPos[0];
-				for (s=1; s<sIntervalG; s++) {
+				for (s=1; s<sIntervalsR; s++) {
 					if ((rampMeanMinusSDFactors[s]>0) && (minusSDPos[s]>fontSR2) && (abs(minusSDPos[s]-lastDrawnMinusSDPos)>0.75*fontSR2)) {
 						setFont(fontName, fontSR2, fontStyle);
 						if (minmaxLines) {
-							if ((minusSDPos[s]<(minPos-0.75*fontSR2)) || (minusSDPos[s]>(minPos+0.75*fontSR2))) { /* prevent overlap with min line */
+							if ((minusSDPos[s]<(minPos-0.9*fontSR2)) || (minusSDPos[s]>(minPos+0.9*fontSR2))) { /* prevent overlap with min line */
 								drawString("-"+s+fromCharCode(0x03C3), round((rampW-getStringWidth("-"+s+fromCharCode(0x03C3)))/2), round(minusSDPos[s]+0.5*fontSR2));
 								drawLine(rampLW, minusSDPos[s], tickLR, minusSDPos[s]);
 								drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
@@ -525,7 +525,7 @@ macro "ROI Color Coder with Scaled Labels"{
 							drawLine(rampW-1-tickLR, minusSDPos[s], rampW-rampLW-1, minusSDPos[s]);
 							lastDrawnMinusSDPos = minusSDPos[s];
 						}
-						if (rampMeanMinusSDs[minOf(9,s+1)]<0.93*rampMin) s = 10;
+						if (rampMeanMinusSDs[minOf(9,s+1)]<0.93*rampMin) s = sIntervalsR;
 					}
 				}
 			}
@@ -569,7 +569,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			if(statsRampLines!="No"){
 				lastDrawnPlusSDPos = plusSDPos[0];
 				setColorFromColorName(outlierColor);
-				for (s=1; s<sIntervalG; s++) {
+				for (s=1; s<sIntervalsR; s++) {
 					if ((outlierChoice!="No") && (s>=sigmaR)) {
 						if ((rampMeanPlusSDFactors[s]<=1) && (plusSDPos[s]<=(rampH - fontSR2)) && (abs(plusSDPos[s]-lastDrawnPlusSDPos)>0.75*fontSR2)) {
 							if (minmaxLines) {
@@ -583,12 +583,12 @@ macro "ROI Color Coder with Scaled Labels"{
 								drawLine(rampW-1-tickLR, plusSDPos[s]-rampLW*0.75, rampW-rampLW-1, plusSDPos[s]-rampLW*0.75);
 								lastDrawnPlusSDPos = plusSDPos[s];
 							}
-							if (rampMeanPlusSDFactors[minOf(9,sIntervalG+1)]>=0.98) s = sIntervalG;
+							if (rampMeanPlusSDFactors[minOf(9,sIntervalsR+1)]>=0.98) s = sIntervalsR;
 						}
 					}
 				}
 				lastDrawnMinusSDPos = minusSDPos[0];
-				for (s=1; s<sIntervalG; s++) {
+				for (s=1; s<sIntervalsR; s++) {
 					if ((outlierChoice!="No") && (s>=sigmaR)) {
 						if ((rampMeanMinusSDFactors[s]>0) && (minusSDPos[s]>fontSR2) && (abs(minusSDPos[s]-lastDrawnMinusSDPos)>0.75*fontSR2)) {
 							if (minmaxLines) {
@@ -603,7 +603,7 @@ macro "ROI Color Coder with Scaled Labels"{
 								drawLine(rampW-1-tickLR, minusSDPos[s]-rampLW*0.75, rampW-rampLW-1, minusSDPos[s]-rampLW*0.75);
 								lastDrawnMinusSDPos = minusSDPos[s];
 							}
-							if (rampMeanMinusSDs[minOf(9,sIntervalG+1)]<0.93*rampMin) s = sIntervalG;
+							if (rampMeanMinusSDs[minOf(9,sIntervalsR+1)]<0.93*rampMin) s = sIntervalsR;
 						}
 					}
 				}
@@ -667,8 +667,9 @@ macro "ROI Color Coder with Scaled Labels"{
 			}
 		}
 	}
-	/* End of object coloring */
-
+	/*
+	End of object coloring
+	*/
 	/* recombine units and labels that were used in Ramp */
 	if (unitLabel!="") textLabel = parameterLabel + ", " + unitLabel;
 	else textLabel = parameterLabel;
@@ -940,8 +941,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				Dialog.addNumber("Inner shadow darkness \(darkest = 100%\):", 20,0,3,"%");
 				Dialog.show();
 			}
-			else Dialog.show(); /* Sorry, only an abbreviated menu for small screens */
-			
+			else Dialog.show(); /* Sorry, only an abbreviated menu for small screens */			
 			textLabel = Dialog.getString();
 			paraLabFontSize =  Dialog.getNumber();
 			fontColor = Dialog.getChoice();
@@ -979,7 +979,9 @@ macro "ROI Color Coder with Scaled Labels"{
 				innerShadowBlur = Dialog.getNumber();
 				innerShadowDarkness = Dialog.getNumber();
 			}
-		/* End optional parameter label dialog */
+		/*
+		End optional parameter label dialog
+		*/
 		if (shadowDrop<0) textLabelShadowDrop = round(shadowDrop * negAdj);
 		else textLabelShadowDrop = shadowDrop;
 		if (shadowDisp<0) textLabelShadowDisp = round(shadowDisp * negAdj);
@@ -1129,7 +1131,10 @@ macro "ROI Color Coder with Scaled Labels"{
 				else if (just=="right") drawString(textLabel, textLabelX + (longestStringWidth - getStringWidth(textLabel)), textLabelY);
 				else drawString(textLabel, textLabelX + (longestStringWidth-getStringWidth(textLabel))/2, textLabelY);
 			}
-			fancyTextOverImage(textLabelShadowDrop,textLabelShadowDisp,textLabelShadowBlur,shadowDarkness,outlineStroke,textLabelInnerShadowDrop,textLabelInnerShadowDisp,textLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */			
+			fancyTextOverImage(textLabelShadowDrop,textLabelShadowDisp,textLabelShadowBlur,shadowDarkness,outlineStroke,textLabelInnerShadowDrop,textLabelInnerShadowDisp,textLabelInnerShadowBlur,innerShadowDarkness); /* requires "textImage" and original "workingImage" */
+			/* function fancyTextOverImage requires shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness\
+				Requires: functions: createShadowDropFromMask7 createInnerShadowFromMask6 
+			*/
 			if (isOpen("antiAliased")) {
 				if (fontInt>=outlineInt){
 					imageCalculator("Max","textImage","antiAliased");
@@ -1176,7 +1181,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				if (createCombo=="Combine Scaled Ramp with New Manual Crop of Image") {
 					setTool("rectangle");
 					title="Crop Location for Combined Image";
-					msg = "Select the Crop Area";
+					msg = "1. Select the area that you want to crop to. 2. Click on OK";
 					waitForUser(title, msg);
 					run("Crop");
 					run("Select None");
@@ -1197,6 +1202,9 @@ macro "ROI Color Coder with Scaled Labels"{
 				selectWindow("tempCrop");
 				run("Canvas Size...", "width=&comboW height=&croppedImageHeight position=Top-Left");
 				makeRectangle(croppedImageWidth + maxOf(2,croppedImageWidth/500), round((croppedImageHeight-canvasH)/2), srW, croppedImageHeight);
+				setBatchMode("exit & display");
+				selectWindow("tempCrop"); /* voodoo step seems to help  . . . */
+				wait(10); /* required to get image to selection to work here */
 				run("Image to Selection...", "image=scaled_ramp opacity=100");
 				run("Flatten");
 				if (imageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
@@ -1219,6 +1227,7 @@ macro "ROI Color Coder with Scaled Labels"{
 				run("Canvas Size...", "width=&comboW height=&imageHeight position=Top-Left");
 				makeRectangle(imageWidth + maxOf(2,imageWidth/500), round((imageHeight-canvasH)/2), srW, imageHeight);
 				setBatchMode("exit & display");
+				selectWindow("temp_combo"); /* voodoo step seems to help  . . . */
 				wait(10); /* required to get image to selection to work here */
 				if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image")
 					run("Image to Selection...", "image=scaled_ramp opacity=100");
@@ -1238,7 +1247,6 @@ macro "ROI Color Coder with Scaled Labels"{
 	memFlush(200);
 	showStatus("ROI Color Coder with Scaled Labels macro finished");
 	beep(); wait(300); beep(); wait(300); beep();
-	call("java.lang.System.gc");
 }
 	/*
 		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
@@ -1253,6 +1261,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		v180312 Add minimum and maximum morphological radii.
 		v180602 Add 0.5 pixels to output co-ordinates to match X,Y, XM and YM system for ImageJ results
 		v190802 Updated distance measurement to use more compact pow function.
+	*/
 		workingTitle = getTitle();
 		if (!checkForPlugin("morphology_collection")) restoreExit("Exiting: Gabriel Landini's morphology suite is needed to run this function.");
 		binaryCheck(workingTitle); /* Makes sure image is binary and sets to white background, black objects */
@@ -1341,20 +1350,24 @@ macro "ROI Color Coder with Scaled Labels"{
 		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 	}	
 	function binaryCheck(windowTitle) { /* For black objects on a white background */
-		/* v180601 added choice to invert or not */
-		/* v180907 added choice to revert to the true LUT, changed border pixel check to array stats */
+		/* v180601 added choice to invert or not 
+		v180907 added choice to revert to the true LUT, changed border pixel check to array stats
+		v190725 Changed to make binary
+		Requires function: restoreExit
+		*/
 		selectWindow(windowTitle);
-		if (is("binary")==0) run("8-bit");
+		if (!is("binary")) run("8-bit");
 		/* Quick-n-dirty threshold if not previously thresholded */
 		getThreshold(t1,t2); 
 		if (t1==-1)  {
 			run("8-bit");
 			run("Auto Threshold", "method=Default");
-			run("Convert to Mask");
+			setOption("BlackBackground", false);
+			run("Make Binary");
 		}
-		if (is("Inverting LUT")==true)  {
+		if (is("Inverting LUT"))  {
 			trueLUT = getBoolean("The LUT appears to be inverted, do you want the true LUT?", "Yes Please", "No Thanks");
-			if (trueLUT==true) run("Invert LUT");
+			if (trueLUT) run("Invert LUT");
 		}
 		/* Make sure black objects on white background for consistency */
 		cornerPixels = newArray(getPixel(0, 0), getPixel(0, 1), getPixel(1, 0), getPixel(1, 1));
@@ -1364,7 +1377,7 @@ macro "ROI Color Coder with Scaled Labels"{
 			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
 		if (cornerMean==0) {
 			inversion = getBoolean("The background appears to have intensity zero, do you want the intensities inverted?", "Yes Please", "No Thanks");
-			if (inversion==true) run("Invert"); 
+			if (inversion) run("Invert"); 
 		}
 	}
 	function checkForPlugin(pluginName) {
@@ -1514,9 +1527,10 @@ macro "ROI Color Coder with Scaled Labels"{
 	}
 	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)
-		 v170914 Radio dialog with more information displayed */
+		 v170914 Radio dialog with more information displayed
+		 v200925 looks for pixels unit too	*/
 		getPixelSize(unit, pixelWidth, pixelHeight);
-		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches"){
+		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches" || unit=="pixels"){
 			Dialog.create("Suspicious Units");
 			rescaleChoices = newArray("Define new units for this image", "Use current scale", "Exit this macro");
 			rescaleDialogLabel = "pixelHeight = "+pixelHeight+", pixelWidth = "+pixelWidth+", unit = "+unit+": what would you like to do?";
@@ -1552,62 +1566,67 @@ macro "ROI Color Coder with Scaled Labels"{
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
+	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
-		/* v181002 reselects original image at end if open */
+		/* v181002 reselects original image at end if open
+		   v200925 uses "while" instead of "if" so that it can also remove duplicates
+		*/
 		oIID = getImageID();
-        if (isOpen(windowTitle)) {
+        while (isOpen(windowTitle)) {
 			selectWindow(windowTitle);
 			close();
 		}
 		if (isOpen(oIID)) selectImage(oIID);
 	}
-	function createInnerShadowFromMask4(iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
+	function createInnerShadowFromMask6(mask,iShadowDrop, iShadowDisp, iShadowBlur, iShadowDarkness) {
 		/* Requires previous run of: imageDepth = bitDepth();
 		because this version works with different bitDepths
-		v161115 calls -4- variables: drop, displacement blur and darkness */
+		v161115 calls four variables: drop, displacement blur and darkness
+		v180627 and calls mask label, v190108 */
 		showStatus("Creating inner shadow for labels . . . ");
 		newImage("inner_shadow", "8-bit white", imageWidth, imageHeight, 1);
-		getSelectionFromMask("label_mask");
+		getSelectionFromMask(mask);
 		setBackgroundColor(0,0,0);
 		run("Clear Outside");
 		getSelectionBounds(selMaskX, selMaskY, selMaskWidth, selMaskHeight);
 		setSelectionLocation(selMaskX-iShadowDisp, selMaskY-iShadowDrop);
 		setBackgroundColor(0,0,0);
 		run("Clear Outside");
-		getSelectionFromMask("label_mask");
+		getSelectionFromMask(mask);
 		expansion = abs(iShadowDisp) + abs(iShadowDrop) + abs(iShadowBlur);
-		if (expansion>0) run("Enlarge...", "enlarge=[expansion] pixel");
-		if (iShadowBlur>0) run("Gaussian Blur...", "sigma=[iShadowBlur]");
+		if (expansion>0) run("Enlarge...", "enlarge=&expansion pixel");
+		if (iShadowBlur>0) run("Gaussian Blur...", "sigma=&iShadowBlur");
 		run("Unsharp Mask...", "radius=0.5 mask=0.2"); /* A tweak to sharpen the effect for small font sizes */
-		imageCalculator("Max", "inner_shadow","label_mask");
+		imageCalculator("Max", "inner_shadow",mask);
 		run("Select None");
 		/* The following are needed for different bit depths */
 		if (imageDepth==16 || imageDepth==32) run(imageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
 		run("Invert");  /* Create an image that can be subtracted - this works better for color than Min */
 		divider = (100 / abs(iShadowDarkness));
-		run("Divide...", "value=[divider]");
+		run("Divide...", "value=&divider");
 	}
-	function createShadowDropFromMask5(oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
+	function createShadowDropFromMask7(mask, oShadowDrop, oShadowDisp, oShadowBlur, oShadowDarkness, oStroke) {
 		/* Requires previous run of: imageDepth = bitDepth();
 		because this version works with different bitDepths
-		v161115 calls -5- variables: drop, displacement blur and darkness */
+		v161115 calls five variables: drop, displacement blur and darkness
+		v180627 adds mask label to variables, v190108	*/
 		showStatus("Creating drop shadow for labels . . . ");
 		newImage("shadow", "8-bit black", imageWidth, imageHeight, 1);
-		getSelectionFromMask("label_mask");
+		getSelectionFromMask(mask);
 		getSelectionBounds(selMaskX, selMaskY, selMaskWidth, selMaskHeight);
 		setSelectionLocation(selMaskX + oShadowDisp, selMaskY + oShadowDrop);
 		setBackgroundColor(255,255,255);
-		if (oStroke>0) run("Enlarge...", "enlarge=[oStroke] pixel"); /* Adjust shadow size so that shadow extends beyond stroke thickness */
+		if (oStroke>0) run("Enlarge...", "enlarge=&oStroke pixel"); /* Adjust shadow size so that shadow extends beyond stroke thickness */
 		run("Clear");
 		run("Select None");
 		if (oShadowBlur>0) {
-			run("Gaussian Blur...", "sigma=[oShadowBlur]");
-			// run("Unsharp Mask...", "radius=[oShadowBlur] mask=0.4"); /* Make Gaussian shadow edge a little less fuzzy */
+			run("Gaussian Blur...", "sigma=&oShadowBlur");
+			run("Unsharp Mask...", "radius=&oShadowBlur mask=0.4"); /* Make Gaussian shadow edge a little less fuzzy */
 		}
 		/* Now make sure shadow or glow does not impact outline */
-		getSelectionFromMask("label_mask");
-		if (oStroke>0) run("Enlarge...", "enlarge=[oStroke] pixel");
+		getSelectionFromMask(mask);
+		if (oStroke>0) run("Enlarge...", "enlarge=&oStroke pixel");
 		setBackgroundColor(0,0,0);
 		run("Clear");
 		run("Select None");
@@ -1615,7 +1634,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		if (imageDepth==16 || imageDepth==32) run(imageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
 		divider = (100 / abs(oShadowDarkness));
-		run("Divide...", "value=[divider]");
+		run("Divide...", "value=&divider");
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
@@ -1634,7 +1653,9 @@ macro "ROI Color Coder with Scaled Labels"{
 		string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - */
 		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
-	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* Place text over image in a way that stands out; requires original "workingImage" and "textImage" and createShadowDropFromMask5 and createInnerShadowFromMask4 functions */
+	}
+	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* Place text over image in a way that stands out; requires original "workingImage" and "textImage"
+	Requires: functions: createShadowDropFromMask7 createInnerShadowFromMask6 */
 		selectWindow("textImage");
 		run("Duplicate...", "title=label_mask");
 		setThreshold(0, 128);
@@ -1643,10 +1664,10 @@ macro "ROI Color Coder with Scaled Labels"{
 		/*
 		Create drop shadow if desired */
 		if (shadowDrop!=0 || shadowDisp!=0)
-			createShadowDropFromMask5(shadowDrop, shadowDisp, shadowBlur, shadowDarkness, outlineStroke);
+			createShadowDropFromMask7("label_mask", shadowDrop, shadowDisp, shadowBlur, shadowDarkness, outlineStroke);
 		/*	Create inner shadow if desired */
 		if (innerShadowDrop!=0 || innerShadowDisp!=0 || innerShadowBlur!=0) 
-			createInnerShadowFromMask4(innerShadowDrop, innerShadowDisp, innerShadowBlur, innerShadowDarkness);
+			createInnerShadowFromMask6("label_mask", innerShadowDrop, innerShadowDisp, innerShadowBlur, innerShadowDarkness);
 		/* Apply drop shadow or glow */
 		if (isOpen("shadow") && (shadowDarkness>0))
 			imageCalculator("Subtract",workingImage,"shadow");
@@ -1658,16 +1679,16 @@ macro "ROI Color Coder with Scaled Labels"{
 		getSelectionBounds(maskX, maskY, null, null);
 		outlineStrokeOffset = maxOf(0,(outlineStroke/2)-1);
 		setSelectionLocation(maskX+outlineStrokeOffset, maskY+outlineStrokeOffset); /* Offset selection to create shadow effect */
-		run("Enlarge...", "enlarge=[outlineStroke] pixel");
+		run("Enlarge...", "enlarge=&outlineStroke pixel");
 		setBackgroundFromColorName(outlineColor);
-		run("Clear");
-		run("Enlarge...", "enlarge=[outlineStrokeOffset] pixel");
-		run("Gaussian Blur...", "sigma=[outlineStrokeOffset]");
+		run("Clear", "slice");
+		run("Enlarge...", "enlarge=&outlineStrokeOffset pixel");
+		run("Gaussian Blur...", "sigma=&outlineStrokeOffset");
 		run("Select None");
 		/* Create text */
 		getSelectionFromMask("label_mask");
 		setBackgroundFromColorName(fontColor);
-		run("Clear");
+		run("Clear", "slice");
 		run("Select None");
 		/* Create inner shadow or glow if requested */
 		if (isOpen("inner_shadow") && (innerShadowDarkness>0))
@@ -1676,9 +1697,8 @@ macro "ROI Color Coder with Scaled Labels"{
 			imageCalculator("Add",workingImage,"inner_shadow");
 		/* The following steps smooth the interior of the text labels */
 		selectWindow("textImage");
-		run("Restore Selection");
-		if (selectionType()>=0) run("Make Inverse");
-		else restoreExit("fancyTextOverImage function error: No selection to invert");
+		getSelectionFromMask("label_mask");
+		run("Make Inverse");
 		run("Invert");
 		run("Select None");
 		imageCalculator("Min",workingImage,"textImage");
@@ -1810,14 +1830,15 @@ macro "ROI Color Coder with Scaled Labels"{
 	/*
 	End of Color Functions 
 	*/
-	function getFontChoiceList() {
+  	function getFontChoiceList() {
 		/*	v180723 first version
 			v180828 Changed order of favorites
+			v190108 Longer list of favorites
 		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Fira Sans Ultra", "Fira Sans Condensed Ultra", "Arial Black", "Myriad Pro Black", "Montserrat Black", "Olympia-Extra Bold", "SansSerif", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Times", "Helvetica");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
 		faveFontListCheck = newArray(faveFontList.length);
 		counter = 0;
 		for (i=0; i<faveFontList.length; i++) {
@@ -1850,7 +1871,7 @@ macro "ROI Color Coder with Scaled Labels"{
 		for (i=0; i<lengthOf(arrayName); i++)
 			  outputArray[i] = log(arrayName[i]);
 		return outputArray;
-		}
+	}
 	function memFlush(waitTime) {
 		run("Reset...", "reset=[Undo Buffer]"); 
 		wait(waitTime);
@@ -1868,20 +1889,13 @@ macro "ROI Color Coder with Scaled Labels"{
 		}
 		return string;
 	}
-	function memFlush(waitTime) {
-		run("Reset...", "reset=[Undo Buffer]"); 
-		wait(waitTime);
-		run("Reset...", "reset=[Locked Image]"); 
-		wait(waitTime);
-		call("java.lang.System.gc"); /* force a garbage collection */
-		wait(waitTime);
-	}
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* v200305 1st version using memFlush function */
 		restoreSettings(); /* Restore previous settings before exiting */
 		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
 		memFlush(200);
 		exit(message);
+	}
 	function runDemo() { /* Generates standard imageJ demo blob analysis */
 	/* v180104 */
 	    run("Blobs (25K)");
@@ -2011,5 +2025,5 @@ macro "ROI Color Coder with Scaled Labels"{
 	+ v190731 Fixed modalBin error exception. Fixed issue with ROI coloring loop not advancing as expected in some conditions.
 	+ v190802 Fixed missing +1 sigma outlier ramp labels. Adjusted sigma range to allow display closer to top of ramp.
 	+ v200706 Changed imageDepth variable name added macro label
-	+ v210417				 
+	+ v210417-9 Updated functions, added wait around selection-to-image, improved stats label overlap avoidance			 
 	*/

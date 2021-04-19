@@ -23,10 +23,10 @@
 	+ v190506 Removed redundant function.
 	+ v200123 Nested if that caused issues with dialog removed.
 	+ v200707 Changed imageDepth variable name added macro label.
-	+ v200723 Added Results Table selection. v200729 Removed stray ")"
+	+ v210419 Updated functions and added wait around image-to-selection
  */
 macro "Line Color Coder with Labels"{
-	macroL = "Line_Color_Coder_v200729";
+	macroL = "Line_Color_Coder_v210419";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -74,7 +74,6 @@ macro "Line Color Coder with Labels"{
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
 	defaultLineWidth = round((imageWidth+imageHeight)/1000);
-	selectResultsWindow(); /* Just in case there are more than one Results Table open */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
 	headingsWithX= filterArrayByContents(headings,"X", "x");
@@ -135,7 +134,7 @@ macro "Line Color Coder with Labels"{
 		toY = Dialog.getChoice();
 		ccf = 1;
 		useLCF = false;
-		if (lcf!=1) useLCF = Dialog.getCheckbox();
+		if (lcf!=1) useLCF = Dialog.getCheckbox);
 		if (useLCF) ccf = lcf;
 		parameterWithLabel= Dialog.getChoice();
 		parameter = substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
@@ -680,8 +679,12 @@ macro "Line Color Coder with Labels"{
 			selectWindow("temp_combo");
 			run("Canvas Size...", "width=&animComboW height=&animFrameHeight position=Top-Left");
 			makeRectangle(animFrameNoRampWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
+			setBatchMode("exit & display");
+			selectWindow("temp_combo"); /* voodoo line seems to help */
+			wait(10);
 			run("Image to Selection...", "image=Scaled_Anim_Ramp opacity=100");
 			run("Flatten");
+			setBatchMode(true);
 			if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 			rename("frame1_combo");
 			closeImageByTitle(tRA);
@@ -973,9 +976,10 @@ macro "Line Color Coder with Labels"{
 	}
 	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)
-		 v170914 Radio dialog with more information displayed */
+		 v170914 Radio dialog with more information displayed
+		 v200925 looks for pixels unit too	*/
 		getPixelSize(unit, pixelWidth, pixelHeight);
-		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches"){
+		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches" || unit=="pixels"){
 			Dialog.create("Suspicious Units");
 			rescaleChoices = newArray("Define new units for this image", "Use current scale", "Exit this macro");
 			rescaleDialogLabel = "pixelHeight = "+pixelHeight+", pixelWidth = "+pixelWidth+", unit = "+unit+": what would you like to do?";
@@ -988,17 +992,22 @@ macro "Line Color Coder with Labels"{
 	}
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
-		v180611 added "degreeC" */
+		v180611 added "degreeC"
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, "\\^-1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
-		string= replace(string, "\\^-^1", fromCharCode(0x207B) + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-^2", fromCharCode(0x207B) + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-"+fromCharCode(178), "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-1", "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-2", "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
 		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
-		string= replace(string, "_", fromCharCode(0x2009)); /* Replace underlines with thin spaces */
+		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
@@ -1008,9 +1017,11 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
-		/* v181002 reselects original image at end if open */
+		/* v181002 reselects original image at end if open
+		   v200925 uses "while" instead of "if" so that it can also remove duplicates
+		*/
 		oIID = getImageID();
-        if (isOpen(windowTitle)) {
+        while (isOpen(windowTitle)) {
 			selectWindow(windowTitle);
 			close();
 		}
@@ -1136,7 +1147,7 @@ macro "Line Color Coder with Labels"{
 		Array.sort(defaultLuts);
 		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLutsList = newArray("Your favorite LUTS here", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLutsList = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		preferredLuts = newArray(preferredLutsList.length);
 		counter = 0;
 		for (i=0; i<preferredLutsList.length; i++) {
@@ -1168,11 +1179,12 @@ macro "Line Color Coder with Labels"{
   	function getFontChoiceList() {
 		/*	v180723 first version
 			v180828 Changed order of favorites
+			v190108 Longer list of favorites
 		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Fira Sans Ultra", "Fira Sans Condensed Ultra", "Arial Black", "Myriad Pro Black", "Montserrat Black", "Olympia-Extra Bold", "SansSerif", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Times", "Helvetica");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
 		faveFontListCheck = newArray(faveFontList.length);
 		counter = 0;
 		for (i=0; i<faveFontList.length; i++) {
@@ -1243,6 +1255,13 @@ macro "Line Color Coder with Labels"{
 		}
 		return indexFound;
 	}
+	function memFlush(waitTime) {
+		run("Reset...", "reset=[Undo Buffer]"); 
+		wait(waitTime);
+		run("Reset...", "reset=[Locked Image]"); 
+		wait(waitTime);
+		call("java.lang.System.gc"); /* force a garbage collection */
+	}
 	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period */
 		while (endsWith(string,".0")) {
 			string=substring(string,0, lastIndexOf(string, ".0"));
@@ -1266,10 +1285,10 @@ macro "Line Color Coder with Labels"{
 		else copyImage(window2, replacedWindow); /* Use copyImage function */
 	}
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
-		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
+		/* v200305 1st version using memFlush function */
 		restoreSettings(); /* Restore previous settings before exiting */
 		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
-		call("java.lang.System.gc");
+		memFlush(200);
 		exit(message);
 	}
 	function restoreResultsFrom(deactivatedResults) {
@@ -1278,28 +1297,6 @@ macro "Line Color Coder with Labels"{
 			IJ.renameResults("Results");
 		}
 	}
-	function selectResultsWindow(){
-		/* selects the Results window
-			v200722: 1st version */
-		nonImageWindows = getList("window.titles");
-		resultsWindows = newArray();
-		if (nonImageWindows.length!=0) {
-			for (i=0; i<nonImageWindows.length; i++){
-				selectWindow(nonImageWindows[i]);
-				
-				
-				if(getInfo("window.type")=="ResultsTable")
-					resultsWindows = Array.concat(resultsWindows,nonImageWindows[i]);    
-			}
-		}
-		if (resultsWindows.length>1){
-			resultsWindows = Array.sort(resultsWindows); /* R for Results comes before S for Summary */
-			Dialog.create("Select table for analysis: v200722");
-			Dialog.addChoice("Choose Results Table: ",resultsWindows,resultsWindows[0]);
-			Dialog.show();
-			selectWindow(Dialog.getChoice());
-		}
-  	}
 	function stripKnownExtensionFromString(string) {
 		if (lastIndexOf(string, ".")!=-1) {
 			knownExt = newArray("tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");
@@ -1326,11 +1323,11 @@ macro "Line Color Coder with Labels"{
 	}
 	function unCleanLabel(string) {
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames
-	- 041117 to remove spaces as well */
+	+ 041117 to remove spaces as well */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hypen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */

@@ -2,11 +2,11 @@
 	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
 	Tiago Ferreira, v.5.2 2015.08.13 -	v.5.3 2016.05.1 + pjl mods 6/16-30/2016 to automate defaults and add labels to ROIs
-	v210503
+	v211025
  */
  
 macro "ROI Color Coder with Labels"{
-	macroL = "BAR_ROI_Color_Coder+ROI-Manager-Labels_ASC_v210503";
+	macroL = "BAR_ROI_Color_Coder+ROI-Manager-Labels_ASC_v211025";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_plugins for autoCrop */
@@ -651,7 +651,8 @@ if (minmaxIOR) {
 		}
 		if (isOpen(oIID)) selectImage(oIID);
 	}
-	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles */
+	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
@@ -665,6 +666,7 @@ if (minmaxIOR) {
 		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
 		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
 		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		// string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - Not reliable though */
 		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
@@ -675,7 +677,7 @@ if (minmaxIOR) {
 		Array.sort(defaultLuts);
 		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLutsList = newArray("Your favorite LUTS here", "silver-asc", "viridis-linearlumin", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLutsList = newArray("Your favorite LUTS here", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		preferredLuts = newArray;
 		/* Filter preferredLutsList to make sure they are available . . . */
 		for (i=0, countL=0; i<preferredLutsList.length; i++) {
@@ -700,6 +702,17 @@ if (minmaxIOR) {
 		selectWindow(tempTitle);
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
+	}
+	function indexOfArray(array,string, default) {
+		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first instance of string */
+		index = default;
+		for (i=0; i<lengthOf(array); i++){
+			if (array[i]==string) {
+				index = i;
+				i = lengthOf(array);
+			}
+		}
+		return index;
 	}
 	function loadLutColors(lut) {
 		run(lut);
@@ -754,13 +767,22 @@ if (minmaxIOR) {
 		if(is("Inverting LUT")) run("Invert LUT");
 	}
 	function stripKnownExtensionFromString(string) {
+		/* v210924: Tries to make sure string stays as string
+		   v211014: Adds some additional cleanup
+		   v211025: fixes multiple knowns issue
+		*/
+		string = "" + string;
 		if (lastIndexOf(string, ".")!=-1) {
-			knownExt = newArray("tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");
+			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");
 			for (i=0; i<knownExt.length; i++) {
 				index = lastIndexOf(string, "." + knownExt[i]);
-				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1))) string = substring(string, 0, index);
+				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && index>0) string = "" + substring(string, 0, index);
 			}
 		}
+		string = replace(string,"_lzw",""); /* cleanup previous suffix */
+		string = replace(string," ","_"); /* a personal preference */
+		string = replace(string,"__","_"); /* cleanup previous suffix */
+		string = replace(string,"--","-"); /* cleanup previous suffix */
 		return string;
 	}
 	function stripUnitFromString(string) {
@@ -795,7 +817,9 @@ if (minmaxIOR) {
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
-	/* v180404 added Feret_MinDAngle_Offset */
+	/* v180404 added Feret_MinDAngle_Offset
+		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array
+		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
@@ -809,10 +833,13 @@ if (minmaxIOR) {
 			}
 		}
 		else {
+			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
+			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
-			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90" || string=="Feret_MinDAngle_Offset" || string=="MinDistAngle") unitLabel = fromCharCode(0x00B0);
+			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(chooseUnits,string,-1)>=0) unitLabel = "";
+			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 		}
@@ -831,4 +858,5 @@ if (minmaxIOR) {
 	+ v180831 Added check for Fiji_Plugins.	
 	+ v200706 Change imageDepth variable name added macro label.
 	+ v210427-v210503 Updated to match other ASC macros.
+	+ v211025 Updated functions
 	*/

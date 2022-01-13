@@ -4,12 +4,12 @@
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
-	v211029
+	11/19/2021 9:47 AM]
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary" {
 
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v211029";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v211119.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc"); 
@@ -230,6 +230,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 		Dialog.setInsets(4, 120, 0);
 		Dialog.addCheckbox("Add Frequency Distribution Plot to Ramp", true);
+		Dialog.addCheckbox("Calculate 'Max' image to restore holes \(experimental\)",false);
 		Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterLabel = Dialog.getString;
@@ -254,6 +255,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak = Dialog.getNumber;
 		freqDistRamp = Dialog.getCheckbox();
+		restoreHoles = Dialog.getCheckbox();
 	if (imageChoice!=t) {
 		t = imageChoice;
 		tN = stripKnownExtensionFromString(t);
@@ -782,6 +784,17 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		paraLabelExp = parameterLabelExp + ", " + unitLabel;
 	}
 	if (!addLabels) {
+		if (restoreHoles) { /* Not fully tested yet but should be harmless */
+			mI1 = getImageID();
+			roiManager("show all without labels");
+			run("Flatten");
+			mI1F = getTitle();
+			imageCalculator("Max", mI1F,id);
+			// run("Image Calculator...");
+			closeImageByTitle(mI1);
+			selectWindow(mI1F);
+			rename(tN);
+		}
 		roiManager("show all with labels");
 		run("Flatten"); /* creates an RGB copy of the image with color coded objects or not */
 	}
@@ -925,10 +938,29 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (fontStyle=="unstyled") fontStyle="";
 		if (stroke>=0) {
 			run("Flatten"); /* Flatten converts to RGB so . . .  */
+			if (restoreHoles) {  /* To overcome issue of complete ROI-fill, not fully tested yet */
+				mI1i = getImageID();
+				run("Flatten");
+				rename("flatImage");
+				mI1Fi = getImageID();
+				imageCalculator("Max", "flatImage",id);
+				if (mI1i!=mI1Fi){
+					selectImage(mI1i);
+					close();
+				}
+				selectWindow("flatImage");
+			}
 			rename(tN + "_" + parameterLabel + "_labels");
 			if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 		} else {
 			run("Duplicate...", "title=labeled");
+			if (restoreHoles){ /* Not fully tested yet but should be harmless */
+				imageCalculator("Max", "labeled",id);
+				// run("Image Calculator...");
+				// setBatchMode("exit & display");
+				// waitForUser("OK 961?");
+				// setBatchMode(true);
+			}
 			rename(tN + "_" + parameterLabel + "_labels");
 		}
 		workingImage = getTitle();
@@ -1137,7 +1169,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				Dialog.addNumber("Statistics summary font size:", statsLabFontSize,1,4,"");
 				Dialog.addNumber("Change decimal places from " + summaryDP + ": ", summaryDP,0,2,"");
 				defValLines = 6;
-				statsChoice1 = newArray("None", "Dashed Line:  ---", "Number of objects:  " + items);
+				statsChoice1 = newArray("Skip", "No More Stats", "Dashed Line:  ---", "Number of objects:  " + items);
 				if (outlierChoice!="No"){
 					if (outlierColor2=="same") statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
 					else statsChoice2 = newArray("Outlines > :  " + outlierCounterPos + " objects " + outlierChoiceAbbrevPos + " in " + outlierColor,"Outlines < :  " + outlierCounterNeg + " objects " + outlierChoiceAbbrevNeg + " in " + outlierColor2);
@@ -1342,42 +1374,48 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			if (lengthOf(t)>round(imageWidth/(1.5*fontSize)))
 				titleShort = substring(t, 0, round(imageWidth/(1.5*fontSize))) + "...";
 			else titleShort = t;
-			for (i=0; i<statsLabLineText.length; i++) {
+			for (i=0, j=0; i<statsLabLineText.length; i++) {
 				if (statsLabLine[i]!="None") {
-					statsLines = i + 1;
-					if (indexOf(statsLabLine[i], ":  ")>0) statsLabLine[i] = substring(statsLabLine[i], 0, indexOf(statsLabLine[i], ":  "));
-					if (statsLabLine[i]=="Dashed Line:  ---") statsLabLineText[i] = "----------";
-					else if (statsLabLine[i]=="Number of objects") statsLabLineText[i] = "Objects = " + items;
-					else if (statsLabLine[i]=="Outlines") statsLabLineText[i] = "Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + replace(outlierColor,"_"," ");
-					else if (statsLabLine[i]=="Outlines > ") statsLabLineText[i] = "Outlines > :  " + outlierCounterPos + " objects " + outlierChoiceAbbrevPos + " in " + replace(outlierColor,"_"," ");
-					else if (statsLabLine[i]=="Outlines < ") statsLabLineText[i] = "Outlines < :  " + outlierCounterNeg + " objects " + outlierChoiceAbbrevNeg + " in " + replace(outlierColor2,"_"," ");
-					else if (statsLabLine[i]=="Mean") statsLabLineText[i] = "Mean = " + arrayMean + " " + unitLabel;
-					else if (statsLabLine[i]=="Median") statsLabLineText[i] = "Median = " + median + " " + unitLabel;
-					else if (statsLabLine[i]=="StdDev") statsLabLineText[i] = "Std.Dev.: " + arraySD + " " + unitLabel;
-					else if (statsLabLine[i]=="CoeffVar") statsLabLineText[i] = "Coeff.Var.: " + coeffVar + "%";
-					else if (statsLabLine[i]=="Min-Max") statsLabLineText[i] = "Range: " + arrayMin + " - " + arrayMax + " " + unitLabel;
-					else if (statsLabLine[i]=="Minimum") statsLabLineText[i] = "Minimum: " + arrayMin + " " + unitLabel;
-					else if (statsLabLine[i]=="Maximum") statsLabLineText[i] = "Maximum: " + arrayMax + " " + unitLabel;
-					else if (statsLabLine[i]=="Sum") statsLabLineText[i] = "Sum: " + arraySum + " " + unitLabel;
-					else if (statsLabLine[i]=="Mode") statsLabLineText[i] = "Mode = " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)";
-					else if (statsLabLine[i]=="InterQuartile Range") statsLabLineText[i] = "InterQuartile Range = " + IQR + " " +unitLabel;
-					else if (statsLabLine[i]=="ln Stats Mean") statsLabLineText[i] = "ln Stats Mean: " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="ln Stats +SD") statsLabLineText[i] = "ln Stats +SD: " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats +2SD: " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats +3SD: " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="ln Stats -SD") statsLabLineText[i] = "ln Stats -SD: " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[i] = "ln Stats -2SD: " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[i] = "ln Stats -3SD: " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
-					else if (statsLabLine[i]=="Pixel Size") statsLabLineText[i] = "Scale: 1 pixel = " + lcf + " " + unit;
-					else if (statsLabLine[i]=="Image Title") statsLabLineText[i] = "Image: " + titleShort;
-					else if (statsLabLine[i]=="Manual"){
-						 if (textInputLines[userTextLine]!="None") statsLabLineText[i] = textInputLines[userTextLine];
-						 else statsLabLineText[i] = "";
-						 userTextLine += 1;
+					if (statsLabLine[i]=="No More Stats") i = statsLabLineText.length;
+					else {
+						statsLines = i + 1;
+						if (indexOf(statsLabLine[i], ":  ")>0) statsLabLine[i] = substring(statsLabLine[i], 0, indexOf(statsLabLine[i], ":  "));
+						if (startsWith(statsLabLine[i],"Dashed")) statsLabLineText[i] = "----------";
+						else if (statsLabLine[i]=="Number of objects") statsLabLineText[j] = "Objects = " + items;
+						else if (statsLabLine[i]=="Outlines") statsLabLineText[j] = "Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + replace(outlierColor,"_"," ");
+						else if (statsLabLine[i]=="Outlines > ") statsLabLineText[j] = "Outlines > :  " + outlierCounterPos + " objects " + outlierChoiceAbbrevPos + " in " + replace(outlierColor,"_"," ");
+						else if (statsLabLine[i]=="Outlines < ") statsLabLineText[j] = "Outlines < :  " + outlierCounterNeg + " objects " + outlierChoiceAbbrevNeg + " in " + replace(outlierColor2,"_"," ");
+						else if (statsLabLine[i]=="Mean") statsLabLineText[j] = "Mean = " + arrayMean + " " + unitLabel;
+						else if (statsLabLine[i]=="Median") statsLabLineText[j] = "Median = " + median + " " + unitLabel;
+						else if (statsLabLine[i]=="StdDev") statsLabLineText[j] = "Std.Dev.: " + arraySD + " " + unitLabel;
+						else if (statsLabLine[i]=="CoeffVar") statsLabLineText[j] = "Coeff.Var.: " + coeffVar + "%";
+						else if (statsLabLine[i]=="Min-Max") statsLabLineText[j] = "Range: " + arrayMin + " - " + arrayMax + " " + unitLabel;
+						else if (statsLabLine[i]=="Minimum") statsLabLineText[j] = "Minimum: " + arrayMin + " " + unitLabel;
+						else if (statsLabLine[i]=="Maximum") statsLabLineText[j] = "Maximum: " + arrayMax + " " + unitLabel;
+						else if (statsLabLine[i]=="Sum") statsLabLineText[j] = "Sum: " + arraySum + " " + unitLabel;
+						else if (statsLabLine[i]=="Mode") statsLabLineText[j] = "Mode = " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)";
+						else if (statsLabLine[i]=="InterQuartile Range") statsLabLineText[j] = "InterQuartile Range = " + IQR + " " +unitLabel;
+						else if (statsLabLine[i]=="ln Stats Mean") statsLabLineText[j] = "ln Stats Mean: " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="ln Stats +SD") statsLabLineText[j] = "ln Stats +SD: " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[j] = "ln Stats +2SD: " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[j] = "ln Stats +3SD: " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="ln Stats -SD") statsLabLineText[j] = "ln Stats -SD: " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="ln Stats +2SD") statsLabLineText[j] = "ln Stats -2SD: " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="ln Stats +3SD") statsLabLineText[j] = "ln Stats -3SD: " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " + unitLabel;
+						else if (statsLabLine[i]=="Pixel Size") statsLabLineText[j] = "Scale: 1 pixel = " + lcf + " " + unit;
+						else if (statsLabLine[i]=="Image Title") statsLabLineText[j] = "Image: " + titleShort;
+						else if (statsLabLine[i]=="Manual"){
+							 if (textInputLines[userTextLine]!="None") statsLabLineText[j] = textInputLines[userTextLine];
+							 else statsLabLineText[j] = "";
+							 userTextLine += 1;
+						}
+						else if (statsLabLine[i]=="Long Underline") statsLabLineText[j] = "__________";
+						else if (statsLabLine[i]=="Blank Line") statsLabLineText[j] = " ";
+						if (statsLabLine[i]!="Skip"){
+							if (getStringWidth(statsLabLineText[j])>longestStringWidth) longestStringWidth = getStringWidth(statsLabLineText[j]);
+							j++;
+						}
 					}
-					else if (statsLabLine[i]=="Long Underline") statsLabLineText[i] = "__________";
-					else if (statsLabLine[i]=="Blank line") statsLabLineText[i] = " ";
-					if (getStringWidth(statsLabLineText[i])>longestStringWidth) longestStringWidth = getStringWidth(statsLabLineText[i]);
 				}
 			}
 			linesSpace = 1.2 * ((labLines*paraLabFontSize)+(statsLines*statsLabFontSize));
@@ -1567,8 +1605,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Manual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image"); /* 93% is close enough */
 			else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image", "Combine Scaled Ramp with New Manual Crop of Image", "Combine Scaled Ramp with New Auto Crop of Image");
 			Dialog.addRadioButtonGroup("Combine Labeled Image and Legend?", comboChoice, 5, 1,  comboChoice[2]) ;
-			Dialog.show();
-		createCombo = Dialog.getRadioButton;
+		Dialog.show();
+			createCombo = Dialog.getRadioButton;
 		if (createCombo!="No") {
 			if (createCombo=="Combine Scaled Ramp with New Manual Crop of Image" || createCombo=="Combine Scaled Ramp with New Auto Crop of Image") {
 				if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
@@ -2080,13 +2118,38 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		divider = (100 / abs(oShadowDarkness));
 		run("Divide...", "value=&divider");
 	}
-	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
+		v211102-v211103  Some more fixes and updated to match latest extended geometries  */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
 		string = replace(string, "FiberLAnn", "Fiber Length from Annulus");
 		string = replace(string, "FiberLR", "Fiber Length R");
+		string = replace(string, " Th ", " Thickness ");
+		string = replace(string, " Crl ", " Curl ");
+		string = replace(string, "Snk", "\(Snake\)");
+		string = replace(string, "Fbr", "Fiber");
+		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
+		string = replace(string, "AR_", "Aspect Ratio: ");
+		string = replace(string, "Rnd_", "Roundness: ");
+		string = replace(string, "Sqr_", "Square: ");
+		string = replace(string, "Squarity_AP","Squarity: from Area and Perimeter");
+		string = replace(string, "Squarity_AF","Squarity: from Area and Feret");
+		string = replace(string, "Squarity_Ff","Squarity: from Feret");
+		string = replace(string, "Rss1", "/(Russ Formula 1/)");
+		string = replace(string, "Rss1", "/(Russ Formula 2/)");
+		string = replace(string, "Rndnss", "Roundness");
+		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
+		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
+		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");	
+		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
+		string = replace(string, "Hxgn_", "Hexagon: ");
+		string = replace(string, "Perim", "Perimeter");
+		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
+		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
+		string = replace(string, "HSF", "Hexagon Shape Factor");
+		string = replace(string, "Vol_", "Volume: ");
 		string = replace(string, "Da", "Diam:area");
 		string = replace(string, "Dp", "Diam:perim.");
 		string = replace(string, "equiv", "equiv.");
@@ -2096,7 +2159,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
 		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
 		// string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - Not reliable though */
-		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
+		// string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
 	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* Place text over image in a way that stands out; requires original "workingImage" and "textImage"
@@ -2401,22 +2464,43 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if(is("Inverting LUT")) run("Invert LUT");
 	}
 	function stripKnownExtensionFromString(string) {
-		/* v210924: Tries to make sure string stays as string
-		   v211014: Adds some additional cleanup
-		   v211025: fixes multiple knowns issue
+		/*	Note: Do not use on path as it may change the directory names
+		v210924: Tries to make sure string stays as string
+		v211014: Adds some additional cleanup
+		v211025: fixes multiple knowns issue
+		v211101: Added ".Ext_" removal
+		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
+		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
 		*/
 		string = "" + string;
-		if (lastIndexOf(string, ".")!=-1) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");
-			for (i=0; i<knownExt.length; i++) {
+		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
+			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX","_"," ");
+			kEL = lengthOf(knownExt);
+			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
+			uSL = lengthOf(unwantedSuffixes);
+			for (i=0; i<kEL; i++) {
+				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+					ichanLabels = lastIndexOf(string, chanLabels[j]);
+					if(ichanLabels>0){
+						index = lastIndexOf(string, "." + knownExt[i]);
+						if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];
+						ichanLabels = lastIndexOf(string, chanLabels[j]);
+						for (k=0; k<uSL; k++){
+							index = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
+							if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];	
+						}				
+					}
+				}
 				index = lastIndexOf(string, "." + knownExt[i]);
 				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && index>0) string = "" + substring(string, 0, index);
 			}
 		}
-		string = replace(string,"_lzw",""); /* cleanup previous suffix */
-		string = replace(string," ","_"); /* a personal preference */
-		string = replace(string,"__","_"); /* cleanup previous suffix */
-		string = replace(string,"--","-"); /* cleanup previous suffix */
+		unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
+		for (i=0; i<lengthOf(unwantedSuffixes); i++){
+			sL = lengthOf(string);
+			if (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+		}
 		return string;
 	}
 	function stripUnitFromString(string) {
@@ -2548,5 +2632,6 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	+ v211022 All colors lower-case, restored cyan.
 	+ v211025 Updated functions
 	+ v211029 Fixed missing comment close below. Added cividis.lut to favorite luts
-	
+	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
+	+ v211119: Added option to perform to create a Max calculated version to restore holes (not fully tested yet in all circumstances). Added skip options to summary choices.
 	*/

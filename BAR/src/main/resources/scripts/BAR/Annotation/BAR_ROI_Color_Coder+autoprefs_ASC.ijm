@@ -23,9 +23,11 @@
 	+ v200706 Changed imageDepth variable name
 	+ v210428-30 Updated ASC functions, disabled non-function experimental log option. Switched to expandable arrays, improved ramp labels
 	+ v211025 updated functions  v211029 Added cividis.lut
+	+ v211103 Expanded expandLabels function
+	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211029";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -149,7 +151,7 @@ macro "ROI Color Coder with settings generated from data"{
 		thinLinesFontSTweak= Dialog.getNumber;
 //
 	rampW = round(rampH/8); /* this will be updated later */ 
-	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely Ã‚Â° symbol */
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely Â° symbol */
 	if ((rotLegend && (rampHChoice==rampH)) || (rampW < getStringWidth(rampUnitLabel))) rampH = imageHeight - fontSize; /* tweaks automatic height selection for vertical legend */
 	else rampH = rampHChoice;
 	rampW = round(rampH/8); 
@@ -386,7 +388,7 @@ macro "ROI Color Coder with settings generated from data"{
 	/*	parse symbols in unit and draw final label below ramp */
 	selectWindow(tR);
 	rampParameterLabel= cleanLabel(parameterLabel);
-	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely Â° symbol */
+	rampUnitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
 	if (rampW>getStringWidth(rampUnitLabel) && rampW>getStringWidth(rampParameterLabel) && !rotLegend) { /* can center align if labels shorter than ramp width */
 		if (rampParameterLabel!="") drawString(rampParameterLabel, round((rampW-(getStringWidth(rampParameterLabel)))/2), round(1.5*fontSize));
 		if (rampUnitLabel!="") drawString(rampUnitLabel, round((rampW-(getStringWidth(rampUnitLabel)))/2), round(canvasH-0.5*fontSize));
@@ -687,15 +689,15 @@ macro "ROI Color Coder with settings generated from data"{
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ã…ngstrÃ¶m unit symbol */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
 		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " Â°", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "Â±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -710,21 +712,47 @@ macro "ROI Color Coder with settings generated from data"{
 		if (isOpen(oIID)) selectImage(oIID);
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
+		v211102-v211103  Some more fixes and updated to match latest extended geometries  */
 		string = replace(string, "Raw Int Den", "Raw Int. Density");
 		string = replace(string, "FeretAngle", "Feret Angle");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
 		string = replace(string, "FiberLAnn", "Fiber Length from Annulus");
 		string = replace(string, "FiberLR", "Fiber Length R");
+		string = replace(string, " Th ", " Thickness ");
+		string = replace(string, " Crl ", " Curl ");
+		string = replace(string, "Snk", "\(Snake\)");
+		string = replace(string, "Fbr", "Fiber");
+		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
+		string = replace(string, "AR_", "Aspect Ratio: ");
+		string = replace(string, "Rnd_", "Roundness: ");
+		string = replace(string, "Sqr_", "Square: ");
+		string = replace(string, "Squarity_AP","Squarity: from Area and Perimeter");
+		string = replace(string, "Squarity_AF","Squarity: from Area and Feret");
+		string = replace(string, "Squarity_Ff","Squarity: from Feret");
+		string = replace(string, "Rss1", "/(Russ Formula 1/)");
+		string = replace(string, "Rss1", "/(Russ Formula 2/)");
+		string = replace(string, "Rndnss", "Roundness");
+		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
+		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
+		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");	
+		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
+		string = replace(string, "Hxgn_", "Hexagon: ");
+		string = replace(string, "Perim", "Perimeter");
+		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
+		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
+		string = replace(string, "HSF", "Hexagon Shape Factor");
+		string = replace(string, "Vol_", "Volume: ");
 		string = replace(string, "Da", "Diam:area");
 		string = replace(string, "Dp", "Diam:perim.");
 		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "_", " ");
-		string = replace(string, "Â°", "degrees");
-		string = replace(string, "0-90", "0-90Â°"); /* An exception to the above */
-		string = replace(string, "Â°, degrees", "Â°"); /* That would be otherwise be too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Ã‚ */
-		string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
+		string = replace(string, "°", "degrees");
+		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
+		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
+		// string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - Not reliable though */
+		// string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
 		return string;
 	}
   	function getFontChoiceList() {
@@ -828,22 +856,43 @@ macro "ROI Color Coder with settings generated from data"{
 		if(is("Inverting LUT")) run("Invert LUT");
 	}
 	function stripKnownExtensionFromString(string) {
-		/* v210924: Tries to make sure string stays as string
-		   v211014: Adds some additional cleanup
-		   v211025: fixes multiple knowns issue
+		/*	Note: Do not use on path as it may change the directory names
+		v210924: Tries to make sure string stays as string
+		v211014: Adds some additional cleanup
+		v211025: fixes multiple knowns issue
+		v211101: Added ".Ext_" removal
+		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
+		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
 		*/
 		string = "" + string;
-		if (lastIndexOf(string, ".")!=-1) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV");
-			for (i=0; i<knownExt.length; i++) {
+		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
+			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX","_"," ");
+			kEL = lengthOf(knownExt);
+			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
+			uSL = lengthOf(unwantedSuffixes);
+			for (i=0; i<kEL; i++) {
+				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+					ichanLabels = lastIndexOf(string, chanLabels[j]);
+					if(ichanLabels>0){
+						index = lastIndexOf(string, "." + knownExt[i]);
+						if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];
+						ichanLabels = lastIndexOf(string, chanLabels[j]);
+						for (k=0; k<uSL; k++){
+							index = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
+							if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];	
+						}				
+					}
+				}
 				index = lastIndexOf(string, "." + knownExt[i]);
 				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && index>0) string = "" + substring(string, 0, index);
 			}
 		}
-		string = replace(string,"_lzw",""); /* cleanup previous suffix */
-		string = replace(string," ","_"); /* a personal preference */
-		string = replace(string,"__","_"); /* cleanup previous suffix */
-		string = replace(string,"--","-"); /* cleanup previous suffix */
+		unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
+		for (i=0; i<lengthOf(unwantedSuffixes); i++){
+			sL = lengthOf(string);
+			if (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+		}
 		return string;
 	}
 	function stripUnitFromString(string) {
@@ -868,7 +917,7 @@ macro "ROI Color Coder with settings generated from data"{
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* Ã…ngstrÃ¶m unit symbol */
+		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
@@ -895,7 +944,7 @@ macro "ROI Color Coder with settings generated from data"{
 		}
 		else {
 			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
-			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90Â°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
+			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
 			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
 			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";

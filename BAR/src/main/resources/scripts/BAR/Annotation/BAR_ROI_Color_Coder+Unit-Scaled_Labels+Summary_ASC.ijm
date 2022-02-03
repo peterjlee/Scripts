@@ -4,12 +4,12 @@
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
-	11/19/2021 9:47 AM]
+	1/13/2022 5:52 PM + 2 function updates
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary" {
 
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v211119.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220113f1.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc"); 
@@ -861,7 +861,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			}
 			else Dialog.addChoice("Object Label At:", newArray("ROI Center", "Morphological Center"), "Morphological Center");
 			Dialog.addCheckbox("Add Parameter Label Title: \("+paraLabel+"\)?", true);
-			Dialog.addCheckbox("Add Summary Table", true);
+			summaryChoices = newArray("Add to image","Add to log window","Both image and log","None"); 
+			Dialog.addChoice("Select statistics summary output options",summaryChoices,"Add to log window");
 			if (selectionExists) paraLocChoice = newArray("Current Selection", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "At New Selection");
 			else paraLocChoice = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "At New Selection"); 
 			Dialog.addChoice("Title and Summary table Location:", paraLocChoice, paraLocChoice[0]);
@@ -892,7 +893,19 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			else tweakLabels = Dialog.getCheckbox();
 			ctrChoice = Dialog.getChoice(); /* Choose ROI or morphological centers for object labels */
 			paraLabAdd = Dialog.getCheckbox();
-			summaryAdd = Dialog.getCheckbox();
+			summaryChoice = Dialog.getChoice(); /* Options: "Add to image","Add to log window","Both image and log","None" */
+			summaryAdd = false;
+			summaryToImage = false;
+			summaryToLog = false;
+			if(summaryChoice!="None"){
+				summaryAdd = true;
+				if(startsWith(summaryChoice,"Both")){
+					summaryToImage = true;
+					summaryToLog = true;
+				}
+				else if(endsWith(summaryChoice,"image")) summaryToImage = true;
+				else summaryToLog = true;
+			}
 			paraLabPos = Dialog.getChoice(); /* Parameter Label Position */
 			statsChoiceLines = Dialog.getNumber();
 			if (menuLimit <= 796){
@@ -1421,7 +1434,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			linesSpace = 1.2 * ((labLines*paraLabFontSize)+(statsLines*statsLabFontSize));
 		}
 		if (paraLabAdd && !summaryAdd) longestStringWidth = getStringWidth(paraLabel);
-		if (paraLabAdd) {
+		if (paraLabAdd || summaryToImage) {
 			setFont(fontName,paraLabFontSize, fontStyle);
 			just = "left"; /* set default justification */
 			if (getStringWidth(paraLabel)>longestStringWidth) longestStringWidth = getStringWidth(paraLabel);
@@ -1543,9 +1556,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			Array.getStatistics(outlineColorArray,outlineIntMean);
 			outlineInt = floor(outlineIntMean);
 			paraLabelY1 = paraLabelY;
-			for (t=0; t<2; t++) {
-				selectWindow(textImages[t]);
-				if (t==0) setColor("white");
+			for (tImage=0; tImage<2; tImage++) {
+				selectWindow(textImages[tImage]);
+				if (tImage==0) setColor("white");
 				else {
 					paraLabelY = paraLabelY1;
 					run("Select All");
@@ -1562,13 +1575,15 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					else drawString(paraLabel, paraLabelX + (longestStringWidth-getStringWidth(paraLabel))/2, paraLabelY);
 					paraLabelY += round(1.2 * paraLabFontSize);
 				}
-				if (summaryAdd) {
+				if (summaryToImage) {
 					setFont(fontName,statsLabFontSize, fontStyle);
-					for (i=0; i<statsLines; i++) {
-						if (just=="left") drawString(statsLabLineText[i], paraLabelX, paraLabelY);
-						else if (just=="right") drawString(statsLabLineText[i], paraLabelX + (longestStringWidth - getStringWidth(statsLabLineText[i])), paraLabelY);
-						else drawString(statsLabLineText[i], paraLabelX + (longestStringWidth-getStringWidth(statsLabLineText[i]))/2, paraLabelY);
-						paraLabelY += round(1.2 * statsLabFontSize);		
+					for (iS=0; iS<statsLines; iS++) {
+						if (statsLabLineText[iS]!="0" && statsLabLineText[iS]!=""){
+							if (just=="left") drawString(statsLabLineText[iS], paraLabelX, paraLabelY);
+							else if (just=="right") drawString(statsLabLineText[iS], paraLabelX + (longestStringWidth - getStringWidth(statsLabLineText[iS])), paraLabelY);
+							else drawString(statsLabLineText[iS], paraLabelX + (longestStringWidth-getStringWidth(statsLabLineText[iS]))/2, paraLabelY);
+							paraLabelY += round(1.2 * statsLabFontSize);
+						}
 					}
 				}
 			}
@@ -1584,6 +1599,11 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			closeImageByTitle("label_mask");
 			closeImageByTitle("antiAliased");
 		}
+	}
+	if(summaryToLog){
+		print("\n" + paraLabel + " summary for " + t);
+		for (iS=0; iS<statsLines; iS++)
+			if (statsLabLineText[iS]!="0" && statsLabLineText[iS]!="") print(statsLabLineText[iS]);
 	}
 /*	
 		End of Optional Summary section
@@ -2307,12 +2327,13 @@ function expandLabel(string) {  /* Expands abbreviations typically used for comp
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
-			v210430 expandable array version    v211029 added cividis.lut to LUT favorites */
+			v210430 expandable array version    v211029 added cividis.lut to LUT favorites v220113 added cividis_asc_linearlumin
+		*/
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLutsList = newArray("Your favorite LUTS here", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLutsList = newArray("Your favorite LUTS here", "cividis_asc_linearlumin", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		preferredLuts = newArray;
 		/* Filter preferredLutsList to make sure they are available . . . */
 		for (i=0, countL=0; i<preferredLutsList.length; i++) {
@@ -2518,20 +2539,67 @@ function expandLabel(string) {  /* Expands abbreviations typically used for comp
 		return stringLabel;
 	}
 	function unCleanLabel(string) {
-	/* v161104 This function replaces special characters with standard characters for file system compatible filenames
-	+ 041117 to remove spaces as well */
+	/* v161104 This function replaces special characters with standard characters for file system compatible filenames.
+	+ 041117b to remove spaces as well.
+	+ v220126 added getInfo("micrometer.abbreviation").
+	+ v220128 add loops that allow removal of multiple duplication.
+	+ v220131 fixed so that suffix cleanup works even if extensions are included.
+	*/
+		/* Remove bad characters */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, getInfo("micrometer.abbreviation"), "um"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string= replace(string, "%", "pc"); /* % causes issues with html listing */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		/* Remove duplicate strings */
+		unwantedDupes = newArray("8bit","lzw");
+		for (i=0; i<lengthOf(unwantedDupes); i++){
+			iLast = lastIndexOf(string,unwantedDupes[i]);
+			iFirst = indexOf(string,unwantedDupes[i]);
+			if (iFirst!=iLast) {
+				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDupes[i]));
+				i=-1; /* check again */
+			}
+		}
+		unwantedDbls = newArray("_-","-_","__","--","\\+\\+");
+		for (i=0; i<lengthOf(unwantedDbls); i++){
+			iFirst = indexOf(string,unwantedDbls[i]);
+			if (iFirst>=0) {
+				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDbls[i])/2);
+				i=-1; /* check again */
+			}
+		}
 		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
-		string= replace(string, "\\+\\+", "\\+"); /* Clean up autofilenames */
-		string= replace(string, "__", "_"); /* Clean up autofilenames */
+		/* cleanup suffixes */
+		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
+		extStart = lastIndexOf(string,".");
+		sL = lengthOf(string);
+		if (sL-extStart<=4) extIncl = true;
+		else extIncl = false;
+		if (extIncl){
+			preString = substring(string,0,extStart);
+			extString = substring(string,extStart);
+		}
+		else {
+			preString = string;
+			extString = "";
+		}
+		for (i=0; i<lengthOf(unwantedSuffixes); i++){
+			sL = lengthOf(preString);
+			if (endsWith(preString,unwantedSuffixes[i])) { 
+				preString = substring(preString,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+				i=-1; /* check one more time */
+			}
+		}
+		if (!endsWith(preString,"_lzw") && !endsWith(preString,"_lzw.")) preString = replace(preString, "_lzw", ""); /* Only want to keep this if it is at the end */
+		string = preString + extString;
+		/* End of suffix cleanup */
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
@@ -2634,4 +2702,5 @@ function expandLabel(string) {  /* Expands abbreviations typically used for comp
 	+ v211029 Fixed missing comment close below. Added cividis.lut to favorite luts
 	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
 	+ v211119: Added option to perform to create a Max calculated version to restore holes (not fully tested yet in all circumstances). Added skip options to summary choices.
+	+ v220113: Adds summary output options to include output to log window or both image and log window
 	*/

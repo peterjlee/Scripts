@@ -24,10 +24,10 @@
 	+ v210428-30 Updated ASC functions, disabled non-function experimental log option. Switched to expandable arrays, improved ramp labels
 	+ v211025 updated functions  v211029 Added cividis.lut
 	+ v211103 Expanded expandLabels function
-	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
+	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again  (f3)220510 updated checkForPlugins
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112f1.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112f3.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -513,7 +513,9 @@ macro "ROI Color Coder with settings generated from data"{
 		/* v180831 1st version to check for partial names so avoid versioning problems
 			v181005 1st version that works correctly ?
 			v210429 Updates for expandable arrays
-			NOTE: requires ASC restoreExit function which requires previous run of saveSettings */
+			v220510 Fixed subfolder error
+			NOTE: requires ASC restoreExit function which requires previous run of saveSettings
+			NOTE: underlines are NOT converted to spaces in names */
 		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -529,10 +531,10 @@ macro "ROI Color Coder with settings generated from data"{
 		}
 		/* If not in the root try the subfolders */
 		if (!pluginCheck) {
-			subFolderList = newArray;
+			subFolderList = newArray();
 			for (i=0,countSF=0; i<lengthOf(pluginList); i++) {
 				if (endsWith(pluginList[i], "/")){
-					subFolderList = subFolderList[countSF] = pluginList[i];
+					subFolderList[countSF] = pluginList[i];
 					countSF++;
 				}
 			}

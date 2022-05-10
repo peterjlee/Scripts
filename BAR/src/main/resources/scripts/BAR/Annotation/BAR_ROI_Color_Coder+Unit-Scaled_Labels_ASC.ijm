@@ -4,11 +4,11 @@
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
-	v211112f1
+	v211112-v220510
  */
  
 macro "ROI Color Coder with Scaled Labels" {
-	macroL = "BAR_ROI_Color_Coder__Unit-Scaled_Labels_ASC_v211112f1.ijm";
+	macroL = "BAR_ROI_Color_Coder__Unit-Scaled_Labels_ASC_v211112f4.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -110,7 +110,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Ramp_Range", "Manual_Input");
 		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values:", outlierOptions, 2, 4, "No");
 		Dialog.setInsets(3, 0, 15);
-		allColors = newArray("red", "cyan", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "radical_red", "wild_watermelon", "outrageous_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
+		allColors = newArray("red", "cyan", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "jazzberry_jam", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern", "radical_red", "wild_watermelon", "outrageous_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
 		Dialog.addChoice("Outliers: Outline:", allColors, allColors[0]);
 		Dialog.addCheckbox("Apply colors and labels to image copy \(no change to original\)", true);
 		Dialog.setInsets(6, 120, 10);
@@ -1468,29 +1468,35 @@ macro "ROI Color Coder with Scaled Labels" {
 	function checkForPlugin(pluginName) {
 		/* v161102 changed to true-false
 			v180831 some cleanup
-			v210429 Expandable array version */
+			v210429 Expandable array version
+			v220510 Looks for both class and jar if no extension is given */
 		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
-		if (!endsWith(pluginName, ".jar")) pluginName = pluginName + ".jar";
-		if (File.exists(pluginDir + pluginName)) {
+		pExts = newArray(".jar",".class");
+		pluginNameO = pluginName;
+		for (j=0; j<lengthOf(pExts); j++){
+			pluginName = pluginNameO;
+			if (!endsWith(pluginName,pExts[0]) && !endsWith(pluginName,pExts[1])) pluginName = pluginName + pExts[j];
+			if (File.exists(pluginDir + pluginName)) {
 				pluginCheck = true;
 				showStatus(pluginName + "found in: "  + pluginDir);
-		}
-		else {
-			pluginList = getFileList(pluginDir);
-			subFolderList = newArray;
-			for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount++;
-				}
 			}
-			for (i=0; i<lengthOf(subFolderList); i++) {
-				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
-					pluginCheck = true;
-					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-					i = lengthOf(subFolderList);
+			else {
+				pluginList = getFileList(pluginDir);
+				subFolderList = newArray;
+				for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
+					if (endsWith(pluginList[i], "/")) {
+						subFolderList[subFolderCount] = pluginList[i];
+						subFolderCount++;
+					}
+				}
+				for (i=0; i<lengthOf(subFolderList); i++) {
+					if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
+						pluginCheck = true;
+						showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
+						i = lengthOf(subFolderList);
+					}
 				}
 			}
 		}
@@ -1500,7 +1506,9 @@ macro "ROI Color Coder with Scaled Labels" {
 		/* v180831 1st version to check for partial names so avoid versioning problems
 			v181005 1st version that works correctly ?
 			v210429 Updates for expandable arrays
-			NOTE: requires ASC restoreExit function which requires previous run of saveSettings */
+			v220510 Fixed subfolder error
+			NOTE: requires ASC restoreExit function which requires previous run of saveSettings
+			NOTE: underlines are NOT converted to spaces in names */
 		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -1516,10 +1524,10 @@ macro "ROI Color Coder with Scaled Labels" {
 		}
 		/* If not in the root try the subfolders */
 		if (!pluginCheck) {
-			subFolderList = newArray;
+			subFolderList = newArray();
 			for (i=0,countSF=0; i<lengthOf(pluginList); i++) {
 				if (endsWith(pluginList[i], "/")){
-					subFolderList = subFolderList[countSF] = pluginList[i];
+					subFolderList[countSF] = pluginList[i];
 					countSF++;
 				}
 			}
@@ -1859,7 +1867,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
-		   v211022 all names lower-case, all spaces to underscores
+		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1883,16 +1891,17 @@ macro "ROI Color Coder with Scaled Labels" {
 		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
-		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);
+		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
 		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
-		else if (colorName == "gray_modern") cA = newArray(83,86,90);
-		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);
+		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu Blue #30076B6 */
+		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
+		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
 		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
 		else if (colorName == "green_modern_accent") cA = newArray(214,228,187); /* #D6E4BB AKA "Gin" */
 		else if (colorName == "green_spring_accent") cA = newArray(0,255,102); /* #00FF66 AKA "Spring Green" */
-		else if (colorName == "orange_modern") cA = newArray(247,150,70);
-		else if (colorName == "pink_modern") cA = newArray(255,105,180);
-		else if (colorName == "purple_modern") cA = newArray(128,100,162);
+		else if (colorName == "orange_modern") cA = newArray(247,150,70); /* #f79646 tan hide, light orange */
+		else if (colorName == "pink_modern") cA = newArray(255,105,180); /* hot pink #ff69b4 */
+		else if (colorName == "purple_modern") cA = newArray(128,100,162); /* blue-magenta, purple paradise #8064A2 */
 		else if (colorName == "jazzberry_jam") cA = newArray(165,11,94);
 		else if (colorName == "red_n_modern") cA = newArray(227,24,55);
 		else if (colorName == "red_modern") cA = newArray(192,80,77);

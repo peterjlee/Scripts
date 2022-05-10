@@ -32,7 +32,7 @@
 	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
  */
 macro "Line Color Coder with Labels"{
-	macroL = "Line_Color_Coder_v211112f1.ijm";
+	macroL = "Line_Color_Coder_v211112f4.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -951,7 +951,9 @@ macro "Line Color Coder with Labels"{
 		/* v180831 1st version to check for partial names so avoid versioning problems
 			v181005 1st version that works correctly ?
 			v210429 Updates for expandable arrays
-			NOTE: requires ASC restoreExit function which requires previous run of saveSettings */
+			v220510 Fixed subfolder error
+			NOTE: requires ASC restoreExit function which requires previous run of saveSettings
+			NOTE: underlines are NOT converted to spaces in names */
 		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
@@ -967,10 +969,10 @@ macro "Line Color Coder with Labels"{
 		}
 		/* If not in the root try the subfolders */
 		if (!pluginCheck) {
-			subFolderList = newArray;
+			subFolderList = newArray();
 			for (i=0,countSF=0; i<lengthOf(pluginList); i++) {
 				if (endsWith(pluginList[i], "/")){
-					subFolderList = subFolderList[countSF] = pluginList[i];
+					subFolderList[countSF] = pluginList[i];
 					countSF++;
 				}
 			}
@@ -1119,7 +1121,7 @@ macro "Line Color Coder with Labels"{
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
-		   v211022 all names lower-case, all spaces to underscores
+		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1143,16 +1145,17 @@ macro "Line Color Coder with Labels"{
 		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
-		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);
+		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
 		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
-		else if (colorName == "gray_modern") cA = newArray(83,86,90);
-		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);
+		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu Blue #30076B6 */
+		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
+		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
 		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
 		else if (colorName == "green_modern_accent") cA = newArray(214,228,187); /* #D6E4BB AKA "Gin" */
 		else if (colorName == "green_spring_accent") cA = newArray(0,255,102); /* #00FF66 AKA "Spring Green" */
-		else if (colorName == "orange_modern") cA = newArray(247,150,70);
-		else if (colorName == "pink_modern") cA = newArray(255,105,180);
-		else if (colorName == "purple_modern") cA = newArray(128,100,162);
+		else if (colorName == "orange_modern") cA = newArray(247,150,70); /* #f79646 tan hide, light orange */
+		else if (colorName == "pink_modern") cA = newArray(255,105,180); /* hot pink #ff69b4 */
+		else if (colorName == "purple_modern") cA = newArray(128,100,162); /* blue-magenta, purple paradise #8064A2 */
 		else if (colorName == "jazzberry_jam") cA = newArray(165,11,94);
 		else if (colorName == "red_n_modern") cA = newArray(227,24,55);
 		else if (colorName == "red_modern") cA = newArray(192,80,77);

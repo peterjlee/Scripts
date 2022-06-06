@@ -4,11 +4,11 @@
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
-	v211112-v220510
+	v211112-v220510 f5: updated functions
  */
  
 macro "ROI Color Coder with Scaled Labels" {
-	macroL = "BAR_ROI_Color_Coder__Unit-Scaled_Labels_ASC_v211112f4.ijm";
+	macroL = "BAR_ROI_Color_Coder__Unit-Scaled_Labels_ASC_v211112-f5.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -262,7 +262,6 @@ macro "ROI Color Coder with Scaled Labels" {
 		minLUT = parseFloat(lutRange[0]); maxLUT = parseFloat(lutRange[1]);
 	}
 	if (indexOf(rangeLUT, "-")==0) minLUT = 0 - minLUT; /* checks to see if min is a negative value (lets hope the max isn't). */	
-	
 	fontSR2 = fontSize * thinLinesFontSTweak/100;
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
@@ -1942,9 +1941,17 @@ macro "ROI Color Coder with Scaled Labels" {
 	}
 	/* Hex conversion below adapted from T.Ferreira, 20010.01 http://imagejdocu.tudor.lu/doku.php?id=macro:rgbtohex */
 	function pad(n) {
-		n = toString(n);
-		if(lengthOf(n)==1) n = "0"+n;
-		return n;
+		/* v220603 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
+		l = lengthOf(n);
+		s = "";
+		for (i = 0; i < l; i++){
+			v = substring(n,i,i+1);
+			w = toString(v);
+			if (w==NaN) w = v;
+			s += w;
+		}
+		if (lengthOf(s)==1) s = "0" + s;
+		return s;
 	}
 	function getHexColorFromRGBArray(colorNameString) {
 		colorArray = getColorArrayFromColorName(colorNameString);

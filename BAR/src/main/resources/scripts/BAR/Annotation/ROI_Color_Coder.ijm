@@ -175,7 +175,17 @@ function loadLutColors(lut) {
 }
 
 function pad(n) {
-  n= toString(n); if (lengthOf(n)==1) n= "0"+n; return n;
+	/* v220603 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
+	l = lengthOf(n);
+	s = "";
+	for (i = 0; i < l; i++){
+		v = substring(n,i,i+1);
+		w = toString(v);
+		if (w==NaN) w = v;
+		s += w;
+	}
+	if (lengthOf(s)==1) s = "0" + s;
+	return s;
 }
 
 function cleanLabel(string) {

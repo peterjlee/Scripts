@@ -29,10 +29,10 @@
 	+ v211025 Updated stripKnownExtensionFromString and other functions
 	+ v211029 Added cividis.lut
 	+ v211103 Expanded expandlabels macro
-	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
+	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-5: updated functions
  */
-macro "Line Color Coder with Labels"{
-	macroL = "Line_Color_Coder_v211112f4.ijm";
+macro "Line Color Coder with Labels" {
+	macroL = "Line_Color_Coder_v211112-f5.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -135,7 +135,6 @@ macro "Line Color Coder with Labels"{
 		Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
 		Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
 		Dialog.addCheckbox("Make animation stack?",false);
-
 	Dialog.show;
 		fromX = Dialog.getChoice();
 		fromY = Dialog.getChoice();
@@ -168,7 +167,6 @@ macro "Line Color Coder with Labels"{
 	}
 	values = Table.getColumn(parameter); 
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
-	
 	/*	Determine parameter label */
 	parameterLabel = parameter;
 	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
@@ -184,39 +182,36 @@ macro "Line Color Coder with Labels"{
 	parameterLabel = stripUnitFromString(parameter);
 	unitLabel = cleanLabel(unitLabel);
 	rampParameterLabel = cleanLabel(parameterLabel);
-	
 	dP = autoCalculateDecPlaces(arrayMin,arrayMax,10);
-		
 	Dialog.create("Ramp - Legend Options");
-	Dialog.addString("Ramp Parameter Label:", rampParameterLabel, 22);
-	Dialog.addString("Ramp Unit:", unitLabel, 5);
-	Dialog.addString("Ramp Range:", arrayMin + "-" + arrayMax, 11);
-	Dialog.setInsets(-35, 248, 0);
-	Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
-	Dialog.addString("Color Coded Range:", arrayMin + "-" + arrayMax, 11);
-	Dialog.setInsets(-35, 248, 0);
-	Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
-	Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
-	Dialog.addNumber("Minor tick intervals:", 5, 0, 3, "5 would add 4 ticks between labels ");
-	Dialog.addChoice("Decimal places:", newArray(dP, "Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), dP);
-	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
-	// Dialog.setInsets(-38, 250, 0); /* (top, left, bottom) */
-	// Dialog.addMessage(rampH + " pxls suggested\nby image height");
-	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
-	Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
-	fontNameChoice = getFontChoiceList();
-	Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-	Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
-	// Dialog.setInsets(-25, 205, 0);
-	Dialog.addCheckbox("Draw tick marks", true);
-	// Dialog.setInsets(4, 120, 0);
-	Dialog.addCheckbox("Force rotated legend label", false);
-	Dialog.addCheckbox("Add thin lines at true minimum and maximum if different", false);
-	Dialog.addCheckbox("Add thin lines at true mean and " + fromCharCode(0x00B1) + " SD", false);
-	Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
-	Dialog.addNumber("Thin line label font:", 70, 0, 3, "% of font size");
+		Dialog.addString("Ramp Parameter Label:", rampParameterLabel, 22);
+		Dialog.addString("Ramp Unit:", unitLabel, 5);
+		Dialog.addString("Ramp Range:", arrayMin + "-" + arrayMax, 11);
+		Dialog.setInsets(-35, 248, 0);
+		Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
+		Dialog.addString("Color Coded Range:", arrayMin + "-" + arrayMax, 11);
+		Dialog.setInsets(-35, 248, 0);
+		Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
+		Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
+		Dialog.addNumber("Minor tick intervals:", 5, 0, 3, "5 would add 4 ticks between labels ");
+		Dialog.addChoice("Decimal places:", newArray(dP, "Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), dP);
+		Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
+		// Dialog.setInsets(-38, 250, 0); /* (top, left, bottom) */
+		// Dialog.addMessage(rampH + " pxls suggested\nby image height");
+		fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
+		Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
+		fontNameChoice = getFontChoiceList();
+		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
+		Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pxls");
+		// Dialog.setInsets(-25, 205, 0);
+		Dialog.addCheckbox("Draw tick marks", true);
+		// Dialog.setInsets(4, 120, 0);
+		Dialog.addCheckbox("Force rotated legend label", false);
+		Dialog.addCheckbox("Add thin lines at true minimum and maximum if different", false);
+		Dialog.addCheckbox("Add thin lines at true mean and " + fromCharCode(0x00B1) + " SD", false);
+		Dialog.addNumber("Thin line length:", 50, 0, 3, "\(% of length tick length\)");
+		Dialog.addNumber("Thin line label font:", 70, 0, 3, "% of font size");
 	Dialog.show;
-	
 		rampParameterLabel = cleanLabel(Dialog.getString);
 		unitLabel = cleanLabel(Dialog.getString);
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
@@ -235,37 +230,30 @@ macro "Line Color Coder with Labels"{
 		statsRampLines = Dialog.getCheckbox;
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak= Dialog.getNumber;
-		
-		/* Some more cleanup after last run */
-		if (makeAnimStack) closeImageByTitle("animStack");
-		if (!overwriteImage) closeImageByTitle(tN+"_Lines");
-		
-		if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
-		else rampH = rampHChoice;
-	
-		fontSR2 = fontSize * thinLinesFontSTweak/100;		
-		
-		if (restrictLines=="New Selection") {
-			if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
-			setTool("rectangle");
-			msgtitle="Restricted Range of Lines";
-			msg = "Draw a box in the image to which you want the lines restricted";
-			waitForUser(msgtitle, msg);
-			getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
-			selEX2 = selEX + selEWidth;
-			selEY2 = selEY + selEHeight;
-			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
-		}	
-		rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
-		minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
+	/* Some more cleanup after last run */
+	if (makeAnimStack) closeImageByTitle("animStack");
+	if (!overwriteImage) closeImageByTitle(tN+"_Lines");
+	if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
+	else rampH = rampHChoice;
+	fontSR2 = fontSize * thinLinesFontSTweak/100;		
+	if (restrictLines=="New Selection") {
+		if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
+		setTool("rectangle");
+		msgtitle="Restricted Range of Lines";
+		msg = "Draw a box in the image to which you want the lines restricted";
+		waitForUser(msgtitle, msg);
+		getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
+		selEX2 = selEX + selEWidth;
+		selEY2 = selEY + selEHeight;
+		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+	}	
+	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
+	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
 	run("Select None");
 	/* get values for chosen parameter */
-
-	
 	if (drawSequence=="No") drawOrder = Array.getSequence(nRes);
 	else drawOrder = Array.rankPositions(values);
 	if (drawSequence=="Descending") drawOrder = Array.reverse(drawOrder);
-	
 	range = split(rangeS, "-");
 	if (lengthOf(range)==1) {
 		min= NaN; max= parseFloat(range[0]);
@@ -273,7 +261,6 @@ macro "Line Color Coder with Labels"{
 		min= parseFloat(range[0]); max= parseFloat(range[1]);
 	}
 	if (indexOf(rangeS, "-")==0) min = 0 - min; /* checks to see if min is a negative value (lets hope the max isn't). */
-
 	codedRange = split(rangeCoded, "-");
 	if (lengthOf(codedRange)==1) {
 		minCoded = NaN; maxCoded = parseFloat(codedRange[0]);
@@ -281,12 +268,10 @@ macro "Line Color Coder with Labels"{
 		minCoded = parseFloat(codedRange[0]); maxCoded = parseFloat(codedRange[1]);
 	}
 	if (indexOf(rangeCoded, "-")==0) minCoded = 0 - minCoded; /* checks to see if min is a negative value (lets hope the max isn't). */
-	
 	if (isNaN(min)) min = arrayMin;
 	if (isNaN(max)) max = arrayMax;
 	if (isNaN(minCoded)) minCoded = arrayMin;
 	if (isNaN(maxCoded)) maxCoded = arrayMax;
-
 	/*	Create LUT-map legend	*/
 	rampTBMargin = 2 * fontSize;
 	rampW = round(rampH/8);
@@ -478,7 +463,6 @@ macro "Line Color Coder with Labels"{
 	tR = getTitle;
 	/* End of Ramp Creation */
 	/* Beginning of Line Drawing */
-	
 	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor */
 	/* iterate through the results table and draw lines with the ramp color */
 	selectImage(id);
@@ -550,7 +534,7 @@ macro "Line Color Coder with Labels"{
 			comboChoice = Array.concat(comboChoice,comboChoiceCropped,comboChoiceCropNewSelection);
 			Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[4]);
 		}else Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
-		Dialog.show();
+	Dialog.show();
 		createCombo = Dialog.getChoice();
 	if (createCombo!="No") {
 		comboImage = "temp_combo";
@@ -860,9 +844,8 @@ macro "Line Color Coder with Labels"{
         if (index>n-1) index = n-1;
         return substring(bar2, 0, index) + substring(bar1, index+1, n);
 	}
-	
 	/*
-		   ( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
+		   ( 8(|)	( 8(|)	ASC Functions	@@@@@:-)	@@@@@:-)
    */
 	function addImageToStack(stackName,baseImage) {		
 		run("Copy");
@@ -891,7 +874,9 @@ macro "Line Color Coder with Labels"{
 	}
 	function checkForAnyResults() {
 	/* v180918 uses getResultsTableList function
-		v210715 fixes lengthOf(tableList) error */
+		v210715 fixes lengthOf(tableList) error
+		REQUIRES restoreExit and therefore saveSettings
+		*/
 		funcL = "checkForAnyResults_v210715";
 		if ((nResults==0) && ((getValue("results.count"))==0)){
 			tableList = getResultsTableList();
@@ -994,10 +979,12 @@ macro "Line Color Coder with Labels"{
 	function checkForUnits() {  /* Generic version 
 		/* v161108 (adds inches to possible reasons for checking calibration)
 		 v170914 Radio dialog with more information displayed
-		 v200925 looks for pixels unit too	*/
+		 v200925 looks for pixels unit too; v210428 just adds function label
+		NOTE: REQUIRES ASC restoreExit function which requires previous run of saveSettings		 */
+		functionL = "checkForUnits_v210428";
 		getPixelSize(unit, pixelWidth, pixelHeight);
 		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches" || unit=="pixels"){
-			Dialog.create("Suspicious Units");
+			Dialog.create("Suspicious Units: " + functionL);
 			rescaleChoices = newArray("Define new units for this image", "Use current scale", "Exit this macro");
 			rescaleDialogLabel = "pixelHeight = "+pixelHeight+", pixelWidth = "+pixelWidth+", unit = "+unit+": what would you like to do?";
 			Dialog.addRadioButtonGroup(rescaleDialogLabel, rescaleChoices, 3, 1, rescaleChoices[0]) ;
@@ -1053,6 +1040,7 @@ macro "Line Color Coder with Labels"{
 		}
 	}
 	function copyImage(source,target){
+	/* 		NOTE: REQUIRES ASC restoreExit function which requires previous run of saveSettings */
 		if (isOpen(source)) {
 			imageCalculator("Copy create", source, source);
 			rename(target);
@@ -1122,6 +1110,7 @@ macro "Line Color Coder with Labels"{
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference
+		NOTE: REQUIRES ASC restoreExit function which requires previous run of saveSettings
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1141,7 +1130,7 @@ macro "Line Color Coder with Labels"{
 		else if (colorName == "yellow") cA = newArray(255,255,0);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
-		else if (colorName == "garnet") cA = newArray(120,47,64);
+		else if (colorName == "garnet") cA = newArray(120,47,64); /*782F40 */
 		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
@@ -1187,9 +1176,17 @@ macro "Line Color Coder with Labels"{
 		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
 	function pad(n) {
-		n = toString(n);
-		if(lengthOf(n)==1) n = "0"+n;
-		return n;
+		/* v220603 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
+		l = lengthOf(n);
+		s = "";
+		for (i = 0; i < l; i++){
+			v = substring(n,i,i+1);
+			w = toString(v);
+			if (w==NaN) w = v;
+			s += w;
+		}
+		if (lengthOf(s)==1) s = "0" + s;
+		return s;
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
@@ -1293,6 +1290,17 @@ macro "Line Color Coder with Labels"{
 			IJ.renameResults(deactivatedResults);
 		}
 	}
+	function indexOfArray(array,string, default) {
+		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first instance of string */
+		index = default;
+		for (i=0; i<lengthOf(array); i++){
+			if (array[i]==string) {
+				index = i;
+				i = lengthOf(array);
+			}
+		}
+		return index;
+	}
 	function indexOfArrayThatContains(array, value) {
 		/* Like indexOfArray but partial matches possible
 			v190423 Only first match returned */
@@ -1348,11 +1356,15 @@ macro "Line Color Coder with Labels"{
 		else copyImage(window2, replacedWindow); /* Use copyImage function */
 	}
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
-		/* v200305 1st version using memFlush function */
+		/* v200305 first version using memFlush function
+			v220316 if message is blank this should still work now
+			REQUIRES saveSettings AND memFlush
+		*/
 		restoreSettings(); /* Restore previous settings before exiting */
 		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
 		memFlush(200);
-		exit(message);
+		if (message!="") exit(message);
+		else exit;
 	}
 	function restoreResultsFrom(deactivatedResults) {
 		if (isOpen(deactivatedResults)) {
@@ -1479,7 +1491,9 @@ macro "Line Color Coder with Labels"{
 		return string;
 	}
 	function unitLabelFromString(string, imageUnit) {
-	/* v180404 added Feret_MinDAngle_Offset */
+	/* v180404 added Feret_MinDAngle_Offset
+		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array
+		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
@@ -1493,12 +1507,15 @@ macro "Line Color Coder with Labels"{
 			}
 		}
 		else {
+			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
+			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-			else if (string=="AR" || string=="Circ" || string=="Round" || string=="Solidity") unitLabel = "";
-			else if (string=="Mean" || string=="StdDev" || string=="Mode" || string=="Min" || string=="Max" || string=="IntDen" || string=="Median" || string=="RawIntDen" || string=="Slice") unitLabel = "";
-			else if (string=="Angle" || string=="FeretAngle" || string=="Angle_0-90" || string=="FeretAngle_0-90" || string=="Feret_MinDAngle_Offset" || string=="MinDistAngle") unitLabel = fromCharCode(0x00B0);
+			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(chooseUnits,string,-1)>=0) unitLabel = "";
+			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 		}
 		return unitLabel;
-	}						   
+	}

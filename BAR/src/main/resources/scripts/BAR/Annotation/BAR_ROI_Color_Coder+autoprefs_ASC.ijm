@@ -24,10 +24,10 @@
 	+ v210428-30 Updated ASC functions, disabled non-function experimental log option. Switched to expandable arrays, improved ramp labels
 	+ v211025 updated functions  v211029 Added cividis.lut
 	+ v211103 Expanded expandLabels function
-	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again  (f3)220510 updated checkForPlugins f4 updated pad function
+	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again  (f3)220510 updated checkForPlugins f5 updated pad function
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112f4.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112f5.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -824,18 +824,11 @@ macro "ROI Color Coder with settings generated from data"{
 		return hexColors;
 	}
 	function pad(n) {
-		/* v220603-6 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
-		l = lengthOf(n);
-		s = "";
-		for (i = 0; i < l; i++){
-			v = substring(n,i,i+1);
-			w = toString(v);
-			if (isNaN(w)) w = v;
-			s += w;
-		}
-		if (lengthOf(s)==1) s = "0" + s;
-		return s;
+	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
+	  if (lengthOf(n)==1) n= "0"+n; return n;
+	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
+	
 	/*
 	End of Color Functions 
 	*/

@@ -4,11 +4,11 @@
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
-	5/10/2022 3:43 PM  f5: updated functions
+	5/10/2022 3:43 PM  f6: updated functions
  */
  
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220113-f5.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220113-f6.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc"); 
@@ -2323,18 +2323,11 @@ function expandLabel(string) {  /* Expands abbreviations typically used for comp
 	}
 	/* Hex conversion below adapted from T.Ferreira, 20010.01 http://imagejdocu.tudor.lu/doku.php?id=macro:rgbtohex */
 	function pad(n) {
-		/* v220603-6 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
-		l = lengthOf(n);
-		s = "";
-		for (i = 0; i < l; i++){
-			v = substring(n,i,i+1);
-			w = toString(v);
-			if (isNaN(w)) w = v;
-			s += w;
-		}
-		if (lengthOf(s)==1) s = "0" + s;
-		return s;
+	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
+	  if (lengthOf(n)==1) n= "0"+n; return n;
+	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
+	
 	function getHexColorFromRGBArray(colorNameString) {
 		colorArray = getColorArrayFromColorName(colorNameString);
 		 r = toHex(colorArray[0]); g = toHex(colorArray[1]); b = toHex(colorArray[2]);

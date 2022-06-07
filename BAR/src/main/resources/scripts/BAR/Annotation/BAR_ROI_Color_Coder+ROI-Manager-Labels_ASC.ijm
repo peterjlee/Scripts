@@ -2,11 +2,11 @@
 	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
 	Tiago Ferreira, v.5.2 2015.08.13 -	v.5.3 2016.05.1 + pjl mods 6/16-30/2016 to automate defaults and add labels to ROIs
-	v211104-v220510 f4: updated functions
+	v211104-v220510 f5: updated functions
 */
  
 macro "ROI Color Coder with Labels"{
-	macroL = "BAR_ROI_Color_Coder+ROI-Manager-Labels_ASC_v211112-f4.ijm";
+	macroL = "BAR_ROI_Color_Coder+ROI-Manager-Labels_ASC_v211112-f5.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_plugins for autoCrop */
@@ -742,18 +742,11 @@ macro "ROI Color Coder with Labels"{
 		return hexColors;
 	}
 	function pad(n) {
-		/* v220603-6 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
-		l = lengthOf(n);
-		s = "";
-		for (i = 0; i < l; i++){
-			v = substring(n,i,i+1);
-			w = toString(v);
-			if (isNaN(w)) w = v;
-			s += w;
-		}
-		if (lengthOf(s)==1) s = "0" + s;
-		return s;
+	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
+	  if (lengthOf(n)==1) n= "0"+n; return n;
+	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
+	
 	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period 
 	v210430 totally new version
 	Note: Requires remTZeroP function

@@ -29,10 +29,10 @@
 	+ v211025 Updated stripKnownExtensionFromString and other functions
 	+ v211029 Added cividis.lut
 	+ v211103 Expanded expandlabels macro
-	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-5: updated functions
+	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-6: updated functions
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v211112-f5.ijm";
+	macroL = "Line_Color_Coder_v211112-f6.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -1176,18 +1176,11 @@ macro "Line Color Coder with Labels" {
 		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
 	function pad(n) {
-		/* v220603-6 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
-		l = lengthOf(n);
-		s = "";
-		for (i = 0; i < l; i++){
-			v = substring(n,i,i+1);
-			w = toString(v);
-			if (isNaN(w)) w = v;
-			s += w;
-		}
-		if (lengthOf(s)==1) s = "0" + s;
-		return s;
+	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
+	  if (lengthOf(n)==1) n= "0"+n; return n;
+	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
+	
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
 			v210430 expandable array version   v211029 Added cividis.lut */

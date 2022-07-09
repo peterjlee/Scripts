@@ -29,10 +29,10 @@
 	+ v211025 Updated stripKnownExtensionFromString and other functions
 	+ v211029 Added cividis.lut
 	+ v211103 Expanded expandlabels macro
-	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-6: updated functions
+	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used!
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v211112-f6.ijm";
+	macroL = "Line_Color_Coder_v211112-f8.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -47,7 +47,7 @@ macro "Line Color Coder with Labels" {
 	*/
 	switchIsOn = "false";
 	activateIsOn = "false";
-	selEType = selectionType; 
+	selEType = selectionType;
 	if (selEType>=0) {
 		getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
 		selEX2 = selEX + selEWidth;
@@ -91,7 +91,7 @@ macro "Line Color Coder with Labels" {
 		resultsColumn = newArray(nRes);
 		for (j=0; j<nRes; j++)
 			resultsColumn[j] = getResult(headings[i], j);
-		Array.getStatistics(resultsColumn, min, max, null, null); 
+		Array.getStatistics(resultsColumn, min, max, null, null);
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
 	if (headingsWithRange[0]==" :  Infinity - -Infinity")
@@ -110,7 +110,7 @@ macro "Line Color Coder with Labels" {
 		Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
 		Dialog.setInsets(-1, 20, 6);
 		if (lcf!=1){
-			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false); 
+			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false);
 			Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor");
 		}
 		Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
@@ -121,7 +121,7 @@ macro "Line Color Coder with Labels" {
 		luts=getLutsList();
 		Dialog.addChoice("LUT:", luts, luts[0]);
 		Dialog.setInsets(0, 120, 0);
-		Dialog.addCheckbox("Reverse LUT?", false); 
+		Dialog.addCheckbox("Reverse LUT?", false);
 		Dialog.setInsets(6, 0, 6);
 		defaultR = "Current Selection";
 		if (selEType>=0) restrictions =  newArray("No", "Current Selection", "New Selection");
@@ -129,9 +129,9 @@ macro "Line Color Coder with Labels" {
 			restrictions = newArray("No", "New Selection");
 			defaultR = "No";
 		}
-		Dialog.addRadioButtonGroup("Restrict Lines to Area?", restrictions, 1, restrictions.length, defaultR); 
+		Dialog.addRadioButtonGroup("Restrict Lines to Area?", restrictions, 1, restrictions.length, defaultR);
 		Dialog.addCheckbox("Overwrite Active Image?",false);
-		Dialog.addCheckbox("Draw coded lines on a white background",false);	
+		Dialog.addCheckbox("Draw coded lines on a white background",false);
 		Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
 		Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
 		Dialog.addCheckbox("Make animation stack?",false);
@@ -161,11 +161,11 @@ macro "Line Color Coder with Labels" {
 		Dialog.create("Animation options " + tN);
 		Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?",false); /* Using individual non-disposing lines can reduce the size of gif animation files */
 		Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
-		Dialog.show();	
+		Dialog.show();
 		animLinesOnWhite = Dialog.getCheckbox();
 		linesPerFrame = maxOf(1,Dialog.getNumber());
 	}
-	values = Table.getColumn(parameter); 
+	values = Table.getColumn(parameter);
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	/*	Determine parameter label */
 	parameterLabel = parameter;
@@ -178,7 +178,7 @@ macro "Line Color Coder with Labels" {
 			Dialog.show();
 			unitLabel = Dialog.getString();
 	}
-	if (unitLabel=="None") unitLabel = ""; 
+	if (unitLabel=="None") unitLabel = "";
 	parameterLabel = stripUnitFromString(parameter);
 	unitLabel = cleanLabel(unitLabel);
 	rampParameterLabel = cleanLabel(parameterLabel);
@@ -235,7 +235,7 @@ macro "Line Color Coder with Labels" {
 	if (!overwriteImage) closeImageByTitle(tN+"_Lines");
 	if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
 	else rampH = rampHChoice;
-	fontSR2 = fontSize * thinLinesFontSTweak/100;		
+	fontSR2 = fontSize * thinLinesFontSTweak/100;
 	if (restrictLines=="New Selection") {
 		if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
 		setTool("rectangle");
@@ -246,7 +246,7 @@ macro "Line Color Coder with Labels" {
 		selEX2 = selEX + selEWidth;
 		selEY2 = selEY + selEHeight;
 		if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
-	}	
+	}
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
 	run("Select None");
@@ -305,7 +305,7 @@ macro "Line Color Coder with Labels" {
 	run("Canvas Size...", "width=&canvasW height=&canvasH position=Center-Left");
 	if (dpChoice=="Auto")
 		decPlaces = autoCalculateDecPlaces(min, max, numLabels);
-	else if (dpChoice=="Manual") 
+	else if (dpChoice=="Manual")
 		decPlaces=getNumber("Choose Number of Decimal Places", 0);
 	else if (dpChoice=="Scientific")
 		decPlaces = -1;
@@ -331,10 +331,10 @@ macro "Line Color Coder with Labels" {
 			/*Now add overrun text labels at the top and/or bottom of the ramp if the true data extends beyond the ramp range */
 			if ((i==0) && (min>arrayMin)) {
 				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMin,decPlaces+1)); /* adding 1 to dp ensures that the range is different */
-				rampLabelString = rampExt + "-" + rampLabelString; 
+				rampLabelString = rampExt + "-" + rampLabelString;
 			}if ((i==(numLabels-1)) && (max<arrayMax)) {
 				rampExt = removeTrailingZerosAndPeriod(d2s(arrayMax,decPlaces+1));
-				rampLabelString += "-" + rampExt; 
+				rampLabelString += "-" + rampExt;
 			}
 		}
 		drawString(rampLabelString, rampW+4*rampLW, yPos+fontSize/1.5);
@@ -398,7 +398,7 @@ macro "Line Color Coder with Labels" {
 			setFont(fontName, meanFS, fontStyle);
 			drawString("Mean", (rampW-getStringWidth("Mean"))/2, meanPos+0.75*meanFS);
 			drawLine(rampLW, meanPos, tickLR, meanPos);
-			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);	
+			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
 			if (plusSDFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
 				drawString("+SD", (rampW-getStringWidth("+SD"))/2, round(plusSDPos+0.75*fontSR2));
@@ -429,7 +429,7 @@ macro "Line Color Coder with Labels" {
 		run("Clear");
 		run("Select None");
 		closeImageByTitle("label_mask");
-			
+
 		/* reset colors and font */
 		setFont(fontName, fontSize, fontStyle);
 		setColor(0,0,0);
@@ -475,7 +475,7 @@ macro "Line Color Coder with Labels" {
 			if (imageDepth==16 || imageDepth==32) run("8-bit"); /* No need for excessive bit depth here */
 			if ((bitDepth()==8) && (lut!="Grays")) run("RGB Color"); /* converts image to RGB if not using grays only */
 		}
-	} 
+	}
 	workingT = getTitle();
 	selectWindow(workingT);
 	run("Select None");
@@ -497,7 +497,7 @@ macro "Line Color Coder with Labels" {
 				lutIndex= 255;
 			else if (!revLut)
 				lutIndex= round(255 * (values[i] - min) / (max - min));
-			else 
+			else
 				lutIndex= round(255 * (max - values[i]) / (max - min));
 			setColor("#"+lineColors[lutIndex]);
 			X1 = fromXs[i]/ccf;
@@ -562,7 +562,7 @@ macro "Line Color Coder with Labels" {
 		comboW = getWidth();
 		if (indexOf(createCombo, "Scaled")<=0) rampScale =  1;
 		selectWindow(tR);
-		tRS = "scaled_ramp"; 
+		tRS = "scaled_ramp";
 		run("Scale...", "x=&rampScale y=&rampScale interpolation=Bicubic average create title=&tRS");
 		canvasH = getHeight(); /* update ramp height */
 		canvasW = getWidth(); /* update ramp width */
@@ -613,7 +613,7 @@ macro "Line Color Coder with Labels" {
 			if (reuseSelection) {
 				cX1 = selEX; cY1 = selEY; cW = selEWidth;cH = selEHeight;
 			}
-			else {	
+			else {
 				getLocationAndSize(tFx, tFy, tFWidth, tFHeight);
 				OKZoom = 75*screenH/tFHeight;
 				run("Set... ", "zoom="+OKZoom/10+" x=0 y=0"); /* Use zoom to hide image */
@@ -688,10 +688,10 @@ macro "Line Color Coder with Labels" {
 		animFrameWidth = getWidth;
 		/* End of creation of initial animStack frame */
 		copyImage("frame1", "animStack");
-		
+
 		if (valueSort!="No") valueRank = Array.rankPositions(values);
 		if (valueSort=="Descending")	valueRank = Array.reverse(valueRank);
-		
+
 		/* Create array holders for sorted values */
 		animX1 = newArray(nRes);
 		animY1 = newArray(nRes);
@@ -730,7 +730,7 @@ macro "Line Color Coder with Labels" {
 		progressWindowTitleS = "Animation_Frame_Creation_Progress";
 		progressWindowTitle = "[" + progressWindowTitleS + "]";
 		run("Text Window...", "name=&progressWindowTitleS width=25 height=2 monospaced");
-		eval("script","f = WindowManager.getWindow('"+progressWindowTitleS+"'); f.setLocation(50,20); f.setSize(550,150);"); 
+		eval("script","f = WindowManager.getWindow('"+progressWindowTitleS+"'); f.setLocation(50,20); f.setSize(550,150);");
 		nextMemoryFlushPC = 50; /* 1st memory flush at 50% mem */
 		for (i=0; i<nRes; i++) {
 			if (valueSort!="No") j = valueRank[i];
@@ -742,7 +742,7 @@ macro "Line Color Coder with Labels" {
 					lutIndex= 255;
 				else if (!revLut)
 					lutIndex= round(255 * (values[j] - min) / (max - min));
-				else 
+				else
 					lutIndex= round(255 * (max - values[j]) / (max - min));
 				setColor("#"+lineColors[lutIndex]);
 				if (!animLinesOnWhite) { /* create animation frames lines on original image */
@@ -787,9 +787,9 @@ macro "Line Color Coder with Labels" {
 					mem /=1000000;
 					memPC = mem * maxMemFactor;
 					if (memPC > nextMemoryFlushPC) {
-						run("Reset...", "reset=[Undo Buffer]"); 
+						run("Reset...", "reset=[Undo Buffer]");
 						wait(100);
-						run("Reset...", "reset=[Locked Image]"); 
+						run("Reset...", "reset=[Locked Image]");
 						wait(100);
 						call("java.lang.System.gc"); /* force a garbage collection */
 						wait(100);
@@ -799,7 +799,7 @@ macro "Line Color Coder with Labels" {
 						memFlushedPC = (100/mem) * memFlushed;
 						print(memFlushedPC + "% Memory flushed at " + timeTaken);
 						nextMemoryFlushPC += memFlushIncrement;
-					}						
+					}
 					if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
 					print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
 					previousUpdateTime = getTime();
@@ -829,11 +829,11 @@ macro "Line Color Coder with Labels" {
 		hideResultsAs(tableUsed);
 	}
 	setBatchMode("exit & display");
-	showStatus("Line Color Coder completed.");																			 
+	showStatus("Line Color Coder completed.");
 	beep(); wait(300); beep(); wait(300); beep();
 	call("java.lang.System.gc");
 	showStatus("Line Drawing Macro Finished");
-}	
+}
 	function getBar(p1, p2) {
 		/* from https://imagej.nih.gov/ij//macros/ProgressBar.txt */
         n = 20;
@@ -847,7 +847,7 @@ macro "Line Color Coder with Labels" {
 	/*
 		   ( 8(|)	( 8(|)	ASC Functions	@@@@@:-)	@@@@@:-)
    */
-	function addImageToStack(stackName,baseImage) {		
+	function addImageToStack(stackName,baseImage) {
 		run("Copy");
 		selectWindow(stackName);
 		run("Add Slice");
@@ -883,7 +883,7 @@ macro "Line Color Coder with Labels" {
 			if (lengthOf(tableList)==0) {
 				Dialog.create("No Results to Work With: " + funcL);
 				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following columns in any order:\n   1.\) The parameter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
-				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit"); 
+				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit");
 				Dialog.show();
 				tableDecision = Dialog.getRadioButton();
 				if (tableDecision=="Exit") restoreExit("GoodBye");
@@ -902,7 +902,7 @@ macro "Line Color Coder with Labels" {
 		if ((getValue("results.count"))!=nResults && nResults!=0) {
 			Dialog.create("Results Checker: " + funcL);
 			Dialog.addMessage();
-			Dialog.addRadioButtonGroup("There are more than one tables open; how do you want to proceed?", newArray("Swap Results with Other Table", "Close Results Table and Exit", "Exit"), 1, 3, "Swap Results with Other Table"); 
+			Dialog.addRadioButtonGroup("There are more than one tables open; how do you want to proceed?", newArray("Swap Results with Other Table", "Close Results Table and Exit", "Exit"), 1, 3, "Swap Results with Other Table");
 			Dialog.show();
 			next = Dialog.getRadioButton;
 			if (next=="Exit") restoreExit("Your have selected \"Exit\", Goodbye");
@@ -976,7 +976,7 @@ macro "Line Color Coder with Labels" {
 		}
 		return pluginCheck;
 	}
-	function checkForUnits() {  /* Generic version 
+	function checkForUnits() {  /* Generic version
 		/* v161108 (adds inches to possible reasons for checking calibration)
 		 v170914 Radio dialog with more information displayed
 		 v200925 looks for pixels unit too; v210428 just adds function label
@@ -1070,7 +1070,7 @@ macro "Line Color Coder with Labels" {
 		string = replace(string, "Rndnss", "Roundness");
 		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
 		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
-		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");	
+		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");
 		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
 		string = replace(string, "Hxgn_", "Hexagon: ");
 		string = replace(string, "Perim", "Perimeter");
@@ -1099,18 +1099,18 @@ macro "Line Color Coder with Labels" {
 					outputArray[pointsRowCounter] = inputArray[a];
 					pointsRowCounter += 1;
 			}
-		}	
+		}
 		outputArray = Array.slice(outputArray, 0, pointsRowCounter);
 		return outputArray;
 	}
 		/* ASC mod BAR Color Functions */
-		
+
 	function getColorArrayFromColorName(colorName) {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
-		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference
-		NOTE: REQUIRES ASC restoreExit function which requires previous run of saveSettings
+		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
+		   REQUIRES restoreExit function.  56 Colors
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1127,10 +1127,11 @@ macro "Line Color Coder with Labels" {
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0,0,255);
+		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
 		else if (colorName == "yellow") cA = newArray(255,255,0);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
-		else if (colorName == "garnet") cA = newArray(120,47,64); /*782F40 */
+		else if (colorName == "garnet") cA = newArray(120,47,64);
 		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
@@ -1180,7 +1181,6 @@ macro "Line Color Coder with Labels" {
 	  if (lengthOf(n)==1) n= "0"+n; return n;
 	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
-	
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
 			v210430 expandable array version   v211029 Added cividis.lut */
@@ -1214,7 +1214,7 @@ macro "Line Color Coder with Labels" {
 		return hexColors;
 	}
 	/*
-	End of ASC mod BAR Color Functions 
+	End of ASC mod BAR Color Functions
 	*/
   	function getFontChoiceList() {
 		/*	v180723 first version
@@ -1307,9 +1307,9 @@ macro "Line Color Coder with Labels" {
 		return indexFound;
 	}
 	function memFlush(waitTime) {
-		run("Reset...", "reset=[Undo Buffer]"); 
+		run("Reset...", "reset=[Undo Buffer]");
 		wait(waitTime);
-		run("Reset...", "reset=[Locked Image]"); 
+		run("Reset...", "reset=[Locked Image]");
 		wait(waitTime);
 		call("java.lang.System.gc"); /* force a garbage collection */
 	}
@@ -1344,7 +1344,7 @@ macro "Line Color Coder with Labels" {
 			rename(tempName);
 			selectWindow(window2);
 			rename(replacedWindow);
-			eval("script","WindowManager.getWindow('"+tempName+"').close();"); 
+			eval("script","WindowManager.getWindow('"+tempName+"').close();");
 		}
 		else copyImage(window2, replacedWindow); /* Use copyImage function */
 	}
@@ -1361,7 +1361,7 @@ macro "Line Color Coder with Labels" {
 	}
 	function restoreResultsFrom(deactivatedResults) {
 		if (isOpen(deactivatedResults)) {
-			selectWindow(deactivatedResults);		
+			selectWindow(deactivatedResults);
 			IJ.renameResults("Results");
 		}
 	}
@@ -1373,6 +1373,7 @@ macro "Line Color Coder with Labels" {
 		v211101: Added ".Ext_" removal
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
+		v220615: Tries to fix the fix for the trapped extensions ...
 		*/
 		string = "" + string;
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
@@ -1384,18 +1385,19 @@ macro "Line Color Coder with Labels" {
 			for (i=0; i<kEL; i++) {
 				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
 					ichanLabels = lastIndexOf(string, chanLabels[j]);
-					if(ichanLabels>0){
-						index = lastIndexOf(string, "." + knownExt[i]);
-						if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];
+					iExt = lastIndexOf(string, "." + knownExt[i]);
+					if(ichanLabels>0 && iExt>(ichanLabels+lengthOf(chanLabels[j]))){
+						iExt = lastIndexOf(string, "." + knownExt[i]);
+						if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];
 						ichanLabels = lastIndexOf(string, chanLabels[j]);
 						for (k=0; k<uSL; k++){
-							index = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
-							if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];	
-						}				
+							iExt = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
+							if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];
+						}
 					}
 				}
-				index = lastIndexOf(string, "." + knownExt[i]);
-				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && index>0) string = "" + substring(string, 0, index);
+				iExt = lastIndexOf(string, "." + knownExt[i]);
+				if (iExt>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && iExt>0) string = "" + substring(string, 0, iExt);
 			}
 		}
 		unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
@@ -1473,7 +1475,7 @@ macro "Line Color Coder with Labels" {
 		}
 		for (i=0; i<lengthOf(unwantedSuffixes); i++){
 			sL = lengthOf(preString);
-			if (endsWith(preString,unwantedSuffixes[i])) { 
+			if (endsWith(preString,unwantedSuffixes[i])) {
 				preString = substring(preString,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
 				i=-1; /* check one more time */
 			}

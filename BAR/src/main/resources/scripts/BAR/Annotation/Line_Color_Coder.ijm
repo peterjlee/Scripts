@@ -29,10 +29,10 @@
 	+ v211025 Updated stripKnownExtensionFromString and other functions
 	+ v211029 Added cividis.lut
 	+ v211103 Expanded expandlabels macro
-	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used!
+	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used! F9-10 updated colors.
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v211112-f8.ijm";
+	macroL = "Line_Color_Coder_v211112-f10.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -1110,7 +1110,7 @@ macro "Line Color Coder with Labels" {
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
-		   REQUIRES restoreExit function.  56 Colors
+		   REQUIRES restoreExit function.  57 Colors
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1124,13 +1124,14 @@ macro "Line Color Coder with Labels" {
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "red") cA = newArray(255,0,0);
-		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0,0,255);
-		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
-		else if (colorName == "yellow") cA = newArray(255,255,0);
-		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
+		else if (colorName == "yellow") cA = newArray(255,255,0);
+		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
+		else if (colorName == "pink") cA = newArray(255, 192, 203);
+		else if (colorName == "violet") cA = newArray(127,0,255);
+		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "garnet") cA = newArray(120,47,64);
 		else if (colorName == "gold") cA = newArray(206,184,136);
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
@@ -1427,21 +1428,23 @@ macro "Line Color Coder with Labels" {
 	+ v220126 added getInfo("micrometer.abbreviation").
 	+ v220128 add loops that allow removal of multiple duplication.
 	+ v220131 fixed so that suffix cleanup works even if extensions are included.
+	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
 	*/
 		/* Remove bad characters */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, fromCharCode(181)+"m", "um"); /* micron units */
 		string= replace(string, getInfo("micrometer.abbreviation"), "um"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string= replace(string, fromCharCode(0x212B), "Angstrom"); /* the other Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, "%", "pc"); /* % causes issues with html listing */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
 		/* Remove duplicate strings */
-		unwantedDupes = newArray("8bit","lzw");
+		unwantedDupes = newArray("8bit","8-bit","lzw");
 		for (i=0; i<lengthOf(unwantedDupes); i++){
 			iLast = lastIndexOf(string,unwantedDupes[i]);
 			iFirst = indexOf(string,unwantedDupes[i]);
@@ -1463,7 +1466,7 @@ macro "Line Color Coder with Labels" {
 		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
 		extStart = lastIndexOf(string,".");
 		sL = lengthOf(string);
-		if (sL-extStart<=4) extIncl = true;
+		if (sL-extStart<=4 && extStart>0) extIncl = true;
 		else extIncl = false;
 		if (extIncl){
 			preString = substring(string,0,extStart);

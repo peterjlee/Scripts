@@ -24,10 +24,10 @@
 	+ v210428-30 Updated ASC functions, disabled non-function experimental log option. Switched to expandable arrays, improved ramp labels
 	+ v211025 updated functions  v211029 Added cividis.lut
 	+ v211103 Expanded expandLabels function
-	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again  (f3)220510 updated checkForPlugins f5 updated pad function
+	+ v211104: Updated stripKnownExtensionsFromString function    v211112+v220616: Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112f5.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112-f7.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -828,7 +828,6 @@ macro "ROI Color Coder with settings generated from data"{
 	  if (lengthOf(n)==1) n= "0"+n; return n;
 	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
-	
 	/*
 	End of Color Functions 
 	*/
@@ -868,6 +867,7 @@ macro "ROI Color Coder with settings generated from data"{
 		v211101: Added ".Ext_" removal
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
+		v220615: Tries to fix the fix for the trapped extensions ...
 		*/
 		string = "" + string;
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
@@ -879,18 +879,19 @@ macro "ROI Color Coder with settings generated from data"{
 			for (i=0; i<kEL; i++) {
 				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
 					ichanLabels = lastIndexOf(string, chanLabels[j]);
-					if(ichanLabels>0){
-						index = lastIndexOf(string, "." + knownExt[i]);
-						if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];
+					iExt = lastIndexOf(string, "." + knownExt[i]);
+					if(ichanLabels>0 && iExt>(ichanLabels+lengthOf(chanLabels[j]))){
+						iExt = lastIndexOf(string, "." + knownExt[i]);
+						if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];
 						ichanLabels = lastIndexOf(string, chanLabels[j]);
 						for (k=0; k<uSL; k++){
-							index = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
-							if (ichanLabels>index && index>0) string = "" + substring(string, 0, index) + "_" + chanLabels[j];	
+							iExt = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
+							if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];	
 						}				
 					}
 				}
-				index = lastIndexOf(string, "." + knownExt[i]);
-				if (index>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && index>0) string = "" + substring(string, 0, index);
+				iExt = lastIndexOf(string, "." + knownExt[i]);
+				if (iExt>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && iExt>0) string = "" + substring(string, 0, iExt);
 			}
 		}
 		unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
@@ -920,21 +921,23 @@ macro "ROI Color Coder with settings generated from data"{
 	+ v220126 added getInfo("micrometer.abbreviation").
 	+ v220128 add loops that allow removal of multiple duplication.
 	+ v220131 fixed so that suffix cleanup works even if extensions are included.
+	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
 	*/
 		/* Remove bad characters */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, fromCharCode(181)+"m", "um"); /* micron units */
 		string= replace(string, getInfo("micrometer.abbreviation"), "um"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string= replace(string, fromCharCode(0x212B), "Angstrom"); /* the other Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string= replace(string, "%", "pc"); /* % causes issues with html listing */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
 		/* Remove duplicate strings */
-		unwantedDupes = newArray("8bit","lzw");
+		unwantedDupes = newArray("8bit","8-bit","lzw");
 		for (i=0; i<lengthOf(unwantedDupes); i++){
 			iLast = lastIndexOf(string,unwantedDupes[i]);
 			iFirst = indexOf(string,unwantedDupes[i]);
@@ -956,7 +959,7 @@ macro "ROI Color Coder with settings generated from data"{
 		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
 		extStart = lastIndexOf(string,".");
 		sL = lengthOf(string);
-		if (sL-extStart<=4) extIncl = true;
+		if (sL-extStart<=4 && extStart>0) extIncl = true;
 		else extIncl = false;
 		if (extIncl){
 			preString = substring(string,0,extStart);
@@ -968,7 +971,7 @@ macro "ROI Color Coder with settings generated from data"{
 		}
 		for (i=0; i<lengthOf(unwantedSuffixes); i++){
 			sL = lengthOf(preString);
-			if (endsWith(preString,unwantedSuffixes[i])) { 
+			if (endsWith(preString,unwantedSuffixes[i])) {
 				preString = substring(preString,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
 				i=-1; /* check one more time */
 			}

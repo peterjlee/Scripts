@@ -6,7 +6,7 @@
 	Full history at the bottom of the file.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220708-f2.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220818-f1.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -51,11 +51,11 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	}
 	checkForUnits(); /* Required function */
 	getPixelSize(unit, pixelWidth, pixelHeight);
-	bgI = guessBGMedianIntensity();
+	medianBGIs = guessBGMedianIntensity();
+	bgI = round((medianBGIs[0]+medianBGIs[1]+medianBGIs[2])/3);
 	lcf = (pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
-	checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
+	nROIs = checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */
-	nROIs = roiManager("count"); /* get number of ROIs to colorize */
 	nRes = nResults;
 	tSize = Table.size;
 	if (nRes==0 && tSize>0){
@@ -1846,33 +1846,38 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		/* v161102 changed to true-false
 			v180831 some cleanup
 			v210429 Expandable array version
-			v220510 Looks for both class and jar if no extension is given */
-		var pluginCheck = false;
-		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
-		else pluginDir = getDirectory("plugins");
-		pExts = newArray(".jar",".class");
-		pluginNameO = pluginName;
-		for (j=0; j<lengthOf(pExts); j++){
-			pluginName = pluginNameO;
-			if (!endsWith(pluginName,pExts[0]) && !endsWith(pluginName,pExts[1])) pluginName = pluginName + pExts[j];
-			if (File.exists(pluginDir + pluginName)) {
-				pluginCheck = true;
-				showStatus(pluginName + "found in: "  + pluginDir);
-			}
-			else {
-				pluginList = getFileList(pluginDir);
-				subFolderList = newArray;
-				for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
-					if (endsWith(pluginList[i], "/")) {
-						subFolderList[subFolderCount] = pluginList[i];
-						subFolderCount++;
-					}
+			v220510 Looks for both class and jar if no extension is given
+			v220818 Mystery issue fixed, no longer requires restoreExit	*/
+		pluginCheck = false;
+		if (getDirectory("plugins") == "") print("Failure to find any plugins!");
+		else {
+			pluginDir = getDirectory("plugins");
+			if (lastIndexOf(pluginName,".")==pluginName.length-1) pluginName = substring(pluginName,0,pluginName.length-1);
+			pExts = newArray(".jar",".class");
+			knownExt = false;
+			for (j=0; j<lengthOf(pExts); j++) if(endsWith(pluginName,pExts[j])) knownExt = true;
+			pluginNameO = pluginName;
+			for (j=0; j<lengthOf(pExts) && !pluginCheck; j++){
+				if (!knownExt) pluginName = pluginName + pExts[j];
+				if (File.exists(pluginDir + pluginName)) {
+					pluginCheck = true;
+					showStatus(pluginName + "found in: "  + pluginDir);
 				}
-				for (i=0; i<lengthOf(subFolderList); i++) {
-					if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
-						pluginCheck = true;
-						showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-						i = lengthOf(subFolderList);
+				else {
+					pluginList = getFileList(pluginDir);
+					subFolderList = newArray;
+					for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
+						if (endsWith(pluginList[i], "/")) {
+							subFolderList[subFolderCount] = pluginList[i];
+							subFolderCount++;
+						}
+					}
+					for (i=0; i<lengthOf(subFolderList); i++) {
+						if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
+							pluginCheck = true;
+							showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
+							i = lengthOf(subFolderList);
+						}
 					}
 				}
 			}
@@ -2430,28 +2435,39 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
 	function guessBGMedianIntensity(){
-		/* v210827 1st working version */
+		/* v220822 1st color array version (based on https://wsr.imagej.net//macros/tools/ColorPickerTool.txt) */
 		iW = Image.width-1;
 		iH = Image.height-1;
 		interrogate = round(maxOf(1,(iW+iH)/200));
-		samples = 4*interrogate;
-		iVs = newArray();
-		for (i=0; i<interrogate; i++){
-			if (bitDepth!=24){
-				iVs = Array.concat(iVs,getPixel(i,i));
-				iVs = Array.concat(iVs,getPixel(i,iH-i));
-				iVs = Array.concat(iVs,getPixel(iW-i,i));
-				iVs = Array.concat(iVs,getPixel(iW-i,iH-i));
-			}
-			else {
-				iVs = Array.concat(iVs,getValue(i,i));
-				iVs = Array.concat(iVs,getValue(i,iH-i));
-				iVs = Array.concat(iVs,getValue(iW-i,i));
-				iVs = Array.concat(iVs,getValue(iW-i,iH-i));
+		if (bitDepth==24){red = 0; green = 0; blue = 0;}
+		else int = 0;
+		xC = newArray(0,iW,0,iW);
+		yC = newArray(0,0,iH,iH);
+		xAdd = newArray(1,-1,1,-1);
+		yAdd = newArray(1,1,-1,-1);
+		if (bitDepth==24){ reds = newArray(); greens = newArray(); blues = newArray();}
+		else ints = newArray;
+		for (i=0; i<xC.length; i++){
+			for(j=0;j<interrogate;j++){
+				if (bitDepth==24){
+					v = getPixel(xC[i]+j*xAdd[i],yC[i]+j*yAdd[i]);
+					reds = Array.concat(reds,(v>>16)&0xff);  // extract red byte (bits 23-17)
+	           		greens = Array.concat(greens,(v>>8)&0xff); // extract green byte (bits 15-8)
+	            	blues = Array.concat(blues,v&0xff);       // extract blue byte (bits 7-0)
+				}
+				else ints = Array.concat(ints,getValue(xC[i]+j*xAdd[i],yC[i]+j*yAdd[i]));
 			}
 		}
-		iVs = Array.sort(iVs);
-		return(iVs[round(lengthOf(iVs)/2)]);
+		midV = round((xC.length-1)/2);
+		if (bitDepth==24){
+			reds = Array.sort(reds); greens = Array.sort(greens); blues = Array.sort(blues);
+			medianVals = newArray(reds[midV],greens[midV],blues[midV]);
+		}
+		else{
+			ints = Array.sort(ints);
+			medianVals = newArray(ints[midV],ints[midV],ints[midV]);
+		}
+		return medianVals;
 	}
 	function indexOfArray(array,string,default) {
 		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first found value */

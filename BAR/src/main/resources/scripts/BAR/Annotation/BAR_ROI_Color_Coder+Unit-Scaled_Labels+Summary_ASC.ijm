@@ -6,7 +6,7 @@
 	Full history at the bottom of the file.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220823.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220922.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -35,13 +35,31 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	setOption("BlackBackground", false);
 	selectImage(id);
 	if (is("Inverting LUT")) run("Invert LUT");
+	nROIs = checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
+	checkForResults(); /* macro requires that there are results to display */	
 	/* Check for unwanted black border */
 	oImageDepth = bitDepth();
 	if (oImageDepth!=24){
 		yMax = Image.height-1;	xMax = Image.width-1;
 		cornerPixels = newArray(getPixel(0,0),getPixel(1,1),getPixel(0,yMax),getPixel(xMax,0),getPixel(xMax,yMax),getPixel(xMax-1,yMax-1));
 		Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
-		if (cornerMax!=cornerMin) restoreExit("cornerMax="+cornerMax+ " but cornerMin=" +cornerMin+ " and cornerMean = "+cornerMean+" problem with image border");
+		if (cornerMax!=cornerMin){
+			actionOptions = newArray("Remove black edge objects","Invert, then remove black edge objects","Exit","Feeling lucky");
+			Dialog.create("Border pixel inconsistency");
+				Dialog.addMessage("cornerMax="+cornerMax+ " but cornerMin=" +cornerMin+ " and cornerMean = "+cornerMean+" problem with image border");
+				Dialog.addRadioButtonGroup("Actions:",actionOptions,actionOptions.length,1,"Remove black edge objects");
+			Dialog.show();
+				edgeAction = Dialog.getRadioButton();
+			if (edgeAction=="Exit") restoreExit();
+			else if (edgeAction=="Invert, then remove black edge objects"){
+				run("Invert");
+				removeBlackEdgeObjects();
+			}
+			else if (edgeAction=="Remove white edge objects, then invert"){
+				removeBlackEdgeObjects();
+				run("Invert");
+			} 
+		} 
 		/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
 			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
 		if (cornerMean<1 && cornerMean!=-1) {
@@ -54,8 +72,6 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	medianBGIs = guessBGMedianIntensity();
 	bgI = round((medianBGIs[0]+medianBGIs[1]+medianBGIs[2])/3);
 	lcf = (pixelWidth+pixelHeight)/2; /* length conversion factor needed for morph. centroids */
-	nROIs = checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
-	checkForResults(); /* macro requires that there are results to display */
 	nRes = nResults;
 	tSize = Table.size;
 	if (nRes==0 && tSize>0){
@@ -2029,7 +2045,23 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					yMax = Image.height-1;	xMax = Image.width-1;
 					cornerPixels = newArray(getPixel(0,0),getPixel(1,1),getPixel(0,yMax),getPixel(xMax,0),getPixel(xMax,yMax),getPixel(xMax-1,yMax-1));
 					Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
-					if (cornerMax!=cornerMin) restoreExit("cornerMax="+cornerMax+ " but cornerMin=" +cornerMin+ " and cornerMean = "+cornerMean+" problem with image border");
+					if (cornerMax!=cornerMin){
+						actionOptions = newArray("Remove black edge objects","Invert, then remove black edge objects","Exit","Feeling lucky");
+						Dialog.create("Border pixel inconsistency");
+							Dialog.addMessage("cornerMax="+cornerMax+ " but cornerMin=" +cornerMin+ " and cornerMean = "+cornerMean+" problem with image border");
+							Dialog.addRadioButtonGroup("Actions:",actionOptions,actionOptions.length,1,"Remove black edge objects");
+						Dialog.show();
+							edgeAction = Dialog.getRadioButton();
+						if (edgeAction=="Exit") restoreExit();
+						else if (edgeAction=="Invert, then remove black edge objects"){
+							run("Invert");
+							removeBlackEdgeObjects();
+						}
+						else if (edgeAction=="Remove white edge objects, then invert"){
+							removeBlackEdgeObjects();
+							run("Invert");
+						} 
+					}
 					/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
 						i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
 					if (cornerMean<1 && cornerMean!=-1) {
@@ -2438,14 +2470,17 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
 		return fontNameChoice;
 	}
-	function getSelectionFromMask(selection_Mask){
+	function getSelectionFromMask(sel_M){
+		/* v220920 inverts selection if full width */
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
-		tempTitle = getTitle();
-		selectWindow(selection_Mask);
+		tempID = getImageID();
+		selectWindow(sel_M);
 		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
-		run("Make Inverse");
-		selectWindow(tempTitle);
+		getSelectionBounds(gSelX,gSelY,gWidth,gHeight);
+		if(gSelX==0 && gSelY==0 && gWidth==Image.width && gHeight==Image.height)	run("Make Inverse");
+		run("Select None");
+		selectImage(tempID);
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
@@ -2509,6 +2544,21 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		wait(waitTime);
 		call("java.lang.System.gc"); /* force a garbage collection */
 		wait(waitTime);
+	}
+	function removeBlackEdgeObjects() {
+	/* Requires Versatile Wand plugin */
+		bDepth = bitDepth();
+		iW = Image.width;
+		iH = Image.height;
+		if (!checkForPlugin("versatile_wand_tool") && !checkForPlugin("Versatile_Wand_Tool")) exit("Versatile wand tool required");
+		run("Canvas Size...", "width="+(iW+2)+" height="+(iH+2)+" position=Center zero");
+		call("Versatile_Wand_Tool.doWand", 0, 0, 0.0, 0.0, 0.0, "8-connected");
+		if (bDepth==8 || bDepth==24) setBackgroundColor(255, 255, 255);
+		else if (bDepth==16) setBackgroundColor(65535, 65535, 65535);
+		run("Clear", "slice");
+		makeRectangle(1, 1, iW, iH);
+		run("Crop");
+		run("Select None");
 	}
 	function removeTrailingZerosAndPeriod(string) { /* Removes any trailing zeros after a period
 	v210430 totally new version

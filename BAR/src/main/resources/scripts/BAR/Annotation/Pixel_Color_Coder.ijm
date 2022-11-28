@@ -1,39 +1,10 @@
-/* Originally based on ROI_Color_Coder.ijm
+/* This macro is based on the Line-Color_Coder macros which itself was based on ROI_Color_Coder.ijm
 	IJ BAR: https://github.com/tferr/Scripts#scripts
 	https://imagej.net/doku.php?id=macro:roi_color_coder
-	Tiago Ferreira, v.5.2 2015.08.13 -	v.5.3 2016.05.1 + pjl mods 6/16-30/2016 to automate defaults and add labels to ROIs
-	+ add ability to reverse LUT and also shows min and max values for all measurements to make it easier to choose a range 8/5/2016
-	This version draws line between two sets of coordinates in a results table
-	Stats and true min and max added to ramp 8/16-7/2016
-	+ v170411 removes spaces from image names for compatibility with new image combinations
-	+ v170914 Added garbage clean up as suggested by Luc LaLonde at LBNL.
-	+ v180125 fixed "items" should be "nRes" error.
-	+ v180725 Added system fonts to font list. Updated functions. Adds unit:pixel conversion option.
-	+ v180831 Added check for Fiji_Plugins.
-	+ v180912 Added options to crop animation frames to make it possible to create animations for very large data sets.
-	+ v180918 Updated table functions.
-	+ v180921 Can now sort values for the animation frames. Greatly reduced run time.
-	+ v180926 Added coded range option.
-	+ v180928 Fixed undef variable error.
-	+ v181002-3 Minor fixes.
-	+ v181004 Major overhaul of menus for better fit on smaller screen and to allow editing of labels. Also added option to change line drawing order.
-	+ v181016-7 Restricted memory flush use to greatly improve speed. Fixed missing last animation frame. Original selection restored.
-	+ v190327 Fixed accidental closure of output window when no combination chosen. Fixed variable ramp height. Fixed text location on ramp.
-	+ v190423 Updated indexOfArrayThatContains function so it stops searching after finding the first match.
-	+ v190506 Removed redundant function.
-	+ v200123 Nested if that caused issues with dialog removed.
-	+ v200707 Changed imageDepth variable name added macro label.
-	+ v210419 Updated functions and added wait around image-to-selection
-	+ v210714-15 Fixed error in checkForResults function
-	+ v211022 Updated color function choices
-	+ v211025 Updated stripKnownExtensionFromString and other functions
-	+ v211029 Added cividis.lut
-	+ v211103 Expanded expandlabels macro
-	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used! F9-10 updated colors.
-	+ v221128 Updated for new version of filterArrayByContents function
+	v221128: 1st version
  */
-macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v221128.ijm";
+macro "Pixel Color Coder with Labels" {
+	macroL = "Pixel_Color_Coder_v221128.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -79,14 +50,11 @@ macro "Line Color Coder with Labels" {
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	fontSize = maxOf(8,rampH/28); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
-	/* Now variables specific to line drawing: */
-	defaultLineWidth = round((imageWidth+imageHeight)/1000);
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
-	headingsWithX= filterArrayByContents(headings,newArray("x"),false);
-	if (lengthOf(headingsWithX)<2) restoreExit("Two X coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithX) + " header\(s\) with 'X' found");
-	headingsWithY= filterArrayByContents(headings,newArray("y"),false);
-	if (lengthOf(headingsWithY)<2) restoreExit("Two Y coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithY) + " header\(s\) with 'Y' found");
+	headingsWithX = filterArrayByContents(headings,newArray("x"),false);
+	headingsWithY = filterArrayByContents(headings,newArray("y"),false);
+	if (lengthOf(headingsWithX)<1 || lengthOf(headingsWithY)<1) restoreExit("Two XY coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithX) + " header\(s\) with 'X' found, " + lengthOf(headingsWithY) + " header\(s\) with 'Y' found");
 	headingsWithRange= newArray(lengthOf(headings));
 	for (i=0; i<lengthOf(headings); i++) {
 		resultsColumn = newArray(nRes);
@@ -97,24 +65,22 @@ macro "Line Color Coder with Labels" {
 	}
 	if (headingsWithRange[0]==" :  Infinity - -Infinity")
 		headingsWithRange[0] = "ID" + ":  1 - " + nRes; /* relabels ImageJ ID column */
-	lineParameters = newArray("ist","hick","ength","idth","readth", "iamter","eret");
+	pixelParameters = newArray("ist","hick","ength","idth","readth", "iamter","eret");
 	parameterIndex = 0;
-	for (i=0; i<lengthOf(lineParameters); i++)
-		parameterIndex = maxOf(parameterIndex,indexOfArrayThatContains(headingsWithRange, lineParameters[i]));
+	for (i=0; i<lengthOf(pixelParameters); i++)
+		parameterIndex = maxOf(parameterIndex,indexOfArrayThatContains(headingsWithRange, pixelParameters[i]));
 	/* create the dialog prompt */
-	Dialog.create("Line Color Coder: " + macroL);
+	Dialog.create("Dialog #1: " + macroL);
 		Dialog.addMessage("Image: " + tNL);
 		Dialog.setInsets(6, 0, 0);
-		Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
-		Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[0]);
-		Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[1]);
-		Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
+		Dialog.addChoice("Pixel X coordinate: ", headingsWithX, headingsWithX[0]);
+		Dialog.addChoice("Pixel Y coordinate: ", headingsWithY, headingsWithY[0]);
 		Dialog.setInsets(-1, 20, 6);
 		if (lcf!=1){
 			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false);
 			Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor");
 		}
-		Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
+		Dialog.addChoice("Pixel color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
 		unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 		Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 		// Dialog.setInsets(-40, 197, -5);
@@ -130,17 +96,15 @@ macro "Line Color Coder with Labels" {
 			restrictions = newArray("No", "New Selection");
 			defaultR = "No";
 		}
-		Dialog.addRadioButtonGroup("Restrict Lines to Area?", restrictions, 1, restrictions.length, defaultR);
+		Dialog.addRadioButtonGroup("Restrict Pixels to Area?", restrictions, 1, restrictions.length, defaultR);
 		Dialog.addCheckbox("Overwrite Active Image?",false);
-		Dialog.addCheckbox("Draw coded lines on a white background",false);
-		Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
-		Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
-		Dialog.addCheckbox("Make animation stack?",false);
+		Dialog.addCheckbox("Draw pixels on a white background",false);
+		Dialog.addNumber("Line width \(pixel colored as rectangles\)",1,0,4,"pixels");
+		Dialog.addRadioButtonGroup("Pixel addition sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
+		Dialog.addCheckbox("Make Animation Stack?",false);
 	Dialog.show;
-		fromX = Dialog.getChoice();
-		fromY = Dialog.getChoice();
-		toX = Dialog.getChoice();
-		toY = Dialog.getChoice();
+		pixelX = Dialog.getChoice();
+		pixelY = Dialog.getChoice();
 		ccf = 1;
 		useLCF = false;
 		if (lcf!=1) useLCF = Dialog.getCheckbox();
@@ -150,21 +114,20 @@ macro "Line Color Coder with Labels" {
 		unitLabel = Dialog.getChoice();
 		lut = Dialog.getChoice();
 		revLut = Dialog.getCheckbox();
-		restrictLines = Dialog.getRadioButton();
+		restrictPixels = Dialog.getRadioButton();
 		overwriteImage = Dialog.getCheckbox();
-		linesOnWhiteBG = Dialog.getCheckbox();
-		drawSequence = Dialog.getRadioButton();
+		pixelsOnWhiteBG = Dialog.getCheckbox();
 		lineWidth = Dialog.getNumber();
+		drawSequence = Dialog.getRadioButton();
 		makeAnimStack = Dialog.getCheckbox();
 	/* end of format menu */
-	if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
 	if (makeAnimStack){
 		Dialog.create("Animation options " + tN);
-		Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?",false); /* Using individual non-disposing lines can reduce the size of gif animation files */
-		Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
+		Dialog.addCheckbox("Animation: Pixels color-coded on white\(transp\) frames?",false); /* Using individual non-disposing pixels can reduce the size of gif animation files */
+		Dialog.addNumber(nRes + " pixels, draw", maxOf(1,round(nRes/1000)), 0, 3, "pixels\/animation frame");
 		Dialog.show();
-		animLinesOnWhite = Dialog.getCheckbox();
-		linesPerFrame = maxOf(1,Dialog.getNumber());
+		animPixelsOnWhite = Dialog.getCheckbox();
+		pixelsPerFrame = maxOf(1,Dialog.getNumber());
 	}
 	values = Table.getColumn(parameter);
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
@@ -233,15 +196,15 @@ macro "Line Color Coder with Labels" {
 		thinLinesFontSTweak= Dialog.getNumber;
 	/* Some more cleanup after last run */
 	if (makeAnimStack) closeImageByTitle("animStack");
-	if (!overwriteImage) closeImageByTitle(tN+"_Lines");
+	if (!overwriteImage) closeImageByTitle(tN+"_Pixels");
 	if (rotLegend && (rampHChoice==rampH)) rampH = imageHeight - 2 * fontSize; /* tweak automatic height selection for vertical legend */
 	else rampH = rampHChoice;
 	fontSR2 = fontSize * thinLinesFontSTweak/100;
-	if (restrictLines=="New Selection") {
+	if (restrictPixels=="New Selection") {
 		if (is("Batch Mode")==true) setBatchMode(false); /* Does not accept interaction while batch mode is on */
 		setTool("rectangle");
-		msgtitle="Restricted Range of Lines";
-		msg = "Draw a box in the image to which you want the lines restricted";
+		msgtitle="Restricted Range of Pixels";
+		msg = "Draw a box in the image to which you want the Pixels restricted";
 		waitForUser(msgtitle, msg);
 		getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
 		selEX2 = selEX + selEWidth;
@@ -287,13 +250,14 @@ macro "Line Color Coder with Labels" {
 	/* ramp color/gray range is horizontal only so must be rotated later */
 	if (revLut) run("Flip Horizontally");
 	tR = getTitle; /* short variable label for ramp */
-	lineColors = loadLutColors(lut);/* load the LUT as a hexColor array: requires function */
+	pixelColors = loadLutColors(lut);/* load the LUT as a hexColor array: requires function */
 	/* continue the legend design */
 	if(lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
 	setColor(0, 0, 0);
 	setBackgroundColor(255, 255, 255);
 	setFont(fontName, fontSize, fontStyle);
 	setLineWidth(rampLW*2);
+	autoUpdate(true);
 	if (ticks) {
 		drawRect(0, 0, rampH, rampW);
 		/* The next steps add the top and bottom ticks */
@@ -463,16 +427,15 @@ macro "Line Color Coder with Labels" {
 	run("Canvas Size...", "width=&canvasW height=&canvasH position=Center");
 	tR = getTitle;
 	/* End of Ramp Creation */
-	/* Beginning of Line Drawing */
+	/* Beginning of Pixel Color-Coding */
 	lcf=(pixelWidth+pixelHeight)/2; /* length conversion factor */
-	/* iterate through the results table and draw lines with the ramp color */
+	/* iterate through the results table and code pixels with the ramp color */
 	selectImage(id);
 	if (is("Batch Mode")==false) setBatchMode(true);
-	setLineWidth(lineWidth);
 	if (!overwriteImage) {
-		if(linesOnWhiteBG) newImage(tN+"_Lines", "RGB white", imageWidth, imageHeight, 1);
+		if(pixelsOnWhiteBG) newImage(tN+"_Pixels", "RGB white", imageWidth, imageHeight, 1);
 		else {
-			copyImage(t,tN+"_Lines");
+			copyImage(t,tN+"_Pixels");
 			if (imageDepth==16 || imageDepth==32) run("8-bit"); /* No need for excessive bit depth here */
 			if ((bitDepth()==8) && (lut!="Grays")) run("RGB Color"); /* converts image to RGB if not using grays only */
 		}
@@ -480,14 +443,12 @@ macro "Line Color Coder with Labels" {
 	workingT = getTitle();
 	selectWindow(workingT);
 	run("Select None");
-	linesPerFrameCounter = 0;
+	pixelsPerFrameCounter = 0;
 	loopStart = getTime();
 	makeFrames = newArray(nRes);
 	frameCount = 0;
-	fromXs = Table.getColumn(fromX);
-	fromYs = Table.getColumn(fromY);
-	toXs = Table.getColumn(toX);
-	toYs = Table.getColumn(toY);
+	pixelXs = Table.getColumn(pixelX);
+	pixelYs = Table.getColumn(pixelY);
 	for (d=0; d<nRes; d++) {
 		i = drawOrder[d];
 		showProgress(i, nRes);
@@ -500,22 +461,20 @@ macro "Line Color Coder with Labels" {
 				lutIndex= round(255 * (values[i] - min) / (max - min));
 			else
 				lutIndex= round(255 * (max - values[i]) / (max - min));
-			setColor("#"+lineColors[lutIndex]);
-			X1 = fromXs[i]/ccf;
-			Y1 = fromYs[i]/ccf;
-			X2 = toXs[i]/ccf;
-			Y2 = toYs[i]/ccf;
+			setColor("#"+pixelColors[lutIndex]);
+			X1 = pixelXs[i]/ccf;
+			Y1 = pixelYs[i]/ccf;
 			makeFrames[i] = false;
-			if ((X1<=imageWidth) && (X2<=imageWidth) && (Y1<=imageHeight) && (Y2 <imageHeight)) { /* this allows you to crop image from top left if necessary */
+			if ((X1<=imageWidth) && (Y1<=imageHeight) ) { /* this allows you to crop image from top left if necessary */
 				selectWindow(workingT);
-				if 	(restrictLines=="No") {
-					drawLine(X1, Y1, X2, Y2);
+				if 	(restrictPixels=="No") {
+					drawRect(X1, Y1, lineWidth, lineWidth);
 					makeFrames[i] = true;
 					frameCount += 1;
 				}
 				else {
-					if ((X1>=selEX) && (X1<=selEX2) && (X2>=selEX) && (X2<=selEX2) && (Y1>=selEY) && (Y1<=selEY2) && (Y2>=selEY) && (Y2<=selEY2)) {
-						drawLine(X1, Y1, X2, Y2);
+					if ((X1>=selEX) && (X1<=selEX2) && (Y1>=selEY) && (Y1<=selEY2)) {
+						drawRect(X1, Y1, lineWidth, lineWidth);
 						makeFrames[i] = true;
 						frameCount += 1;
 					}
@@ -527,11 +486,11 @@ macro "Line Color Coder with Labels" {
 		comboChoice = newArray("No");
 		comboChoiceCurrent = newArray("Combine Ramp with Current", "Combine Ramp with New Image");
 		comboChoiceScaled = newArray("Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
-		comboChoiceCropped = newArray("Combine Scaled Ramp with New Image Cropped to Restricted Lines");
+		comboChoiceCropped = newArray("Combine Scaled Ramp with New Image Cropped to Restricted Pixels");
 		comboChoiceCropNewSelection = newArray("Combine Scaled Ramp with Image Cropped to Old or New Selection");
 		if (canvasH>imageHeight || canvasH<(0.93*imageHeight)) comboChoice = Array.concat(comboChoice,comboChoiceScaled,comboChoiceCropNewSelection);
 		else comboChoice = Array.concat(comboChoice,comboChoiceCurrent,comboChoiceCropNewSelection); /* close enough */
-		if (restrictLines!="No") {
+		if (restrictPixels!="No") {
 			comboChoice = Array.concat(comboChoice,comboChoiceCropped,comboChoiceCropNewSelection);
 			Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[4]);
 		}else Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
@@ -586,26 +545,26 @@ macro "Line Color Coder with Labels" {
 	/* Start Animation Section */
 	if(makeAnimStack) {
 		reuseSelection = false;
-		reuseLines = false;
+		reusePixels = false;
 		cX1 = 0;
 		cY1 = 0;
 		copyImage(t,"tempFrame1");
 		if (imageDepth!=8 || lut!="Grays") run("RGB Color");
-		if(animLinesOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
+		if(animPixelsOnWhite) run("Max...", "value=254"); /* restrict max intensity to 254 so no transparent regions in the background image */
 		Dialog.create("Crop Animation Frame?");
 			Dialog.addCheckbox("Would you like to restrict the animation frames to a cropped area?", false);
-			if (restrictLines!="No") {
-				Dialog.addCheckbox("Crop to restricted lines area?", true);
-				Dialog.addCheckbox("Use the same restricted " + frameCount + " lines?", true);
+			if (restrictPixels!="No") {
+				Dialog.addCheckbox("Crop to restricted pixels area?", true);
+				Dialog.addCheckbox("Use the same restricted " + frameCount + " pixels?", true);
 			}
 			Dialog.addCheckbox("Would you like to resize the animation frame to reduce memory load?", false);
 			Dialog.addCheckbox("Would you like to add the scaled ramp to the right of the 1st frame?", true);
 			Dialog.addRadioButtonGroup("Sequence frames by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
 		Dialog.show;
 			animCrop = Dialog.getCheckbox();
-			if (restrictLines!="No") {
+			if (restrictPixels!="No") {
 				reuseSelection = Dialog.getCheckbox();
-				reuseLines =  Dialog.getCheckbox();
+				reusePixels =  Dialog.getCheckbox();
 			}
 			animResize = Dialog.getCheckbox();
 			addRamp = Dialog.getCheckbox();
@@ -619,9 +578,9 @@ macro "Line Color Coder with Labels" {
 				OKZoom = 75*screenH/tFHeight;
 				run("Set... ", "zoom="+OKZoom/10+" x=0 y=0"); /* Use zoom to hide image */
 				selectWindow(t);
-				if ((restrictLines!="No") && (selEType>=0)) makeRectangle(selEX, selEY, selEWidth, selEHeight);
+				if ((restrictPixels!="No") && (selEType>=0)) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 				msgtitle="Select area to crop for animation frames";
-				if (restrictLines!="No") msg = "Previous restricted lines box shown";
+				if (restrictPixels!="No") msg = "Previous restricted pixels box shown";
 				else msg = "Select an area in image window " + t + " for the animation frames";
 				waitForUser(msgtitle, msg);
 				getSelectionBounds(cX1, cY1, cW, cH);
@@ -674,7 +633,7 @@ macro "Line Color Coder with Labels" {
 			run("Canvas Size...", "width=&animComboW height=&animFrameHeight position=Top-Left");
 			makeRectangle(animFrameNoRampWidth, round((animFrameHeight-sarH)/2), sarW, sarH);
 			setBatchMode("exit & display");
-			selectWindow("temp_combo"); /* voodoo line seems to help */
+			selectWindow("temp_combo"); /* voodoo pixel seems to help */
 			wait(10);
 			run("Image to Selection...", "image=Scaled_Anim_Ramp opacity=100");
 			run("Flatten");
@@ -696,38 +655,32 @@ macro "Line Color Coder with Labels" {
 		/* Create array holders for sorted values */
 		animX1 = newArray(nRes);
 		animY1 = newArray(nRes);
-		animX2 = newArray(nRes);
-		animY2 = newArray(nRes);
 		animMakeFrame = newArray(nRes);
-		lineCounter = 0;
-		/* Determine lines to be drawn for animation and their order */
+		pixelCounter = 0;
+		/* Determine pixels to be drawn for animation and their order */
 		for (i=0; i<nRes; i++) {
 			if (valueSort!="No") j = valueRank[i];
 			else j = i;
-			X1 = animScaleF * ((fromXs[j]/ccf)-cX1);
-			Y1 = animScaleF * ((fromYs[j]/ccf)-cY1);
-			X2 = animScaleF * ((toXs[j]/ccf)-cX1);
-			Y2 = animScaleF * ((toYs[j]/ccf)-cY1);
-			if (reuseLines) reuseLine = makeFrames[j];
-			else reuseLine = true;
-			if ((X1>=0) && (Y1>=0) && (X2<=animFrameNoRampWidth) && (Y2<=animFrameHeight) && reuseLine){
+			X1 = animScaleF * ((pixelXs[j]/ccf)-cX1);
+			Y1 = animScaleF * ((pixelYs[j]/ccf)-cY1);
+			if (reusePixels) reusePixel = makeFrames[j];
+			else reusePixel = true;
+			if ((X1>=0) && (Y1>=0) && reusePixel){
 				animMakeFrame[j] = true;
-				lineCounter += 1;
+				pixelCounter += 1;
 			}
 			else animMakeFrame[j] = false;
 			animX1[j] = X1;
 			animY1[j] = Y1;
-			animX2[j] = X2;
-			animY2[j] = Y2;
 		}
-		linesPerFrameCounter = 0;
-		linesDrawn = 0;
+		pixelsPerFrameCounter = 0;
+		pixelsDrawn = 0;
 		frameCount = 0;
 		lastFrameValue = arrayMax + 1; /* Just make sure this is not in the value set */
 		loopStart = getTime();
 		previousUpdateTime = loopStart;
-		animLineWidth = maxOf(1,animScaleF*lineWidth);
-		setLineWidth(animLineWidth);
+		animPixelWidth = maxOf(1,animScaleF*pixelWidth);
+		setLineWidth(animPixelWidth);
 		progressWindowTitleS = "Animation_Frame_Creation_Progress";
 		progressWindowTitle = "[" + progressWindowTitleS + "]";
 		run("Text Window...", "name=&progressWindowTitleS width=25 height=2 monospaced");
@@ -745,16 +698,16 @@ macro "Line Color Coder with Labels" {
 					lutIndex= round(255 * (values[j] - min) / (max - min));
 				else
 					lutIndex= round(255 * (max - values[j]) / (max - min));
-				setColor("#"+lineColors[lutIndex]);
-				if (!animLinesOnWhite) { /* create animation frames lines on original image */
+				setColor("#"+pixelColors[lutIndex]);
+				if (!animPixelsOnWhite) { /* create animation frames pixels on original image */
 					/* Keep adding to frame1 to create a cumulative image */
 					selectWindow("frame1");
-					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
-					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
+					drawRect(animX1[j], animY1[j], lineWidth, lineWidth);
+					pixelsPerFrameCounter += 1;
+					if (pixelsPerFrameCounter>=pixelsPerFrame || i==(nRes-1)) {
 						if (values[j]!=lastFrameValue || i==(nRes-1)) {
 							addImageToStack("animStack","frame1");
-							linesPerFrameCounter = 0;
+							pixelsPerFrameCounter = 0;
 							lastFrameValue = values[j];
 						}
 					}
@@ -762,21 +715,21 @@ macro "Line Color Coder with Labels" {
 				else {
 					if (!isOpen("tempFrame")) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
 					selectWindow("tempFrame");
-					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
-					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) { /* lineCounter is the number of lines in the full or restricted region and was determined earlier. This should trigger the last frame to be added */
+					drawRect(animX1[j], animY1[j], lineWidth, lineWidth);
+					pixelsPerFrameCounter += 1;
+					if (pixelsPerFrameCounter>=pixelsPerFrame || i==(nRes-1)) { /* pixelCounter is the number of pixels in the full or restricted region and was determined earlier. This should trigger the last frame to be added */
 						if (values[j]!=lastFrameValue || i==(nRes-1)) {
 							addImageToStack("animStack","tempFrame");
 							if(i<(nRes-1)) closeImageByTitle("tempFrame"); /* leave the last frame to add at the end */
-							linesPerFrameCounter = 0; /* Reset lines per frame counter so start new set of lines in a new frame */
+							pixelsPerFrameCounter = 0; /* Reset pixels per frame counter so start new set of pixels in a new frame */
 							lastFrameValue = values[j];
 						}
 					}
 					run("Select None");
 				}
 				timeSinceUpdate = getTime()- previousUpdateTime;
-				linesDrawn += 1;
-				if((timeSinceUpdate>1000) && (linesDrawn>1)) {
+				pixelsDrawn += 1;
+				if((timeSinceUpdate>1000) && (pixelsDrawn>1)) {
 					/* The time/memory window and memory flushing was add for some older PC with had limited memory but it is relatively time consuming so it is only updated ~ 1 second */
 					timeTaken = getTime()-loopStart;
 					timePerLoop = timeTaken/(i+1);
@@ -821,7 +774,7 @@ macro "Line Color Coder with Labels" {
 	/* display result		 */
 	if (isOpen(id)) selectImage(id);
 	restoreSettings;
-	if ((restrictLines!="No") && (selEType>=0)) makeRectangle(selEX, selEY, selEWidth, selEHeight);
+	if ((restrictPixels!="No") && (selEType>=0)) makeRectangle(selEX, selEY, selEWidth, selEHeight);
 	if (switchIsOn== "true") {
 		hideResultsAs(tableUsed);
 		restoreResultsFrom(hiddenResults);
@@ -830,10 +783,10 @@ macro "Line Color Coder with Labels" {
 		hideResultsAs(tableUsed);
 	}
 	setBatchMode("exit & display");
-	showStatus("Line Color Coder completed.");
+	showStatus("Pixel Color Coder completed.");
 	beep(); wait(300); beep(); wait(300); beep();
 	call("java.lang.System.gc");
-	showStatus("Line Drawing Macro Finished");
+	showStatus("Pixel Drawing Macro Finished");
 }
 	function getBar(p1, p2) {
 		/* from https://imagej.nih.gov/ij//macros/ProgressBar.txt */

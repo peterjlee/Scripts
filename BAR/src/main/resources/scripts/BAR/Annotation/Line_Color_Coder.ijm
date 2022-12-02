@@ -28,15 +28,17 @@
 	+ v211022 Updated color function choices
 	+ v211025 Updated stripKnownExtensionFromString and other functions
 	+ v211029 Added cividis.lut
-	+ v211103 Expanded expandlabels macro
+	+ v211103 Expanded expandlabels macro.
 	+ v211104 Updated stripKnownExtensionsFromString function    v211112: Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used! F9-10 updated colors.
-	+ v221128 Updated for new version of filterArrayByContents function
+	+ v221128 Updated for new version of filterArrayByContents function.
+	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use.
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v221128.ijm";
+	macroL = "Line_Color_Coder_v221201.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
+	if (nImages==0) exit("Sorry, this macro needs an image to annotate");
 	saveSettings;
 	close("*_Ramp"); /* cleanup: closes previous ramp windows */
 	/* Set options for black objects on white background as this works better for publications */
@@ -80,12 +82,14 @@ macro "Line Color Coder with Labels" {
 	fontSize = maxOf(8,rampH/28); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
-	defaultLineWidth = round((imageWidth+imageHeight)/1000);
+	defaultLineWidth = maxOf(1,round((imageWidth+imageHeight)/1000));
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
-	headingsWithX= filterArrayByContents(headings,newArray("x"),false);
+	headingsWithX = filterArrayByContents(headings,newArray("x"),false);
+	headingsWithX = Array.concat("Fixed entry",headingsWithX);
 	if (lengthOf(headingsWithX)<2) restoreExit("Two X coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithX) + " header\(s\) with 'X' found");
-	headingsWithY= filterArrayByContents(headings,newArray("y"),false);
+	headingsWithY = filterArrayByContents(headings,newArray("y"),false);
+	headingsWithY = Array.concat("Fixed entry",headingsWithY);
 	if (lengthOf(headingsWithY)<2) restoreExit("Two Y coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithY) + " header\(s\) with 'Y' found");
 	headingsWithRange= newArray(lengthOf(headings));
 	for (i=0; i<lengthOf(headings); i++) {
@@ -105,22 +109,35 @@ macro "Line Color Coder with Labels" {
 	Dialog.create("Line Color Coder: " + macroL);
 		Dialog.addMessage("Image: " + tNL);
 		Dialog.setInsets(6, 0, 0);
-		Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[0]);
-		Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[0]);
-		Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[1]);
-		Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[1]);
-		Dialog.setInsets(-1, 20, 6);
+		iFX = indexOfArray(headingsWithX, call("ij.Prefs.get", "line.color.coder.fromX",headingsWithX[headingsWithX.length-1]),0);
+		iFY = indexOfArray(headingsWithY, call("ij.Prefs.get", "line.color.coder.fromY",headingsWithY[headingsWithY.length-1]),0);
+		iTX = indexOfArray(headingsWithX, call("ij.Prefs.get", "line.color.coder.toX",headingsWithX[maxOf(0,headingsWithX.length-2)]),0);
+		iTY = indexOfArray(headingsWithY, call("ij.Prefs.get", "line.color.coder.toY",headingsWithY[maxOf(0,headingsWithY.length-2)]),0);
+		Dialog.addChoice("From x coordinate: ", headingsWithX, headingsWithX[iFX]);
+		Dialog.addChoice("From y coordinate: ", headingsWithY, headingsWithY[iFY]);
+		Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[iTX]);
+		Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[iTY]);
 		if (lcf!=1){
-			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", false);
-			Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor");
+			Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor",11,"red");
+			Dialog.setInsets(-1, 20, 16);
+			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", true);
 		}
-		Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[parameterIndex]);
+		Dialog.addNumber("Fixed X Coordinate if 'Fixed entry' is chosen above",0,0,6,"pixels");
+		Dialog.addNumber("Fixed Y Coordinate if 'Fixed entry' is chosen above",0,0,6,"pixels");
+		if (lcf!=1){
+			Dialog.addMessage("If the fixed co-ordinates are not in pixels they will need to be divided by the scale factor",11,"red");
+			Dialog.setInsets(-1, 20, 16);
+			Dialog.addCheckbox("Divide fixed coordinates by image calibration \("+lcf+"\)?", false);
+		}
+		iPara = indexOfArray(headings, call("ij.Prefs.get", "line.color.coder.parameter",headings[parameterIndex]),parameterIndex);
+		Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[iPara]);
 		unitChoice = newArray("Auto", "Manual", unit, unit+"^2", "None", "pixels", "pixels^2", fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
 		Dialog.addChoice("Unit \("+unit+"\) Label:", unitChoice, unitChoice[0]);
 		// Dialog.setInsets(-40, 197, -5);
 		// Dialog.addMessage("Auto based on\nselected parameter");
 		luts=getLutsList();
-		Dialog.addChoice("LUT:", luts, luts[0]);
+		iLuts = indexOfArray(luts, call("ij.Prefs.get", "line.color.coder.lut",luts[0]),0);
+		Dialog.addChoice("LUT:", luts, luts[iLuts]);
 		Dialog.setInsets(0, 120, 0);
 		Dialog.addCheckbox("Reverse LUT?", false);
 		Dialog.setInsets(6, 0, 6);
@@ -134,8 +151,18 @@ macro "Line Color Coder with Labels" {
 		Dialog.addCheckbox("Overwrite Active Image?",false);
 		Dialog.addCheckbox("Draw coded lines on a white background",false);
 		Dialog.addRadioButtonGroup("Line draw sequence by value?", newArray("No", "Ascending", "Descending"),1,3,"Ascending");
+		lineStyleChoices = newArray("Simple", "I-Bar", "Arrow", "Arrows", "S-Arrow", "S-Arrows");
+		iLS = indexOfArray(lineStyleChoices, call("ij.Prefs.get", "line.color.coder.style",lineStyleChoices[0]),0);
+		Dialog.addRadioButtonGroup("Line styles \(arrowheads are solid triangles or \"S-Arrows\" which are \"stealth\"/notched\):__", lineStyleChoices, 1, 3, lineStyleChoices[iLS]);
+		if (selEType==5){
+			Dialog.addMessage("Single arrow points in the direction drawn",12,"#782F40");
+		}
+		arrowheadSizeChoices = newArray("small", "medium", "large");
+		iAS = indexOfArray(arrowheadSizeChoices, call("ij.Prefs.get", "line.color.coder.arrowhead.size",arrowheadSizeChoices[0]),0);
+		Dialog.addChoice("Arrowhead/bar header size",arrowheadSizeChoices, arrowheadSizeChoices[iAS]);
 		Dialog.addNumber("Line Width:", defaultLineWidth, 0, 4, "pixels");
 		Dialog.addCheckbox("Make animation stack?",false);
+		Dialog.addCheckbox("Diagnostics",false);
 	Dialog.show;
 		fromX = Dialog.getChoice();
 		fromY = Dialog.getChoice();
@@ -145,6 +172,15 @@ macro "Line Color Coder with Labels" {
 		useLCF = false;
 		if (lcf!=1) useLCF = Dialog.getCheckbox();
 		if (useLCF) ccf = lcf;
+		fixedX = Dialog.getNumber();
+		fixedY = Dialog.getNumber();
+		if (lcf!=1){
+			if (Dialog.getCheckbox()){
+				fixedX /= lcf;
+				fixedY /= lcf;
+			}
+		}
+		if (useLCF) fixedccf = lcf;
 		parameterWithLabel= Dialog.getChoice();
 		parameter = substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
 		unitLabel = Dialog.getChoice();
@@ -154,14 +190,32 @@ macro "Line Color Coder with Labels" {
 		overwriteImage = Dialog.getCheckbox();
 		linesOnWhiteBG = Dialog.getCheckbox();
 		drawSequence = Dialog.getRadioButton();
+		lineStyle = Dialog.getRadioButton;
+		arrowheadSize = Dialog.getChoice;
 		lineWidth = Dialog.getNumber();
 		makeAnimStack = Dialog.getCheckbox();
+		diagnostics = Dialog.getCheckbox();
 	/* end of format menu */
+	call("ij.Prefs.set", "line.color.coder.fromX", fromX);
+	call("ij.Prefs.set", "line.color.coder.fromY", fromY);
+	call("ij.Prefs.set", "line.color.coder.toX", toX);
+	call("ij.Prefs.set", "line.color.coder.toY", toY);
+	call("ij.Prefs.set", "line.color.coder.parameter", parameter);
+	call("ij.Prefs.set", "line.color.coder.lut", lut);
+	call("ij.Prefs.set", "line.color.coder.style", lineStyle);
+	call("ij.Prefs.set", "line.color.coder.arrowhead.size", arrowheadSize);
+	if (lineStyle=="Solid Bar") arrowStyle = "Headless";
+	else if (lineStyle=="I-Bar") arrowStyle = "Bar Double";
+	else if (lineStyle=="Arrows")  arrowStyle = "Double";
+	else if (lineStyle=="S-Arrow")  arrowStyle = "Notched";
+	else if (lineStyle=="S-Arrows")  arrowStyle = "Notched Double";
+	else arrowStyle = "";
+	arrowStyle += " " + arrowheadSize;
 	if (lineWidth<1) lineWidth = 1; /* otherwise what is the point? */
 	if (makeAnimStack){
 		Dialog.create("Animation options " + tN);
 		Dialog.addCheckbox("Animation: Lines drawn on white\(transp\) frames?",false); /* Using individual non-disposing lines can reduce the size of gif animation files */
-		Dialog.addNumber(nRes + " lines, draw", round(nRes/1000), 0, 3, "lines\/animation frame");
+		Dialog.addNumber(nRes + " lines, draw", maxOf(1,round(nRes/1000)), 0, 3, "lines\/animation frame");
 		Dialog.show();
 		animLinesOnWhite = Dialog.getCheckbox();
 		linesPerFrame = maxOf(1,Dialog.getNumber());
@@ -430,7 +484,6 @@ macro "Line Color Coder with Labels" {
 		run("Clear");
 		run("Select None");
 		closeImageByTitle("label_mask");
-
 		/* reset colors and font */
 		setFont(fontName, fontSize, fontStyle);
 		setColor(0,0,0);
@@ -484,13 +537,14 @@ macro "Line Color Coder with Labels" {
 	loopStart = getTime();
 	makeFrames = newArray(nRes);
 	frameCount = 0;
-	fromXs = Table.getColumn(fromX);
-	fromYs = Table.getColumn(fromY);
-	toXs = Table.getColumn(toX);
-	toYs = Table.getColumn(toY);
+	if(!startsWith(fromX,"Fixed")) fromXs = Table.getColumn(fromX);
+	if(!startsWith(fromY,"Fixed")) fromYs = Table.getColumn(fromY);
+	if(!startsWith(toX,"Fixed")) toXs = Table.getColumn(toX);
+	if(!startsWith(toY,"Fixed")) toYs = Table.getColumn(toY);
 	for (d=0; d<nRes; d++) {
 		i = drawOrder[d];
-		showProgress(i, nRes);
+		if (diagnostics) IJ.log("Drawing sequence: i" + d + ", i " + i);
+		showProgress(d, nRes);
 		if (!isNaN(values[i]) && (values[i]>=minCoded) && (values[i]<=maxCoded)) {
 			if (values[i]<=min)
 				lutIndex= 0;
@@ -501,21 +555,36 @@ macro "Line Color Coder with Labels" {
 			else
 				lutIndex= round(255 * (max - values[i]) / (max - min));
 			setColor("#"+lineColors[lutIndex]);
-			X1 = fromXs[i]/ccf;
-			Y1 = fromYs[i]/ccf;
-			X2 = toXs[i]/ccf;
-			Y2 = toYs[i]/ccf;
+			if(!startsWith(fromX,"Fixed")) X1 = round(fromXs[i]/ccf);
+			else X1 = fixedX;
+			if(!startsWith(fromY,"Fixed")) Y1 = round(fromYs[i]/ccf);
+			else Y1 = fixedY;
+			if(!startsWith(toX,"Fixed")) X2 = round(toXs[i]/ccf);
+			else X2 = fixedX;
+			if(!startsWith(toY,"Fixed")) Y2 = round(toYs[i]/ccf);
+			else Y2 = fixedY;
 			makeFrames[i] = false;
+			if (diagnostics) IJ.log("Coordinates and line color: " + X1 + ", " + Y1 + ", " + X2 + ", " + Y2 + ", #"+lineColors[lutIndex]);
 			if ((X1<=imageWidth) && (X2<=imageWidth) && (Y1<=imageHeight) && (Y2 <imageHeight)) { /* this allows you to crop image from top left if necessary */
 				selectWindow(workingT);
 				if 	(restrictLines=="No") {
-					drawLine(X1, Y1, X2, Y2);
+				if (startsWith(lineStyle,"Simple")) drawLine(X1, Y1, X2, Y2);
+				else {
+					makeArrow(X1, Y1, X2, Y2,arrowStyle);
+					fill();
+					run("Select None");
+				}
 					makeFrames[i] = true;
 					frameCount += 1;
 				}
 				else {
 					if ((X1>=selEX) && (X1<=selEX2) && (X2>=selEX) && (X2<=selEX2) && (Y1>=selEY) && (Y1<=selEY2) && (Y2>=selEY) && (Y2<=selEY2)) {
-						drawLine(X1, Y1, X2, Y2);
+						if (startsWith(lineStyle,"Simple")) drawLine(X1, Y1, X2, Y2);
+						else {
+							makeArrow(X1, Y1, X2, Y2,arrowStyle);
+							fill();
+							run("Select None");
+						}
 						makeFrames[i] = true;
 						frameCount += 1;
 					}
@@ -689,40 +758,40 @@ macro "Line Color Coder with Labels" {
 		animFrameWidth = getWidth;
 		/* End of creation of initial animStack frame */
 		copyImage("frame1", "animStack");
-
 		if (valueSort!="No") valueRank = Array.rankPositions(values);
 		if (valueSort=="Descending")	valueRank = Array.reverse(valueRank);
-
 		/* Create array holders for sorted values */
-		animX1 = newArray(nRes);
-		animY1 = newArray(nRes);
-		animX2 = newArray(nRes);
-		animY2 = newArray(nRes);
-		animMakeFrame = newArray(nRes);
-		lineCounter = 0;
+		animX1 = newArray();
+		animY1 = newArray();
+		animX2 = newArray();
+		animY2 = newArray();
+		animValues = newArray();
+		if(startsWith(fromX,"Fixed")) X1 = animScaleF * ((fixedX)-cX1);
+		if(startsWith(fromY,"Fixed")) Y1 = animScaleF * ((fixedY)-cY1);
+		if(startsWith(toX,"Fixed")) X2 = animScaleF * ((fixedX)-cX1);
+		if(startsWith(toY,"Fixed")) Y2 = animScaleF * ((fixedY)-cY1);
 		/* Determine lines to be drawn for animation and their order */
-		for (i=0; i<nRes; i++) {
+		for (i=0,k=0; i<nRes; i++) {
 			if (valueSort!="No") j = valueRank[i];
 			else j = i;
-			X1 = animScaleF * ((fromXs[j]/ccf)-cX1);
-			Y1 = animScaleF * ((fromYs[j]/ccf)-cY1);
-			X2 = animScaleF * ((toXs[j]/ccf)-cX1);
-			Y2 = animScaleF * ((toYs[j]/ccf)-cY1);
+			if(!startsWith(fromX,"Fixed")) X1 = round(animScaleF * ((fromXs[j]/ccf)-cX1));
+			if(!startsWith(fromY,"Fixed")) Y1 = round(animScaleF * ((fromYs[j]/ccf)-cY1));
+			if(!startsWith(toX,"Fixed")) X2 = round(animScaleF * ((toXs[j]/ccf)-cX1));
+			if(!startsWith(toY,"Fixed")) Y2 = round(animScaleF * ((toYs[j]/ccf)-cY1));
 			if (reuseLines) reuseLine = makeFrames[j];
 			else reuseLine = true;
 			if ((X1>=0) && (Y1>=0) && (X2<=animFrameNoRampWidth) && (Y2<=animFrameHeight) && reuseLine){
-				animMakeFrame[j] = true;
-				lineCounter += 1;
+				if((values[j]>0) && (values[j]>=minCoded) && (values[j]<=maxCoded)){
+					animX1[k] = X1;
+					animY1[k] = Y1;
+					animX2[k] = X2;
+					animY2[k] = Y2;	
+					animValues[k] = values[j];
+					k++;
+				}
 			}
-			else animMakeFrame[j] = false;
-			animX1[j] = X1;
-			animY1[j] = Y1;
-			animX2[j] = X2;
-			animY2[j] = Y2;
 		}
-		linesPerFrameCounter = 0;
-		linesDrawn = 0;
-		frameCount = 0;
+		frameN = k-1;
 		lastFrameValue = arrayMax + 1; /* Just make sure this is not in the value set */
 		loopStart = getTime();
 		previousUpdateTime = loopStart;
@@ -733,78 +802,84 @@ macro "Line Color Coder with Labels" {
 		run("Text Window...", "name=&progressWindowTitleS width=25 height=2 monospaced");
 		eval("script","f = WindowManager.getWindow('"+progressWindowTitleS+"'); f.setLocation(50,20); f.setSize(550,150);");
 		nextMemoryFlushPC = 50; /* 1st memory flush at 50% mem */
-		for (i=0; i<nRes; i++) {
-			if (valueSort!="No") j = valueRank[i];
-			else j = i;
-			if(animMakeFrame[j] && (values[j]>0) && (values[j]>=minCoded) && (values[j]<=maxCoded)){
-				if (values[j]<=min)
-					lutIndex= 0;
-				else if (values[j]>max)
-					lutIndex= 255;
-				else if (!revLut)
-					lutIndex= round(255 * (values[j] - min) / (max - min));
-				else
-					lutIndex= round(255 * (max - values[j]) / (max - min));
-				setColor("#"+lineColors[lutIndex]);
-				if (!animLinesOnWhite) { /* create animation frames lines on original image */
-					/* Keep adding to frame1 to create a cumulative image */
-					selectWindow("frame1");
-					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
-					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) {
-						if (values[j]!=lastFrameValue || i==(nRes-1)) {
-							addImageToStack("animStack","frame1");
-							linesPerFrameCounter = 0;
-							lastFrameValue = values[j];
-						}
-					}
-				}
+		for (i=0,k=0,linesDrawn=0; i<frameN; i++) {
+			if (animValues[i]<=min)
+				lutIndex= 0;
+			else if (animValues[i]>max)
+				lutIndex= 255;
+			else if (!revLut)
+				lutIndex= round(255 * (animValues[i] - min) / (max - min));
+			else
+				lutIndex= round(255 * (max - animValues[i]) / (max - min));
+			setColor("#"+lineColors[lutIndex]);
+			if (!animLinesOnWhite) { /* create animation frames lines on original image */
+				/* Keep adding to frame1 to create a cumulative image */
+				selectWindow("frame1");
+				if (startsWith(lineStyle,"Simple")) drawLine(animX1[i], animY1[i], animX2[i], animY2[i]);
 				else {
-					if (!isOpen("tempFrame")) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
-					selectWindow("tempFrame");
-					drawLine(animX1[j], animY1[j], animX2[j], animY2[j]);
-					linesPerFrameCounter += 1;
-					if (linesPerFrameCounter>=linesPerFrame || i==(nRes-1)) { /* lineCounter is the number of lines in the full or restricted region and was determined earlier. This should trigger the last frame to be added */
-						if (values[j]!=lastFrameValue || i==(nRes-1)) {
-							addImageToStack("animStack","tempFrame");
-							if(i<(nRes-1)) closeImageByTitle("tempFrame"); /* leave the last frame to add at the end */
-							linesPerFrameCounter = 0; /* Reset lines per frame counter so start new set of lines in a new frame */
-							lastFrameValue = values[j];
-						}
-					}
+					makeArrow(animX1[i], animY1[i], animX2[i], animY2[i],arrowStyle);
+					fill();
 					run("Select None");
 				}
-				timeSinceUpdate = getTime()- previousUpdateTime;
-				linesDrawn += 1;
-				if((timeSinceUpdate>1000) && (linesDrawn>1)) {
-					/* The time/memory window and memory flushing was add for some older PC with had limited memory but it is relatively time consuming so it is only updated ~ 1 second */
-					timeTaken = getTime()-loopStart;
-					timePerLoop = timeTaken/(i+1);
-					timeLeft = (nRes-(i+1)) * timePerLoop;
-					timeLeftM = floor(timeLeft/60000);
-					timeLeftS = (timeLeft-timeLeftM*60000)/1000;
-					totalTime = timeTaken + timeLeft;
-					mem = IJ.currentMemory();
-					mem /=1000000;
-					memPC = mem * maxMemFactor;
-					if (memPC > nextMemoryFlushPC) {
-						run("Reset...", "reset=[Undo Buffer]");
-						wait(100);
-						run("Reset...", "reset=[Locked Image]");
-						wait(100);
-						call("java.lang.System.gc"); /* force a garbage collection */
-						wait(100);
-						flushedMem = IJ.currentMemory();
-						flushedMem /=1000000;
-						memFlushed = mem-flushedMem;
-						memFlushedPC = (100/mem) * memFlushed;
-						print(memFlushedPC + "% Memory flushed at " + timeTaken);
-						nextMemoryFlushPC += memFlushIncrement;
+				k++;
+				if (k>=linesPerFrame || i==(frameN-1)) {
+					if (animValues[i]!=lastFrameValue || i==(frameN-1)) {
+						addImageToStack("animStack","frame1");
+						k = 0;
+						lastFrameValue = animValues[i];
 					}
-					if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
-					print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
-					previousUpdateTime = getTime();
 				}
+			}
+			else {
+				if (!isOpen("tempFrame")) newImage("tempFrame", "RGB white", animFrameWidth, animFrameHeight, 1);
+				selectWindow("tempFrame");
+				if (startsWith(lineStyle,"Simple")) drawLine(animX1[i], animY1[i], animX2[i], animY2[i]);
+				else {
+					makeArrow(animX1[i], animY1[i], animX2[i], animY2[i],arrowStyle);
+					fill();
+					run("Select None");
+				}
+				k++;
+				if (k>=linesPerFrame || i==(frameN-1)) { /* lineCounter is the number of lines in the full or restricted region and was determined earlier. This should trigger the last frame to be added */
+					if (animValues[i]!=lastFrameValue || i==(frameN-1)) {
+						addImageToStack("animStack","tempFrame");
+						if(i<(frameN-1)) closeImageByTitle("tempFrame"); /* leave the last frame to add at the end */
+						k = 0; /* Reset lines per frame counter so start new set of lines in a new frame */
+						lastFrameValue = animValues[i];
+					}
+				}
+				run("Select None");
+			}
+			timeSinceUpdate = getTime()- previousUpdateTime;
+			linesDrawn++;
+			if((timeSinceUpdate>1000) && (linesDrawn>1)) {
+				/* The time/memory window and memory flushing was add for some older PC with had limited memory but it is relatively time consuming so it is only updated ~ 1 second */
+				timeTaken = getTime()-loopStart;
+				timePerLoop = timeTaken/(i+1);
+				timeLeft = (frameN-(i+1)) * timePerLoop;
+				timeLeftM = floor(timeLeft/60000);
+				timeLeftS = (timeLeft-timeLeftM*60000)/1000;
+				totalTime = timeTaken + timeLeft;
+				mem = IJ.currentMemory();
+				mem /=1000000;
+				memPC = mem * maxMemFactor;
+				if (memPC > nextMemoryFlushPC) {
+					run("Reset...", "reset=[Undo Buffer]");
+					wait(100);
+					run("Reset...", "reset=[Locked Image]");
+					wait(100);
+					call("java.lang.System.gc"); /* force a garbage collection */
+					wait(100);
+					flushedMem = IJ.currentMemory();
+					flushedMem /=1000000;
+					memFlushed = mem-flushedMem;
+					memFlushedPC = (100/mem) * memFlushed;
+					print(memFlushedPC + "% Memory flushed at " + timeTaken);
+					nextMemoryFlushPC += memFlushIncrement;
+				}
+				if (memPC>90) restoreExit("Memory use has exceeded 90% of maximum memory");
+				print(progressWindowTitle, "\\Update:"+timeLeftM+" m " +timeLeftS+" s to completion ("+(timeTaken*100)/totalTime+"%)\n"+getBar(timeTaken, totalTime)+"\n Current Memory Usage: "  + memPC + "% of MaxMemory: " + maxMem);
+				previousUpdateTime = getTime();
 			}
 		}
 		if (isOpen("frame1")) addImageToStack("animStack","frame1");
@@ -1108,7 +1183,6 @@ macro "Line Color Coder with Labels" {
 		return outputArray;
 	}
 		/* ASC mod BAR Color Functions */
-
 	function getColorArrayFromColorName(colorName) {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found

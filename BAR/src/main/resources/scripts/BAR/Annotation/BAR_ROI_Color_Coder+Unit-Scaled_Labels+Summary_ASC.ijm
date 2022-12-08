@@ -6,7 +6,7 @@
 	Full history at the bottom of the file.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221208.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221208b.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -198,6 +198,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			originalSelEWidth = Dialog.getNumber;
 			originalSelEHeight = Dialog.getNumber;
 		}
+	if (outlierColor2=="same") outlierColor2 = outlierColor;
 	unitLabel = cleanLabel(unitLabelFromString(parameter, unit));
 	/* get values for chosen parameter */
 	values= newArray(items);
@@ -718,7 +719,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 						}
 					}
 				}
-				if (outlierColor2!="same") setColorFromColorName(outlierColor2);
+				setColorFromColorName(outlierColor2);
 				lastDrawnMinusSDPos = minusSDPos[0];
 				for (s=1; s<sIntervalsR; s++) {
 					if ((outlierChoice!="No") && (s>=sigmaR)) {
@@ -1046,8 +1047,6 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			}
 			outlierStroke = maxOf(1,round(fontSize/100 * outlierStrokePC));
 			run("Line Width...", "line=&outlierStroke");
-			if (outlierColor2=="same") outColDiff = false;
-			else outColDiff = true;
 			for (i=0,outlierCounterPos=0,outlierCounterNeg=0; i<items; i++) {
 				roiManager("select", i);
 				if (outlierChoice=="Ramp_Range") {
@@ -1057,7 +1056,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 						outlierCounterPos++;
 					}
 					if (values[i]<rampMin) {
-						if (outColDiff) setForegroundColorFromName(outlierColor2);
+						setForegroundColorFromName(outlierColor2);
 						run("Draw", "slice");
 						outlierCounterNeg++;
 					}
@@ -1069,7 +1068,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 						outlierCounterPos++;
 					}
 					if (values[i]<outlierMin) {
-						if (outColDiff) setForegroundColorFromName(outlierColor2);
+						setForegroundColorFromName(outlierColor2);
 						run("Draw", "slice");
 						outlierCounterNeg++;
 					}
@@ -1082,7 +1081,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 							outlierCounterPos++;
 						}
 						if (values[i]<(expLnMeanMinusSDs[minOf(sIntervalsR-1,sigmaR)])) {
-							if (outColDiff) setForegroundColorFromName(outlierColor2);
+							setForegroundColorFromName(outlierColor2);
 							run("Draw", "slice");
 							outlierCounterNeg++;
 						}
@@ -1094,14 +1093,13 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 							outlierCounterPos++;
 						}
 						if (values[i]<(meanPlusSDs[minOf(sIntervalsR-1,sigmaR)])){
-							if (outColDiff) setForegroundColorFromName(outlierColor2);
+							setForegroundColorFromName(outlierColor2);
 							run("Draw", "slice");
 							outlierCounterNeg++;
 						}
 					}
 				}
 				else { outlierChoice = "No"; i = items;} /* there seems to be a coding malfunction */
-				updateDisplay(); /* Seems to fix missing outlines issue */
 			}
 			run("Line Width...", "line=1"); /* Reset line width to ImageJ default */
 			outlierCounter = outlierCounterPos + outlierCounterNeg;
@@ -1191,7 +1189,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	/* Reduce decimal places - but not as much as ramp labels */
 		summaryDP = decPlaces + 1;
 		outlierChoiceAbbrev = cleanLabel(outlierChoice);
-		if (outlierColor2=="same"){
+		if (outlierColor2==outlierColor){
 			if (outlierChoice=="Manual_Input") 	outlierChoiceAbbrev = "<" + outlierMin + " >" + outlierMax + " " + unitLabel;
 			else if (outlierChoice=="Ramp_Range") 	outlierChoiceAbbrev = "<" + rampMin + " >" + rampMax + " " + unitLabel;
 			else outlierChoiceAbbrev = "<" + outlierChoiceAbbrev + ">";
@@ -1219,7 +1217,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			defValLines = 6;
 			statsChoice1 = newArray("Skip", "No More Stats", "Dashed Line:  ---", "Number of objects:  " + items);
 			if (outlierChoice!="No"){
-				if (outlierColor2=="same") statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
+				if (outlierColor2==outlierColor) statsChoice2 = newArray("Outlines:  " + outlierCounter + " objects " + outlierChoiceAbbrev + " in " + outlierColor);
 				else statsChoice2 = newArray("Outlines > :  " + outlierCounterPos + " objects " + outlierChoiceAbbrevPos + " in " + outlierColor,"Outlines < :  " + outlierCounterNeg + " objects " + outlierChoiceAbbrevNeg + " in " + outlierColor2);
 			}
 			statsChoice3 = newArray(

@@ -1,12 +1,12 @@
 /*	Fork of ROI_Color_Coder.ijm IJ BAR: https://github.com/tferr/Scripts#scripts
-	https://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
+	https://imagej.net/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v220922.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221208.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -269,7 +269,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.setInsets(4, 120, 0);
 		Dialog.addCheckbox("Add Frequency Distribution Plot to Ramp", true);
 		Dialog.addCheckbox("Calculate 'Max' image to restore holes \(experimental\)",false);
-		Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
+		Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
@@ -1292,7 +1292,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					sTextCInv = "white";
 				}
 			}if (imageDepth==16){
-				if (bgI<(1285) sTextC = "white";
+				if (bgI<(1285)) sTextC = "white";
 				else if (bgI>64250){
 					sTextC = "black";
 					sTextCInv = "white";
@@ -1761,7 +1761,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
    */
 	function AddMCsToResultsTable() {
 	/* 	Based on "MCentroids.txt" Morphological centroids by thinning assumes white particles: G. Landini
-		http://imagejdocu.tudor.lu/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
+		https://imagej.net/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
 		http://www.mecourse.com/landinig/software/software.html
 		Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
 		v180102	Fixed typos and updated functions.
@@ -2399,7 +2399,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		colorArray = getColorArrayFromColorName(colorName);
 		setForegroundColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
-	/* Hex conversion below adapted from T.Ferreira, 20010.01 http://imagejdocu.tudor.lu/doku.php?id=macro:rgbtohex */
+	/* Hex conversion below adapted from T.Ferreira, 20010.01 https://imagej.net/doku.php?id=macro:rgbtohex */
 	function pad(n) {
 	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
 	  if (lengthOf(n)==1) n= "0"+n; return n;
@@ -2849,4 +2849,5 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	+ v220701: Updates functions and adds message in summary options dialog to show output destination.
 	+ v220706: Does not require binary image. f1: updated colors and v220707 replaced binary[-]Check with toWhiteBGBinary so it is more explicit.
 	+ v220708: Reorganized menus to allow for more lines of statistics. f1-2: Updated color functions.
+	+ v221208: fixed missing parentesis in line 1295
 	*/

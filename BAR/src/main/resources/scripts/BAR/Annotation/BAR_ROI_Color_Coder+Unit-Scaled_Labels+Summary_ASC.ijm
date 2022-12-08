@@ -1046,11 +1046,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			}
 			outlierStroke = maxOf(1,round(fontSize/100 * outlierStrokePC));
 			run("Line Width...", "line=&outlierStroke");
-			outlierCounterPos = 0;
-			outlierCounterNeg = 0;
 			if (outlierColor2=="same") outColDiff = false;
 			else outColDiff = true;
-			for (i=0; i<items; i++) {
+			for (i=0,outlierCounterPos=0,outlierCounterNeg=0; i<items; i++) {
 				roiManager("select", i);
 				if (outlierChoice=="Ramp_Range") {
 					if (values[i]>rampMax) {
@@ -1103,6 +1101,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					}
 				}
 				else { outlierChoice = "No"; i = items;} /* there seems to be a coding malfunction */
+				updateDisplay(); /* Seems to fix missing outlines issue */
 			}
 			run("Line Width...", "line=1"); /* Reset line width to ImageJ default */
 			outlierCounter = outlierCounterPos + outlierCounterNeg;
@@ -2849,5 +2848,5 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	+ v220701: Updates functions and adds message in summary options dialog to show output destination.
 	+ v220706: Does not require binary image. f1: updated colors and v220707 replaced binary[-]Check with toWhiteBGBinary so it is more explicit.
 	+ v220708: Reorganized menus to allow for more lines of statistics. f1-2: Updated color functions.
-	+ v221208: fixed missing parentesis in line 1295
+	+ v221208: fixed missing parentesis in line 1295, correct out of date hyperlink, addressed missing outlier outline issue
 	*/

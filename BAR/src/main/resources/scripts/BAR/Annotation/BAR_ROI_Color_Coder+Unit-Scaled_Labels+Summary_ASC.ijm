@@ -6,7 +6,7 @@
 	Full history at the bottom of the file.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221208b.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221208c.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -216,7 +216,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	if (iP>=0 && iP<lengthOf(parameterExps)) parameterLabelExp = parameterExps[iP+1];
 	else parameterLabelExp = parameterLabel;
 	/* Create dialog prompt to determine look */
-	Dialog.create("ROI Color Coder: Ramp options");
+	Dialog.create("ROI Color Coder: Ramp options: " + macroL);
 		Dialog.setInsets(2, 0, 6);
 		Dialog.addMessage("Legend \(ramp\) options \(LUT "+lut+"\):");
 		Dialog.addString("Parameter label", parameterLabelExp, 3+maxOf(30, lengthOf(parameterLabelExp)));
@@ -235,8 +235,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (outlierChoice=="1sigma") Dialog.addMessage("Outlier range \("+fromCharCode(0x03C3)+"\):        < "+(arrayMean-arraySD)+" > "+(arrayMean+arraySD) + dialogUnit);
 		else if (outlierChoice=="2sigma") Dialog.addMessage("Outlier range \(2 "+fromCharCode(0x03C3)+"\):       < "+(arrayMean-2*arraySD)+" > "+(arrayMean+2*arraySD) + dialogUnit);
 		else Dialog.addMessage("Outlier range \(3 "+fromCharCode(0x03C3)+"\):       < "+(arrayMean-3*arraySD)+" > "+(arrayMean+3*arraySD) + dialogUnit);
-		Dialog.addString("Ramp data range:", rampMin+"-"+rampMax, 13);
-		Dialog.addString("LUT range \(n-n format\):", "same as ramp range", 18);
+		Dialog.addString("Ramp data range:", rampMin+"-"+rampMax, 20);
+		Dialog.addString("LUT range \(n-n format\):", "same as ramp range", 20);
 		Dialog.setInsets(-7, 115, 7);
 		Dialog.addMessage("                           The LUT gradient will be remapped to this range.\nBeyond this range the top and bottom LUT colors will be applied");
 		Dialog.setInsets(-35, 240, 0);

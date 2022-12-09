@@ -6,7 +6,7 @@
 	Full history at the bottom of the file.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221208c.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v221209.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -1237,15 +1237,15 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				"Mode:  " + mode + " " + unitLabel + " \(W = " +autoDistW+ "\)",
 				"InterQuartile Range:  " + IQR + " " + unitLabel);
 			statsChoice5 = newArray();  /* log stats */
-			eLMPS = lengthOf(expLnMeanPlusSDs);
-			eLMMS = lengthOf(expLnMeanMinusSDs);
+			eLMPS = expLnMeanPlusSDs.length;
+			eLMMS = expLnMeanMinusSDs.length;
 			statsChoice5 = Array.concat(statsChoice5,"ln Stats Mean:  " + d2s(expLnMeanPlusSDs[0],summaryDP) + " " +unitLabel);
-			if (eLMPS>=0)statsChoice5 = Array.concat(statsChoice5,"ln Stats +SD:  " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
-			if (eLMPS>=1) statsChoice5 = Array.concat(statsChoice5,"ln Stats +2SD:  " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
-			if (eLMPS>=2) statsChoice5 = Array.concat(statsChoice5,"ln Stats +3SD:  " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
-			if (eLMMS>=0) statsChoice5 = Array.concat(statsChoice5,"ln Stats -SD:  " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
-			if (eLMMS>=1) statsChoice5 = Array.concat(statsChoice5,"ln Stats -2SD:  " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
-			if (eLMMS>=2) statsChoice5 = Array.concat(statsChoice5,"ln Stats -3SD:  " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			if (eLMPS>1)statsChoice5 = Array.concat(statsChoice5,"ln Stats +SD:  " + d2s((expLnMeanPlusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			if (eLMPS>2) statsChoice5 = Array.concat(statsChoice5,"ln Stats +2SD:  " + d2s((expLnMeanPlusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			if (eLMPS>3) statsChoice5 = Array.concat(statsChoice5,"ln Stats +3SD:  " + d2s((expLnMeanPlusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			if (eLMMS>1) statsChoice5 = Array.concat(statsChoice5,"ln Stats -SD:  " + d2s((expLnMeanMinusSDs[1]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			if (eLMMS>2) statsChoice5 = Array.concat(statsChoice5,"ln Stats -2SD:  " + d2s((expLnMeanMinusSDs[2]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
+			if (eLMMS>3) statsChoice5 = Array.concat(statsChoice5,"ln Stats -3SD:  " + d2s((expLnMeanMinusSDs[3]-expLnMeanPlusSDs[0]),summaryDP) + " " +unitLabel);
 			statsChoice6 = newArray("Pixel Size:  " + lcf + " " + unit, "Image Title:  " + titleAbbrev, "Manual",	"Long Underline:  ___","Blank line");
 			if ((IQR!=0) && freqDistRamp) statsChoice3 = Array.concat(statsChoice3,statsChoice4,statsChoice3c);
 			if (outlierChoice!="No") statsChoice = Array.concat(statsChoice1,statsChoice2,statsChoice3,statsChoice5,statsChoice6,statsChoice3c);
@@ -2847,4 +2847,5 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	+ v220706: Does not require binary image. f1: updated colors and v220707 replaced binary[-]Check with toWhiteBGBinary so it is more explicit.
 	+ v220708: Reorganized menus to allow for more lines of statistics. f1-2: Updated color functions.
 	+ v221208: fixed missing parentesis in line 1295, correct out of date hyperlink, addressed missing outlier outline issue
+	+ v221209: fixed ln stats array length error.
 	*/

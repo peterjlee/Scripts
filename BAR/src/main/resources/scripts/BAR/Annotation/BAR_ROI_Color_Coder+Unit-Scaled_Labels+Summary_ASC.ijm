@@ -5,11 +5,12 @@
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
 	v230414b-v230420: Formatting simplified, "raised" and "recessed" replace innner shadow, major preferences added.
-	f1: updates stripKnownExtensionFromString function
-	v230517: Add summary save to text file option.
+	f1: updates stripKnownExtensionFromString function.
+	v230517: Add summary save to text file option. v230517b: Keeps focus in selected image for coloring. Fixes saved settings for summary output.
+	v230518: Fixed for missing ramp issue caused by spaces in image title. Reorganized unit choices.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230517.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230518.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -22,7 +23,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
         + "Run demo? (Results Table and ROI Manager will be cleared)");
 	    runDemo();
 	}
-	id = getImageID(); /* get id of image and title */
+	orID = getImageID(); /* get id of image and title */
 	t = getTitle();
 	tPath = getDir("image");
 	/* Check to see if there is a rectangular location already set for the summary */
@@ -37,7 +38,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	run("Options...", "iterations=1 white count=1"); /* Set the background to white */
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
-	selectImage(id);
+	selectImage(orID);
 	if (is("Inverting LUT")) run("Invert LUT");
 	nROIs = checkForRoiManager(); /* macro requires that the objects are in the ROI manager */
 	checkForResults(); /* macro requires that there are results to display */	
@@ -91,6 +92,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	// menuLimit = 700; /* for testing only resolution options only */
 	numIntervals = 10; /* default number of ramp label intervals */
 	sup2 = fromCharCode(178);
+	degreeChar = fromCharCode(0x00B0);
 	ums = getInfo("micrometer.abbreviation");
 	outlineStrokePC = 6; /* default outline stroke: % of font size */
 	if (nRes!=nROIs) restoreExit("Exit: Results table \(" + nRes + "\) and ROI Manager \(" + nROIs + "\) mismatch."); /* exit so that this ambiguity can be cleared up */
@@ -205,9 +207,12 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			originalSelEWidth = Dialog.getNumber;
 			originalSelEHeight = Dialog.getNumber;
 		}
+	selectImage(imageChoice);
+	orID = getImageID(); /* update after selection of image */
+	t = getTitle();
 	if (outlierColor2=="same") outlierColor2 = outlierColor;
 	unitLabel = cleanLabel(unitLabelFromString(parameter, unit));
-	unitLabel = replace(unitLabel, fromCharCode(0x00B0), "degrees"); /* replace lonely ° symbol */
+	unitLabel = replace(unitLabel, degreeChar, "degrees"); /* replace lonely ° symbol */
 	/* get values for chosen parameter */
 	values= newArray(items);
 	if (parameter=="Object") for (i=0; i<items; i++) values[i]= i+1;
@@ -228,11 +233,20 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.addString("Parameter label", parameterLabelExp, 3+maxOf(30, lengthOf(parameterLabelExp)));
 		Dialog.setInsets(-7, 145, 7);
 		Dialog.addMessage("                    Edit for ramp label. Do not include unit in\n Parameter label as it will be added from options below...");
-		unitChoice = newArray(unitLabel, "Manual", unit, unit+sup2, "None", "pixels", "pixels"+sup2, fromCharCode(0x00B0), "degrees", "radians", "%", "arb.");
-		if (unit=="microns" && (unitLabel!=ums || unitLabel!=ums+sup2)) unitChoice = Array.concat(newArray(ums,ums+sup2),unitChoice);
+		unitChoices = newArray("Manual", "None");
+		unitLinearChoices = newArray(unitLabel, unit, "pixels", "%", "arb.");
+		if (unit=="microns" && (unitLabel!=ums || unitLabel!=ums+sup2)) unitLinearChoices = Array.concat(ums,unitLinearChoices);
+		unitAngleChoices = newArray(degreeChar, "degrees", "radians");
+		unitAreaChoices = newArray(unit+sup2,"pixels"+sup2);
+		if (indexOf(parameter,"Area")>=0){
+			if (unit=="microns" && (unitLabel!=ums || unitLabel!=ums+sup2)) unitAreaChoices = Array.concat(ums+sup2,unitAreaChoices);
+			unitChoices = Array.concat(unitAreaChoices,unitChoices,unitLinearChoices,unitAngleChoices);	
+		}
+		else if (indexOf(parameter,"Angle")>=0) unitChoices = Array.concat(unitAngleChoices,unitChoices,unitLinearChoices,unitAreaChoices);
+		else unitChoices = Array.concat(unitLinearChoices,unitChoices,unitAreaChoices,unitAngleChoices);
 		if (unitLabel=="None" || unitLabel=="") dialogUnit = "";
 		else dialogUnit = " " + unitLabel;
-		Dialog.addChoice("Unit \("+unitLabel+"\) Label:", unitChoice, unitChoice[0]);
+		Dialog.addChoice("Unit \("+unitLabel+"\) Label:", unitChoices, unitChoices[0]);
 		Dialog.setInsets(-38, 300, 0);
 		Dialog.addMessage("Default shown is based on\nthe selected parameter");
 		Dialog.setInsets(0, 20, -15);
@@ -274,7 +288,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 		Dialog.setInsets(4, 120, 0);
 		Dialog.addCheckbox("Add Frequency Distribution Plot to Ramp", true);
-		Dialog.addCheckbox("Calculate 'Max' image to restore holes \(experimental\)",false);
+		binForHoles = is("binary");
+		if (binForHoles) Dialog.addCheckbox("Calculate 'Max' image to restore holes \(experimental\)",false);
+		else Dialog.addCheckbox("Use binary image of holes to restore holes \(experimental\)",false);
 		Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterLabel = Dialog.getString;
@@ -402,7 +418,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		tickLR = round(tickL * statsRampTicks/100);
 		getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 		call("ij.gui.ImageWindow.setNextLocation", imgx + imgwidth, imgy);
-		newImage(tN + "_" + parameterLabel +"_Ramp", "8-bit ramp", rampH, rampW, 1); /* Height and width swapped for later rotation */
+		tR = replace(tN + "_" + parameterLabel +"_Ramp", " ","_");
+		newImage(tR, "ramp", rampH, rampW, "8-bit"); /* Height and width swapped for later rotation */
 		/* ramp color/gray range is horizontal only so must be rotated later */
 		if (revLut) run("Flip Horizontally");
 		tR = getTitle; /* short variable label for ramp */
@@ -781,7 +798,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		/*
 			iterate through the ROI Manager list and colorize ROIs
 		*/
-		selectImage(id);
+		selectImage(orID);
 		/* iterate through the ROI Manager list and colorize ROIs */
 		for (countNaN=0, i=0; i<items; i++) {
 			if (isNaN(values[i])) countNaN++;
@@ -811,6 +828,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
 		}
 	}
+	else IJ.log("Stroke not set");
 	/*
 	End of object coloring
 	*/
@@ -822,19 +840,36 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		paraLabelExp = parameterLabelExp + ", " + unitLabel;
 	}
 	if (!addLabels) {
-		if (restoreHoles) { /* Not fully tested yet but should be harmless */
+		if (restoreHoles && binForHoles) { /* Not fully tested yet but should be harmless */
 			mI1 = getImageID();
 			roiManager("show all without labels");
 			run("Flatten");
 			mI1F = getTitle();
-			imageCalculator("Max", mI1F,id);
+			imageCalculator("Max", mI1F,orID);
 			// run("Image Calculator...");
 			closeImageByTitle(mI1);
 			selectWindow(mI1F);
 			rename(tN);
 		}
+		selectWindow(tN);
 		roiManager("show all with labels");
 		run("Flatten"); /* creates an RGB copy of the image with color coded objects or not */
+		if (restoreHoles && !binForHoles){
+			holesPath = File.openDialog("Select an image of the holes");
+			open(holesPath);
+			rename(holesTemp);
+			run("Convert to Mask");
+			getSelectionFromMask(holesTemp);
+			run("Select None");
+			close(holesTemp);
+			selectImage(orID);
+			run("Restore Selection");
+			run("Copy");
+			selectWindow(tN);
+			run("Restore Selection");
+			run("Paste");
+			run("Select None");
+		}
 	}
 	else {
 		roiManager("Show All without labels");
@@ -904,7 +939,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			summaryOutputChecks = newArray("Summary->Image","Summary->Log","Summary->File");
 			summaryToImage = call("ij.Prefs.get", "fancyColorCoder.summaryToImage",false);
 			summaryToLog = call("ij.Prefs.get", "fancyColorCoder.summaryToLog",true);
-			summaryToFile = call("ij.Prefs.get", "fancyColorCoder.summaryToImage",true);
+			summaryToFile = call("ij.Prefs.get", "fancyColorCoder.summaryToFile",true);
 			Dialog.addCheckboxGroup(1,3,summaryOutputChecks,newArray(summaryToImage,summaryToLog,summaryToFile));
 			if (selectionExists) paraLocChoice = newArray("Current Selection", "Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "At New Selection");
 			else paraLocChoice = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "At New Selection");
@@ -948,8 +983,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			if (summaryToImage || summaryToLog || summaryToFile){
 				summaryAdd = true;
 				if (summaryToImage) summaryChoice += "to image, ";
-				if (summaryToImage) summaryChoice += "to log, ";
-				if (summaryToImage) summaryChoice += "to image, ";
+				if (summaryToLog) summaryChoice += "to log, ";
+				if (summaryToFile) summaryChoice += "to file, ";
 				summaryChoice += "end";
 				summaryChoice = replace(summaryChoice,", end","");
 			} 
@@ -995,28 +1030,63 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (fontStyle=="unstyled") fontStyle="";
 		if (stroke>=0) {
 			run("Flatten"); /* Flatten converts to RGB so . . .  */
-			if (restoreHoles) {  /* To overcome issue of complete ROI-fill, not fully tested yet */
-				mI1i = getImageID();
-				run("Flatten");
-				rename("flatImage");
-				mI1Fi = getImageID();
-				imageCalculator("Max", "flatImage",id);
-				if (mI1i!=mI1Fi){
-					selectImage(mI1i);
-					close();
+			if (restoreHoles){
+				if (binForHoles) {  /* To overcome issue of complete ROI-fill, not fully tested yet */
+					mI1i = getImageID();
+					run("Flatten");
+					rename("flatImage");
+					mI1Fi = getImageID();
+					imageCalculator("Max", "flatImage",orID);
+					if (mI1i!=mI1Fi){
+						selectImage(mI1i);
+						close();
+					}
+					selectWindow("flatImage");
 				}
-				selectWindow("flatImage");
+				else {
+					preHolesID = getImageID();
+					holesPath = File.openDialog("Select an image of the holes");
+					open(holesPath);
+					rename("holesTemp");
+					run("Convert to Mask");
+					getSelectionFromMask("holesTemp");
+					run("Select None");
+					close("holesTemp");
+					selectImage(orID);
+					run("Restore Selection");
+					run("Copy");
+					selectImage(preHolesID);
+					run("Restore Selection");
+					run("Paste");
+					run("Select None");
+				}
 			}
 			rename(tN + "_" + parameterLabel + "_labels");
 			if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 		} else {
 			run("Duplicate...", "title=labeled");
 			if (restoreHoles){ /* Not fully tested yet but should be harmless */
-				imageCalculator("Max", "labeled",id);
+				if (binForHoles) imageCalculator("Max", "labeled",orID);
 				// run("Image Calculator...");
 				// setBatchMode("exit & display");
 				// waitForUser("OK 961?");
 				// setBatchMode(true);
+				else {
+					holesPath = File.openDialog("Select an image of the holes");
+					open(holesPath);
+					rename("holesTemp");
+					run("Convert to Mask");
+					getSelectionFromMask("holesTemp");
+					run("Select None");
+					close("holesTemp");
+					selectImage(orID);
+					run("Restore Selection");
+					run("Copy");
+					selectWindow(labeled);
+					run("Restore Selection");
+					run("Paste");
+					run("Select None");
+				}
 			}
 			rename(tN + "_" + parameterLabel + "_labels");
 		}
@@ -1685,7 +1755,19 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				closeImageByTitle("tempCrop");
 			}
 			else {
+				if  (!isOpen(tR)) {
+						openImages = getList("image.titles");
+						iRamp = -1;
+						for (i=0; i<openImages.length; i++) if (endsWith(openImages[i],"Ramp")>=0) iRamp = i;
+						if (iRamp>=0){
+							IJ.log("Expected ramp image\n" + tR + "\nwas not found and was replaced by\n" + openImages[iRamp]);
+							tR = openImages[iRamp];
+						} 
+						else exit ("Ramp image " + tR + " not found");
+				}
 				selectWindow(tR);
+				// while(indexOf(tR," ")>=0) replace(tR," ","_");
+				// rename(tR);
 				if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
 					rampScale = imageHeight/canvasH;
 					run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
@@ -1719,8 +1801,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		}
 	}
 	if (selectionExists){
+		/* Restore original selection to original image */
 		finalID = getImageID();
-		selectImage(id);
+		selectImage(orID);
 		makeRectangle(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 		selectImage(finalID);
 	}

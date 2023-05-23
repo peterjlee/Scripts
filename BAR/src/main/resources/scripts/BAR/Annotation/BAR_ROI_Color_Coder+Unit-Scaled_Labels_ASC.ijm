@@ -1,14 +1,16 @@
 /*	Fork of ROI_Color_Coder.ijm IJ BAR: https://github.com/tferr/Scripts#scripts
-	https://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
+	https://imagej.net/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table.
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
 	v211112-v220701 f8: updated functions
 	v220706 Table friendly version  f1: updated colors and replaced binary[-]Check with toWhiteBGBinary f2-3: Updated color functions. f4: updated checkForPlugin f5: updated guessBGMedianIntensity
+	v220823: Color updates  f3: updated stripKnownExtensionFromString function.
+	v230523: Minor changes to cropping.
  */
 macro "ROI Color Coder with Scaled Labels" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_ASC_v220823.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_ASC_v230523.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -134,7 +136,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		outlierOptions = newArray("No", "1sigma", "2sigma","3sigma", "Ramp_Range", "Manual_Input");
 		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values:", outlierOptions, 2, 4, "No");
 		Dialog.setInsets(3, 0, 15);
-		colorChoicesStd = newArray("red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange", "violet", "violet");
+		colorChoicesStd = newArray("red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange", "violet");
 		colorChoicesMod = newArray("garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
 		colorChoicesNeon = newArray("jazzberry_jam", "radical_red", "wild_watermelon", "outrageous_orange", "supernova_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "dodger_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
 		allColors = Array.concat(colorChoicesStd,colorChoicesMod,colorChoicesNeon);
@@ -233,7 +235,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 		Dialog.setInsets(4, 120, 0);
 		Dialog.addCheckbox("Add Frequency Distribution Plot to Ramp", false);
-		Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
+		Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
@@ -1286,19 +1288,16 @@ macro "ROI Color Coder with Scaled Labels" {
 				selectWindow(tNC);
 				run("Duplicate...", "title=tempCrop");
 				run("Select None");
+				run("Select Bounding Box (guess background color)");
+				run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
 				if (createCombo=="Combine Scaled Ramp with New Manual Crop of Image") {
 					setTool("rectangle");
 					title="Crop Location for Combined Image";
 					msg = "1. Select the area that you want to crop to. 2. Click on OK";
 					waitForUser(title, msg);
-					run("Crop");
-					run("Select None");
 				}
-				else {
-					run("Select Bounding Box (guess background color)");
-					run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
-					run("Crop");
-				}
+				run("Crop");
+				run("Select None");
 				croppedImageHeight = getHeight(); croppedImageWidth = getWidth();
 				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 				selectWindow(tR);
@@ -1372,7 +1371,7 @@ macro "ROI Color Coder with Scaled Labels" {
    */
 	function AddMCsToResultsTable() {
 	/* 	Based on "MCentroids.txt" Morphological centroids by thinning assumes white particles: G. Landini
-		http://imagejdocu.tudor.lu/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
+		https://imagej.net/doku.php?id=plugin:morphology:morphological_operators_for_imagej:start
 		http://www.mecourse.com/landinig/software/software.html
 		Modified to add coordinates to Results Table: Peter J. Lee NHMFL  7/20-29/2016
 		v180102	Fixed typos and updated functions.
@@ -1817,46 +1816,54 @@ macro "ROI Color Coder with Scaled Labels" {
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
 		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
-		v211102-v211103  Some more fixes and updated to match latest extended geometries  */
-		string = replace(string, "Raw Int Den", "Raw Int. Density");
+		v211102-v211103  Some more fixes and updated to match latest extended geometries
+		v220808 replaces ° with fromCharCode(0x00B0)
+		v230106 Added a few separation abbreviations */
+		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
+		string = replace(string, "AR_", "Aspect Ratio: ");
+		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
+		string = replace(string, " Crl ", " Curl ");
+		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
+		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");
+		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
+		string = replace(string, "Da", "Diam:area");
+		string = replace(string, "Dp", "Diam:perim.");
+		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "FeretAngle", "Feret Angle");
+		string = replace(string, "Fbr", "Fiber");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
 		string = replace(string, "FiberLAnn", "Fiber Length from Annulus");
 		string = replace(string, "FiberLR", "Fiber Length R");
-		string = replace(string, " Th ", " Thickness ");
-		string = replace(string, " Crl ", " Curl ");
+		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
+		string = replace(string, "HSF", "Hexagon Shape Factor");
+		string = replace(string, "Hxgn_", "Hexagon: ");
+		string = replace(string, "Intfc_D", "Interfacial Density ");
+		string = replace(string, "MinSepROI", "Minimum ROI Separation");
+		string = replace(string, "MinSep", "Minimum Separation ");
+		string = replace(string, "NN", "Nearest Neighbor ");
+		string = replace(string, "Perim", "Perimeter");
+		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
 		string = replace(string, "Snk", "\(Snake\)");
-		string = replace(string, "Fbr", "Fiber");
-		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
-		string = replace(string, "AR_", "Aspect Ratio: ");
+		string = replace(string, "Raw Int Den", "Raw Int. Density");
+		string = replace(string, "Rndnss", "Roundness");
 		string = replace(string, "Rnd_", "Roundness: ");
+		string = replace(string, "Rss1", "/(Russ Formula 1/)");
+		string = replace(string, "Rss1", "/(Russ Formula 2/)");
 		string = replace(string, "Sqr_", "Square: ");
 		string = replace(string, "Squarity_AP","Squarity: from Area and Perimeter");
 		string = replace(string, "Squarity_AF","Squarity: from Area and Feret");
 		string = replace(string, "Squarity_Ff","Squarity: from Feret");
-		string = replace(string, "Rss1", "/(Russ Formula 1/)");
-		string = replace(string, "Rss1", "/(Russ Formula 2/)");
-		string = replace(string, "Rndnss", "Roundness");
-		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
-		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
-		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");
-		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
-		string = replace(string, "Hxgn_", "Hexagon: ");
-		string = replace(string, "Perim", "Perimeter");
-		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
-		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
-		string = replace(string, "HSF", "Hexagon Shape Factor");
+		string = replace(string, " Th ", " Thickness ");
+		string = replace(string, "ThisROI"," this ROI ");
 		string = replace(string, "Vol_", "Volume: ");
-		string = replace(string, "Da", "Diam:area");
-		string = replace(string, "Dp", "Diam:perim.");
-		string = replace(string, "equiv", "equiv.");
-		string = replace(string, "_", " ");
-		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
-		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00B0), "degrees");
+		string = replace(string, "0-90", "0-90"+fromCharCode(0x00B0)); /* An exception to the above */
+		string = replace(string, fromCharCode(0x00B0)+", degrees", fromCharCode(0x00B0)); /* That would be otherwise be too many degrees */
 		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
 		// string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - Not reliable though */
 		// string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
+		string = replace(string, "_", " ");
+		string = replace(string, "  ", " ");
 		return string;
 	}
 	function fancyTextOverImage(shadowDrop,shadowDisp,shadowBlur,shadowDarkness,outlineStroke,innerShadowDrop,innerShadowDisp,innerShadowBlur,innerShadowDarkness) { /* Place text over image in a way that stands out; requires original "workingImage" and "textImage"
@@ -1919,7 +1926,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
-		   REQUIRES restoreExit function.  57 Colors
+		   REQUIRES restoreExit function.  57 Colors v230130 Added more descriptions and modified order
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -1941,13 +1948,13 @@ macro "ROI Color Coder with Scaled Labels" {
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "violet") cA = newArray(127,0,255);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120,47,64);
-		else if (colorName == "gold") cA = newArray(206,184,136);
+		else if (colorName == "garnet") cA = newArray(120,47,64); /* #782F40 */
+		else if (colorName == "gold") cA = newArray(206,184,136); /* #CEB888 */
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
 		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
-		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
 		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu Blue #30076B6 */
+		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
 		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
 		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
 		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
@@ -1965,20 +1972,20 @@ macro "ROI Color Coder with Scaled Labels" {
 		/* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp */
 		else if (colorName == "radical_red") cA = newArray(255,53,94);			/* #FF355E */
 		else if (colorName == "wild_watermelon") cA = newArray(253,91,120);		/* #FD5B78 */
+		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
+		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); 	/* #EE34D2 */
+		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		else if (colorName == "outrageous_orange") cA = newArray(255,96,55);	/* #FF6037 */
 		else if (colorName == "supernova_orange") cA = newArray(255,191,63);	/* FFBF3F Supernova Neon Orange*/
-		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
-		else if (colorName == "neon_carrot") cA = newArray(255,153,51);			/* #FF9933 */
 		else if (colorName == "sunglow") cA = newArray(255,204,51); 			/* #FFCC33 */
+		else if (colorName == "neon_carrot") cA = newArray(255,153,51);			/* #FF9933 */
+		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
 		else if (colorName == "laser_lemon") cA = newArray(255,255,102); 		/* #FFFF66 "Unmellow Yellow" */
 		else if (colorName == "electric_lime") cA = newArray(204,255,0); 		/* #CCFF00 */
 		else if (colorName == "screamin'_green") cA = newArray(102,255,102); 	/* #66FF66 */
 		else if (colorName == "magic_mint") cA = newArray(170,240,209); 		/* #AAF0D1 */
 		else if (colorName == "blizzard_blue") cA = newArray(80,191,230); 		/* #50BFE6 Malibu */
 		else if (colorName == "dodger_blue") cA = newArray(9,159,255);			/* #099FFF Dodger Neon Blue */
-		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
-		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); 	/* #EE34D2 */
-		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		else restoreExit("No color match to " + colorName);
 		return cA;
 	}
@@ -1994,7 +2001,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		colorArray = getColorArrayFromColorName(colorName);
 		setForegroundColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
-	/* Hex conversion below adapted from T.Ferreira, 20010.01 http://imagejdocu.tudor.lu/doku.php?id=macro:rgbtohex */
+	/* Hex conversion below adapted from T.Ferreira, 20010.01 https://imagej.net/doku.php?id=macro:rgbtohex */
 	function pad(n) {
 	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
 	  if (lengthOf(n)==1) n= "0"+n; return n;
@@ -2185,36 +2192,47 @@ macro "ROI Color Coder with Scaled Labels" {
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
 		v220615: Tries to fix the fix for the trapped extensions ...
+		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
+		v230505: Unwanted dupes replaced by unusefulCombos.
 		*/
+		fS = File.separator;
 		string = "" + string;
-		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX","_"," ");
-			kEL = lengthOf(knownExt);
-			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
-			unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
-			uSL = lengthOf(unwantedSuffixes);
-			for (i=0; i<kEL; i++) {
-				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
-					ichanLabels = lastIndexOf(string, chanLabels[j]);
-					iExt = lastIndexOf(string, "." + knownExt[i]);
-					if(ichanLabels>0 && iExt>(ichanLabels+lengthOf(chanLabels[j]))){
-						iExt = lastIndexOf(string, "." + knownExt[i]);
-						if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];
-						ichanLabels = lastIndexOf(string, chanLabels[j]);
-						for (k=0; k<uSL; k++){
-							iExt = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
-							if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];
-						}
-					}
-				}
-				iExt = lastIndexOf(string, "." + knownExt[i]);
-				if (iExt>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && iExt>0) string = "" + substring(string, 0, iExt);
+		protectedPathEnd = lastIndexOf(string,fS)+1;
+		if (protectedPathEnd>0){
+			protectedPath = substring(string,0,protectedPathEnd);
+			string = substring(string,protectedPathEnd);
+		}
+		unusefulCombos = newArray("-", "_"," ");
+		for (i=0; i<lengthOf(unusefulCombos); i++){
+			for (j=0; j<lengthOf(unusefulCombos); j++){
+				combo = unusefulCombos[i] + unusefulCombos[j];
+				while (indexOf(string,combo)>=0) string = replace(string,combo,unusefulCombos[i]);
 			}
 		}
-		unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
-		for (i=0; i<lengthOf(unwantedSuffixes); i++){
-			sL = lengthOf(string);
-			if (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
+			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
+			kEL = knownExt.length;
+			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			for (i=0; i<kEL; i++) {
+				kExtn = "." + knownExt[i];
+				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+					iChanLabels = lastIndexOf(string, chanLabels[j])-1;
+					if (iChanLabels>0){
+						preChan = substring(string,0,iChanLabels);
+						postChan = substring(string,iChanLabels);
+						while (indexOf(preChan,kExtn)>=0) string = replace(preChan,kExtn,"") + postChan;
+					}
+				}
+				while (endsWith(string,kExtn)) string = "" + substring(string, 0, lastIndexOf(string, kExtn));
+			}
+		}
+		unwantedSuffixes = newArray("_lzw"," ", "_","-");
+		for (i=0; i<unwantedSuffixes.length; i++){
+			while (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,string.length-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+		}
+		if (protectedPathEnd>0){
+			if(!endsWith(protectedPath,fS)) protectedPath += fS;
+			string = protectedPath + string;
 		}
 		return string;
 	}
@@ -2410,5 +2428,5 @@ macro "ROI Color Coder with Scaled Labels" {
 	+ v210429-v210503 Expandable arrays. Better ramp label optimization. Fixed image combination issue. Added auto-trimming of object labels option, corrected number of minor ticks
 	+ v211022 Updated color functions
 	+ v211029 Adds cividis.lut
-	+ v211104: Updated stripKnownExtensionsFromString function    v211112: Again
+	+ v211104: Updated stripKnownExtensionFromString function    v211112: Again
 	*/

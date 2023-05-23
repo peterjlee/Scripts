@@ -4,13 +4,14 @@
 	Based on the original by Tiago Ferreira, v.5.4 2017.03.10
 	Peter J. Lee Applied Superconductivity Center, NHMFL
 	Full history at the bottom of the file.
-	v230414b-v230420: Formatting simplified, "raised" and "recessed" replace innner shadow, major preferences added.
+	v230414b-v230420: Formatting simplified, "raised" and "recessed" replace inner shadow, major preferences added.
 	f1: updates stripKnownExtensionFromString function.
 	v230517: Add summary save to text file option. v230517b: Keeps focus in selected image for coloring. Fixes saved settings for summary output.
 	v230518: Fixed for missing ramp issue caused by spaces in image title. Reorganized unit choices.
+	v230523: Cropped combination functionality restored.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230518.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230523.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
 	call("java.lang.System.gc");
@@ -1718,20 +1719,17 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
 				selectWindow(tNC);
 				run("Duplicate...", "title=tempCrop");
-				run("Select None");
+				run("Select Bounding Box (guess background color)");
+				run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
 				if (createCombo=="Combine Scaled Ramp with New Manual Crop of Image") {
 					setTool("rectangle");
 					title="Crop Location for Combined Image";
 					msg = "1. Select the area that you want to crop to. 2. Click on OK";
 					waitForUser(title, msg);
-					if(selectionType<0) run("Crop");
-					run("Select None");
 				}
-				else {
-					run("Select Bounding Box (guess background color)");
-					run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
-					if(selectionType<0) run("Crop");
-				}
+				if(selectionType>=0) run("Crop");
+				else IJ.log("Combination with cropped image desired by no crop made");
+				run("Select None");
 				croppedImageHeight = getHeight(); croppedImageWidth = getWidth();
 				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 				selectWindow(tR);
@@ -1755,7 +1753,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				closeImageByTitle("tempCrop");
 			}
 			else {
-				if  (!isOpen(tR)) {
+				if (!isOpen(tR)) {
 						openImages = getList("image.titles");
 						iRamp = -1;
 						for (i=0; i<openImages.length; i++) if (endsWith(openImages[i],"Ramp")>=0) iRamp = i;
@@ -1935,7 +1933,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				if (!knownExt) pluginName = pluginName + pExts[j];
 				if (File.exists(pluginDir + pluginName)) {
 					pluginCheck = true;
-					showStatus(pluginName + "found in: "  + pluginDir);
+					showStatus(pluginName + "found in: " + pluginDir);
 				}
 				else {
 					pluginList = getFileList(pluginDir);
@@ -1947,7 +1945,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 						}
 					}
 					for (i=0; i<lengthOf(subFolderList); i++) {
-						if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
+						if (File.exists(pluginDir + subFolderList[i] + "\\" + pluginName)) {
 							pluginCheck = true;
 							showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
 							i = lengthOf(subFolderList);
@@ -2018,7 +2016,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		}
 		if (getInfo("window.type")!="ResultsTable" && nRes<=0)	{
 			Dialog.create("No Results to Work With");
-			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRes +"   results.\nThere are    " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are " + nRes +" results.\nThere are " + nROIs +" ROIs.");
 			Dialog.addRadioButtonGroup("No Results to Work With:",newArray("Run Analyze-particles to generate table","Import Results table","Exit"),2,1,"Run Analyze-particles to generate table");
 			Dialog.show();
 			actionChoice = Dialog.getRadioButton();
@@ -2045,7 +2043,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			v211108 Uses radio-button group.
 			NOTE: Requires ASC restoreExit function, which assumes that saveSettings has been run at the beginning of the macro
 			v220706: Table friendly version
-			v220816: Enforces non-inverted LUT as well as white background and fixes ROI-less analyze.  Adds more dialog labeling.
+			v220816: Enforces non-inverted LUT as well as white background and fixes ROI-less analyze. Adds more dialog labeling.
 			v220823: Extended corner pixel test.
 			*/
 		functionL = "checkForRoiManager_v220816";

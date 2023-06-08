@@ -1,5 +1,5 @@
 /*	Fork of ROI_Color_Coder.ijm  IJ BAR: https://github.com/tferr/Scripts#scripts
-	http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
+	https://imagej.net/doku.php?id=macro:roi_color_coder
 	Colorizes ROIs by matching LUT indexes to measurements in the Results table. It is
 	complementary to the ParticleAnalyzer (Analyze>Analyze Particles...), generating
 	particle-size heat maps. Requires IJ 1.47r.
@@ -24,10 +24,10 @@
 	+ v210428-30 Updated ASC functions, disabled non-function experimental log option. Switched to expandable arrays, improved ramp labels
 	+ v211025 updated functions  v211029 Added cividis.lut
 	+ v211103 Expanded expandLabels function
-	+ v211104: Updated stripKnownExtensionsFromString function    v211112+v220616: Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
+	+ v211104: Updated stripKnownExtensionFromString function    v211112+v220616+v230505(f8)+060723(f10): Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112-f7.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112-f10.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -45,7 +45,7 @@ macro "ROI Color Coder with settings generated from data"{
 	run("Colors...", "foreground=black background=white selection=yellow"); /* Set the preferred colors for these macros */
 	setOption("BlackBackground", false);
 	run("Appearance...", " "); if(is("Inverting LUT")) run("Invert LUT"); /* do not use Inverting LUT */
-	/*	The above should be the defaults but this makes sure (black particles on a white background) http://imagejdocu.tudor.lu/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
+	/*	The above should be the defaults but this makes sure (black particles on a white background) https://imagej.net/doku.php?id=faq:technical:how_do_i_set_up_imagej_to_deal_with_white_particles_on_a_black_background_by_default
 	*/
 	id = getImageID();	t=getTitle(); /* get id of image and title */
 	checkForUnits(); /* Required function */
@@ -125,7 +125,7 @@ macro "ROI Color Coder with settings generated from data"{
 	Dialog.addCheckbox("Stats: Add labels at mean and " + fromCharCode(0x00B1) + " SD", false);
 	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
 	Dialog.addNumber("Stats label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
-	Dialog.addHelp("http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder");
+	Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterWithLabel= Dialog.getChoice;
 		parameter= substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
@@ -715,46 +715,54 @@ macro "ROI Color Coder with settings generated from data"{
 	}
 	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
 		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
-		v211102-v211103  Some more fixes and updated to match latest extended geometries  */
-		string = replace(string, "Raw Int Den", "Raw Int. Density");
+		v211102-v211103  Some more fixes and updated to match latest extended geometries
+		v220808 replaces ° with fromCharCode(0x00B0)
+		v230106 Added a few separation abbreviations */
+		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
+		string = replace(string, "AR_", "Aspect Ratio: ");
+		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
+		string = replace(string, " Crl ", " Curl ");
+		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
+		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");
+		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
+		string = replace(string, "Da", "Diam:area");
+		string = replace(string, "Dp", "Diam:perim.");
+		string = replace(string, "equiv", "equiv.");
 		string = replace(string, "FeretAngle", "Feret Angle");
+		string = replace(string, "Fbr", "Fiber");
 		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
 		string = replace(string, "FiberLAnn", "Fiber Length from Annulus");
 		string = replace(string, "FiberLR", "Fiber Length R");
-		string = replace(string, " Th ", " Thickness ");
-		string = replace(string, " Crl ", " Curl ");
+		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
+		string = replace(string, "HSF", "Hexagon Shape Factor");
+		string = replace(string, "Hxgn_", "Hexagon: ");
+		string = replace(string, "Intfc_D", "Interfacial Density ");
+		string = replace(string, "MinSepROI", "Minimum ROI Separation");
+		string = replace(string, "MinSep", "Minimum Separation ");
+		string = replace(string, "NN", "Nearest Neighbor ");
+		string = replace(string, "Perim", "Perimeter");
+		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
 		string = replace(string, "Snk", "\(Snake\)");
-		string = replace(string, "Fbr", "Fiber");
-		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
-		string = replace(string, "AR_", "Aspect Ratio: ");
+		string = replace(string, "Raw Int Den", "Raw Int. Density");
+		string = replace(string, "Rndnss", "Roundness");
 		string = replace(string, "Rnd_", "Roundness: ");
+		string = replace(string, "Rss1", "/(Russ Formula 1/)");
+		string = replace(string, "Rss1", "/(Russ Formula 2/)");
 		string = replace(string, "Sqr_", "Square: ");
 		string = replace(string, "Squarity_AP","Squarity: from Area and Perimeter");
 		string = replace(string, "Squarity_AF","Squarity: from Area and Feret");
 		string = replace(string, "Squarity_Ff","Squarity: from Feret");
-		string = replace(string, "Rss1", "/(Russ Formula 1/)");
-		string = replace(string, "Rss1", "/(Russ Formula 2/)");
-		string = replace(string, "Rndnss", "Roundness");
-		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
-		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
-		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");	
-		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
-		string = replace(string, "Hxgn_", "Hexagon: ");
-		string = replace(string, "Perim", "Perimeter");
-		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
-		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
-		string = replace(string, "HSF", "Hexagon Shape Factor");
+		string = replace(string, " Th ", " Thickness ");
+		string = replace(string, "ThisROI"," this ROI ");
 		string = replace(string, "Vol_", "Volume: ");
-		string = replace(string, "Da", "Diam:area");
-		string = replace(string, "Dp", "Diam:perim.");
-		string = replace(string, "equiv", "equiv.");
-		string = replace(string, "_", " ");
-		string = replace(string, "°", "degrees");
-		string = replace(string, "0-90", "0-90°"); /* An exception to the above */
-		string = replace(string, "°, degrees", "°"); /* That would be otherwise be too many degrees */
+		string = replace(string, fromCharCode(0x00B0), "degrees");
+		string = replace(string, "0-90", "0-90"+fromCharCode(0x00B0)); /* An exception to the above */
+		string = replace(string, fromCharCode(0x00B0)+", degrees", fromCharCode(0x00B0)); /* That would be otherwise be too many degrees */
 		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
 		// string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - Not reliable though */
 		// string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
+		string = replace(string, "_", " ");
+		string = replace(string, "  ", " ");
 		return string;
 	}
   	function getFontChoiceList() {
@@ -868,36 +876,51 @@ macro "ROI Color Coder with settings generated from data"{
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
 		v220615: Tries to fix the fix for the trapped extensions ...
+		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
+		v230505: Unwanted dupes replaced by unusefulCombos.
+		v230607: Quick fix for infinite loop on one of while statements.
 		*/
+		fS = File.separator;
 		string = "" + string;
-		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX","_"," ");
-			kEL = lengthOf(knownExt);
-			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
-			unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
-			uSL = lengthOf(unwantedSuffixes);
-			for (i=0; i<kEL; i++) {
-				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
-					ichanLabels = lastIndexOf(string, chanLabels[j]);
-					iExt = lastIndexOf(string, "." + knownExt[i]);
-					if(ichanLabels>0 && iExt>(ichanLabels+lengthOf(chanLabels[j]))){
-						iExt = lastIndexOf(string, "." + knownExt[i]);
-						if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];
-						ichanLabels = lastIndexOf(string, chanLabels[j]);
-						for (k=0; k<uSL; k++){
-							iExt = lastIndexOf(string, unwantedSuffixes[k]);  /* common ASC suffix */
-							if (ichanLabels>iExt && iExt>0) string = "" + substring(string, 0, iExt) + "_" + chanLabels[j];	
-						}				
-					}
-				}
-				iExt = lastIndexOf(string, "." + knownExt[i]);
-				if (iExt>=(lengthOf(string)-(lengthOf(knownExt[i])+1)) && iExt>0) string = "" + substring(string, 0, iExt);
+		protectedPathEnd = lastIndexOf(string,fS)+1;
+		if (protectedPathEnd>0){
+			protectedPath = substring(string,0,protectedPathEnd);
+			string = substring(string,protectedPathEnd);
+		}
+		unusefulCombos = newArray("-", "_"," ");
+		for (i=0; i<lengthOf(unusefulCombos); i++){
+			for (j=0; j<lengthOf(unusefulCombos); j++){
+				combo = unusefulCombos[i] + unusefulCombos[j];
+				while (indexOf(string,combo)>=0) string = replace(string,combo,unusefulCombos[i]);
 			}
 		}
-		unwantedSuffixes = newArray("_lzw"," ","  ", "__","--","_","-");
-		for (i=0; i<lengthOf(unwantedSuffixes); i++){
-			sL = lengthOf(string);
-			if (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
+			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
+			kEL = knownExt.length;
+			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			for (i=0,k=0; i<kEL; i++) {
+				kExtn = "." + knownExt[i];
+				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+					iChanLabels = lastIndexOf(string, chanLabels[j])-1;
+					if (iChanLabels>0){
+						preChan = substring(string,0,iChanLabels);
+						postChan = substring(string,iChanLabels);
+						while (indexOf(preChan,kExtn)>=0 && k<10){  /* k counter quick fix for infinite loop */
+							string = replace(preChan,kExtn,"") + postChan;
+							k++;
+						}
+					}
+				}
+				while (endsWith(string,kExtn)) string = "" + substring(string, 0, lastIndexOf(string, kExtn));
+			}
+		}
+		unwantedSuffixes = newArray("_lzw"," ", "_","-");
+		for (i=0; i<unwantedSuffixes.length; i++){
+			while (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,string.length-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+		}
+		if (protectedPathEnd>0){
+			if(!endsWith(protectedPath,fS)) protectedPath += fS;
+			string = protectedPath + string;
 		}
 		return string;
 	}

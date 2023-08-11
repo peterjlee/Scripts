@@ -31,10 +31,10 @@
 	+ v211103 Expanded expandlabels macro.
 	+ v211104 Updated stripKnownExtensionFromString function    211112 + 230505(v221201-f2): Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used! F9-10 updated colors.
 	+ v221128 Updated for new version of filterArrayByContents function.
-	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use. f3: updated function stripKnownExtensionFromString
+	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use. f3: updated function stripKnownExtensionFromString v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList function.
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v221201-f3.ijm";
+	macroL = "Line_Color_Coder_v221201-f5.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -924,10 +924,12 @@ macro "Line Color Coder with Labels" {
 		   ( 8(|)	( 8(|)	ASC Functions	@@@@@:-)	@@@@@:-)
    */
 	function addImageToStack(stackName,baseImage) {
+		/* v230614: Added "Select None" */
 		run("Copy");
 		selectWindow(stackName);
 		run("Add Slice");
 		run("Paste");
+		run("Select None");
 		selectWindow(baseImage);
 	}
 	 function autoCalculateDecPlaces(min,max,intervals){
@@ -952,10 +954,11 @@ macro "Line Color Coder with Labels" {
 	/* v180918 uses getResultsTableList function
 		v210715 fixes lengthOf(tableList) error
 		REQUIRES restoreExit and therefore saveSettings
+		v230804: Requires v230804 version of getResultsTableList
 		*/
-		funcL = "checkForAnyResults_v210715";
+		funcL = "checkForAnyResults_v230804";
 		if ((nResults==0) && ((getValue("results.count"))==0)){
-			tableList = getResultsTableList();
+			tableList = getResultsTableList(true);
 			if (lengthOf(tableList)==0) {
 				Dialog.create("No Results to Work With: " + funcL);
 				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following columns in any order:\n   1.\) The parameter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
@@ -964,7 +967,7 @@ macro "Line Color Coder with Labels" {
 				tableDecision = Dialog.getRadioButton();
 				if (tableDecision=="Exit") restoreExit("GoodBye");
 				else open();
-				tableList = getResultsTableList();
+				tableList = getResultsTableList(true);
 			}
 			tableList = Array.concat(newArray("none - exit"), tableList);
 			Dialog.create("Select table to use...");
@@ -986,7 +989,7 @@ macro "Line Color Coder with Labels" {
 				closeNonImageByTitle("Results");
 				restoreExit("Your have selected \"Exit\", perhaps now change name of your table to \"Results\"");
 			}else {
-				tableList = getResultsTableList();
+				tableList = getResultsTableList(true);
 				if (lengthOf(tableList)==0) restoreExit("Whoops, no other tables either");
 				Dialog.create("Select table to analyze...");
 				Dialog.addChoice("Select Table to Activate", tableList);
@@ -998,7 +1001,7 @@ macro "Line Color Coder with Labels" {
 			}
 		}
 		else if ((getValue("results.count"))!=0 && nResults==0) {
-			tableList = getResultsTableList();
+			tableList = getResultsTableList(true);
 			if (lengthOf(tableList)==0) restoreExit("Whoops, no other tables either");
 			Dialog.create("Select table to analyze...");
 			Dialog.addChoice("Select Table to Activate", tableList);
@@ -1270,12 +1273,13 @@ macro "Line Color Coder with Labels" {
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
-			v210430 expandable array version   v211029 Added cividis.lut */
+			v210430 expandable array version    v211029 added cividis.lut to LUT favorites v220113 added cividis-asc-linearlumin
+		*/
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLutsList = newArray("Your favorite LUTS here", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLutsList = newArray("Your favorite LUTS here", "cividis-asc-linearlumin", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		preferredLuts = newArray;
 		/* Filter preferredLutsList to make sure they are available . . . */
 		for (i=0, countL=0; i<preferredLutsList.length; i++) {
@@ -1304,22 +1308,18 @@ macro "Line Color Coder with Labels" {
 	End of ASC mod BAR Color Functions
 	*/
   	function getFontChoiceList() {
-		/*	v180723 first version
-			v180828 Changed order of favorites
-			v190108 Longer list of favorites
-		*/
+		/*	v180723 first version, v180828 Changed order of favorites, v190108 Longer list of favorites, v230209 Minor optimization	*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
 		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
 		faveFontListCheck = newArray(faveFontList.length);
-		counter = 0;
-		for (i=0; i<faveFontList.length; i++) {
+		for (i=0,counter=0; i<faveFontList.length; i++) {
 			for (j=0; j<fontNameChoice.length; j++) {
 				if (faveFontList[i] == fontNameChoice[j]) {
 					faveFontListCheck[counter] = faveFontList[i];
-					counter +=1;
 					j = fontNameChoice.length;
+					counter++;
 				}
 			}
 		}
@@ -1327,40 +1327,36 @@ macro "Line Color Coder with Labels" {
 		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
 		return fontNameChoice;
 	}
-	function getResultsTableList() {
-		/* v180925 added option to open new table if none is open */
-		windowList = getList("window.titles");
-		if (windowList.length==0) {
-			Dialog.create("No open non-Window images.");
-			Dialog.addCheckbox("Do you want to open a table with line coordinates or exit?", true);
-			Dialog.show();
-			if((Dialog.getCheckbox())==true) open();
-			else restoreExit();
-			windowList = getList("window.titles");
-		}
-		tableList = newArray(windowList.length);
-		tableCounter=0;
-		for (i=0; i<tableList.length; i++) {
-			selectWindow(windowList[i]);
-			if (getInfo("window.type")=="ResultsTable") {
-				tableList[tableCounter]=windowList[i];
-				tableCounter += 1;
+	function getResultsTableList(ignoreHistograms) {
+		/* simply returns array of open results tables
+		v200723: 1st version
+		v201207: Removed warning message
+		v230804: Adds boolean ignoreHistograms option */
+		nonImageWindows = getList("window.titles");
+		// if (nonImageWindows.length==0) exit("No potential results windows are open");
+		if (nonImageWindows.length>0){
+			resultsWindows = newArray();
+			for (i=0; i<nonImageWindows.length; i++){
+				selectWindow(nonImageWindows[i]);
+				if(getInfo("window.type")=="ResultsTable")
+				if (!ignoreHistograms) resultsWindows = Array.concat(resultsWindows,nonImageWindows[i]);
+				else (indexOf(nonImageWindows[i],"Histogram")<0) resultsWindows = Array.concat(resultsWindows,nonImageWindows[i]);
 			}
+			return resultsWindows;
 		}
-		tableList = Array.trim(tableList, tableCounter);
-		if (tableCounter==0)
-			 showMessage("No Results table windows are open");
-		else tableList = Array.trim(tableList, tableCounter);
-		return tableList;
+		else return "";
 	}
-	function getSelectionFromMask(selection_Mask){
+	function getSelectionFromMask(sel_M){
+		/* v220920 only inverts if full image selection */
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
-		if (!batchMode) setBatchMode(true); /* Toggle batch mode off */
-		tempTitle = getTitle();
-		selectWindow(selection_Mask);
+		if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
+		tempID = getImageID();
+		selectWindow(sel_M);
 		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
-		run("Make Inverse");
-		selectWindow(tempTitle);
+		getSelectionBounds(gSelX,gSelY,gWidth,gHeight);
+		if(gSelX==0 && gSelY==0 && gWidth==Image.width && gHeight==Image.height)	run("Make Inverse");
+		run("Select None");
+		selectImage(tempID);
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
@@ -1423,7 +1419,8 @@ macro "Line Color Coder with Labels" {
 		return string;
 	}
 	function replaceImage(replacedWindow,window2) {
-		/* v181005 Added descriptive failure for missing window2 */
+		/* v181005 Added descriptive failure for missing window2
+		NOTE: REQUIRES ASC restoreExit function which requires previous run of saveSettings		*/
 		if (!isOpen(window2) restoreExit("replaceImage Function failure: Image " + window2 + " not open");
         if (isOpen(replacedWindow)) {
 			selectWindow(replacedWindow);
@@ -1464,6 +1461,7 @@ macro "Line Color Coder with Labels" {
 		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
 		v230505: Unwanted dupes replaced by unusefulCombos.
 		v230607: Quick fix for infinite loop on one of while statements.
+		v230614: Added AVI.
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -1480,7 +1478,7 @@ macro "Line Color Coder with Labels" {
 			}
 		}
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
+			knownExt = newArray("avi", "AVI", "dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
 			kEL = knownExt.length;
 			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
 			for (i=0,k=0; i<kEL; i++) {

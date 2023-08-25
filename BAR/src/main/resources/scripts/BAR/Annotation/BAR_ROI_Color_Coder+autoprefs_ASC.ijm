@@ -25,9 +25,10 @@
 	+ v211025 updated functions  v211029 Added cividis.lut
 	+ v211103 Expanded expandLabels function
 	+ v211104: Updated stripKnownExtensionFromString function    v211112+v220616+v230505(f8)+060723(f10): Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
+	+ v230825:	Adds rangeFinder function. Intervals automatic.
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v211112-f10.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230825.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -60,6 +61,10 @@ macro "ROI Color Coder with settings generated from data"{
 	items = nROIs;
 	run("Remove Overlay");
 	setBatchMode(true);
+	sup2 = fromCharCode(178);
+	degreeChar = fromCharCode(0x00B0);
+	sigmaChar = fromCharCode(0x03C3);
+	plusMinus = fromCharCode(0x00B1);
 	tN = stripKnownExtensionFromString(t); /* as in N=name could also use File.nameWithoutExtension but that is specific to last opened file */
 	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
@@ -81,7 +86,6 @@ macro "ROI Color Coder with settings generated from data"{
 	if (headingsWithRange[0]==" :  Infinity - -Infinity")
 		headingsWithRange[0] = "Object" + ":  1 - " + items; /* relabels ImageJ ID column */
 	headingsWithRange = Array.trim(headingsWithRange,countH);
-	numIntervals = 10; /* default number if intervals in ramp labels - defined here for possible prefs usage later */
 	/* create the dialog prompt */
 	Dialog.create(macroL + ": " + tN);
 	Dialog.addMessage("Macro version: " + macroL);
@@ -105,7 +109,7 @@ macro "ROI Color Coder with settings generated from data"{
 	Dialog.addMessage("(e.g., 10-100)");
 	Dialog.setInsets(-8, 120, 4);
 	Dialog.addCheckbox("Add labels at true Min. & Max. if inside range", true);
-	Dialog.addNumber("No. of intervals:", numIntervals, 0, 3, "Major label count will be +1 more than this");
+	Dialog.addString("No. of intervals:", "Auto",11);
 	Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 	Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
 	Dialog.setInsets(-38, 195, 0);
@@ -118,11 +122,11 @@ macro "ROI Color Coder with settings generated from data"{
 	Dialog.setInsets(-25, 205, 0);
 	Dialog.addCheckbox("Draw tick marks", true);
 	Dialog.setInsets(2, 120, 0);
-	Dialog.addCheckbox("Force legend label to right of and || to ramp", false);
+	Dialog.addCheckbox("Force legend label to right of and || to ramp", true);
 	Dialog.setInsets(-6, 0, -2);
 	Dialog.addMessage("Ramp Stats Labels:______________");
 	Dialog.setInsets(0, 120, 0);
-	Dialog.addCheckbox("Stats: Add labels at mean and " + fromCharCode(0x00B1) + " SD", false);
+	Dialog.addCheckbox("Stats: Add labels at mean and " + plusMinus + " " + sigmaChar, true);
 	Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
 	Dialog.addNumber("Stats label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 	Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
@@ -136,8 +140,7 @@ macro "ROI Color Coder with settings generated from data"{
 		unitLabel= Dialog.getChoice();
 		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
 		rampMinMaxLines= Dialog.getCheckbox;
-		numIntervals= Dialog.getNumber; /* The number intervals along ramp */
-		numLabels= numIntervals + 1;  /* The number of major ticks/labels is one more than the intervals */
+		numIntervals= Dialog.getString; /* The number intervals along ramp */
 		dpChoice= Dialog.getChoice;
 		rampHChoice= parseFloat(Dialog.getChoice);
 		fontStyle= Dialog.getChoice;
@@ -176,10 +179,29 @@ macro "ROI Color Coder with settings generated from data"{
 	else for (i=0; i<items; i++) values[i] = i+1;
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
 	coeffVar = arraySD*100/arrayMean;
-	if (isNaN(rampMin)) rampMin= arrayMin;
-	if (isNaN(rampMax)) rampMax= arrayMax;
-	rampRange = rampMax-rampMin;
-	sortedValues = Array.copy(values); sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
+	arrayRange = arrayMax-arrayMin;
+	if (isNaN(rampMin)){
+		rampMin= arrayMin; /* i.e. auto */
+		rampMin = rangeFinder(rampMin,false);
+	} 
+	if (isNaN(rampMax)){
+		rampMax= arrayMax; /* i.e. auto */
+		rampMax = rangeFinder(rampMax,true);
+	}
+	rampRange = rampMax - rampMin;
+	if (isNaN(numIntervals)){
+		intStr = d2s(rampRange,-1);
+		intStr = substring(intStr,0,indexOf(intStr,"E"));
+		numIntervals =  parseFloat(intStr);
+		if (numIntervals>4) numIntervals = Math.ceil(numIntervals);
+		else if (numIntervals<2) numIntervals = Math.ceil(10 * numIntervals);
+		else numIntervals = Math.ceil(5 * numIntervals);
+	}
+	else numIntervals = parseInt(numIntervals);
+	rampRange = rampMax - rampMin;
+	numLabels= numIntervals + 1;
+	sortedValues = Array.copy(values);
+	sortedValues = Array.sort(sortedValues); /* all this effort to get the median without sorting the original array! */
 	arrayMedian = sortedValues[round(items/2)];  /* you could extend this obviously to provide quartiles but at that point you might as well use Excel */
 /* Create the parameter label */
 	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
@@ -338,13 +360,13 @@ macro "ROI Color Coder with settings generated from data"{
 			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
 			if (plusSDFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("+SD", round((rampW-getStringWidth("+SD"))/2), round(plusSDPos+0.5*fontSR2));
+				drawString("+"+sigmaChar, round((rampW-getStringWidth("+"+sigmaChar))/2), round(plusSDPos+0.5*fontSR2));
 				drawLine(rampLW, plusSDPos, tickLR, plusSDPos);
 				drawLine(rampW-1-tickLR, plusSDPos, rampW-rampLW-1, plusSDPos);
 			}
 			if (minusSDFactor>0) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("-SD", round((rampW-getStringWidth("-SD"))/2), round(minusSDPos+0.5*fontSR2));
+				drawString("-"+sigmaChar, round((rampW-getStringWidth("-"+sigmaChar))/2), round(minusSDPos+0.5*fontSR2));
 				drawLine(rampLW, minusSDPos, tickLR, minusSDPos);
 				drawLine(rampW-1-tickLR, minusSDPos, rampW-rampLW-1, minusSDPos);
 			}
@@ -450,43 +472,65 @@ macro "ROI Color Coder with settings generated from data"{
 			+ "Some values from the \""+ parameter +"\" column could not be retrieved.\n"
 			+ countNaN +" ROI(s) were labeled with a default color.");
 	roiManager("Show All without labels");
-		Dialog.create("Combine Labeled Image and Legend?");
-		if (canvasH>imageHeight) comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image");
-		else if (canvasH>(0.93 * imageHeight)) comboChoice = newArray("No", "Combine Ramp with Current", "Combine Ramp with New Image"); /* 93% is close enough */
-		else comboChoice = newArray("No", "Combine Scaled Ramp with Current", "Combine Scaled Ramp with New Image", "Combine Ramp with Current", "Combine Ramp with New Image");
-		Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
+	run("Flatten");
+	tNC = tN + "_" + parameter + "-coded";
+	rename(tNC);
+	Dialog.create("Combine labeled image and color-code legend?");
+		comboChoice = newArray("No","Image + color-code legend", "Auto-cropped image + color-code legend","Manually cropped image + color-code legend");
+		Dialog.addRadioButtonGroup("Combine labeled image with color-code legend?", comboChoice, 5, 1,  comboChoice[1]) ;
 	Dialog.show();
-		createCombo = Dialog.getChoice();
+		createCombo = Dialog.getRadioButton;
 	if (createCombo!="No") {
-		selectWindow(tR);
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") {
-			rampScale = imageHeight/canvasH;
-			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
-			canvasH = getHeight(); /* update ramp height */
+		if (indexOf(createCombo,"cropped")>0){
+			if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
+			selectWindow(tNC);
+			run("Duplicate...", "title=" + tNC + "_crop");
+			cropID = getImageID;
+			run("Select Bounding Box (guess background color)");
+			run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
+			if (startsWith(createCombo,"Manual")) {
+				getSelectionBounds(xA, yA, widthA, heightA);
+				makeRectangle(maxOf(2,xA), maxOf(2,yA), minOf(imageWidth-4,widthA), minOf(imageHeight-4,heightA));
+				setTool("rectangle");
+				title = "Crop Location for Combined Image";
+				msg = "1. Select the area that you want to crop to. 2. Click on OK";
+				waitForUser(title, msg);
+			}
+			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+			selectImage(cropID);
+			if(selectionType>=0) run("Crop");
+			else IJ.log("Combination with cropped image desired by no crop made");
+			run("Select None");
+			closeImageByTitle(tNC);
+			rename(tNC);
+			imageHeight = getHeight();
+			imageWidth = getWidth();
 		}
-		srW = getWidth;
-		comboW = srW + imageWidth;
-		selectWindow(t);
-		run("Flatten");
-		if (imageDepth==8 && lut=="Grays") run("8-bit"); // restores gray if all gray settings
-		rename(tN + "_" + parameterLabel + "_coded");
-		tNC = getTitle();
-		if (createCombo=="Combine Scaled Ramp with New Image" || createCombo=="Combine Ramp with New Image") run("Duplicate...", "title=temp_combo");
+		if (canvasH>imageHeight){
+			rampScale = imageHeight/canvasH;
+			selectWindow(tR);
+			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
+			closeImageByTitle(tR);
+			rename(tR);
+			canvasH = getHeight(); /* update ramp height */
+			canvasW = getWidth(); /* update ramp height */
+		}
+		rampMargin = maxOf(2,imageWidth/500);
+		rampSelW = canvasW + rampMargin;
+		comboW = imageWidth + rampSelW;
+		if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
+		selectWindow(tNC);
 		run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
-		makeRectangle(imageWidth, round((imageHeight-canvasH)/2), srW, imageHeight);
-		setBatchMode("exit & display");
-		wait(10); /* required to get image to selection to work here */
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Scaled Ramp with New Image") run("Image to Selection...", "image=scaled_ramp opacity=100");
-		else run("Image to Selection...", "image=" + tR + " opacity=100"); /* can use "else" here because we have already eliminated the "No" option */
-		run("Flatten");
-		if (imageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
+		selectWindow(tR);
+		wait(5);
+		Image.copy;
+		selectWindow(tNC);
+		wait(5);
+		Image.paste(imageWidth + maxOf(2,imageWidth/500),round((imageHeight-canvasH)/2));
 		rename(tNC + "+ramp");
-		closeImageByTitle("scaled_ramp");
-		closeImageByTitle("temp_combo");
-		if (createCombo=="Combine Scaled Ramp with Current" || createCombo=="Combine Ramp with Current") closeImageByTitle(tNC);
+		if (imageDepth==8 && lut=="Grays" && is("grayscale")) run("8-bit"); /* restores gray if all gray settings */
+		closeImageByTitle(tR);
 	}
-		else run("Flatten");
-	if (imageDepth==8 && lut=="Grays") run("8-bit"); /* restores gray if all gray settings */
 	setBatchMode("exit & display");
 	restoreSettings;
 	call("java.lang.System.gc"); 
@@ -713,57 +757,100 @@ macro "ROI Color Coder with settings generated from data"{
 		}
 		if (isOpen(oIID)) selectImage(oIID);
 	}
-	function expandLabel(string) {  /* Expands abbreviations typically used for compact column titles
+	function expandLabel(str) {  /* Expands abbreviations typically used for compact column titles
 		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
 		v211102-v211103  Some more fixes and updated to match latest extended geometries
 		v220808 replaces ° with fromCharCode(0x00B0)
-		v230106 Added a few separation abbreviations */
-		string = replace(string, "_cAR", "\(Corrected by Aspect Ratio\)");
-		string = replace(string, "AR_", "Aspect Ratio: ");
-		string = replace(string, "Cir_to_El_Tilt", "Circle Tilt based on Ellipse");
-		string = replace(string, " Crl ", " Curl ");
-		string = replace(string, "Da_Equiv","Diameter from Area \(Circular\)");
-		string = replace(string, "Dp_Equiv","Diameter from Perimeter \(Circular\)");
-		string = replace(string, "Dsph_Equiv","Diameter from Feret \(Spherical\)");
-		string = replace(string, "Da", "Diam:area");
-		string = replace(string, "Dp", "Diam:perim.");
-		string = replace(string, "equiv", "equiv.");
-		string = replace(string, "FeretAngle", "Feret Angle");
-		string = replace(string, "Fbr", "Fiber");
-		string = replace(string, "FiberThAnn", "Fiber Thckn. from Annulus");
-		string = replace(string, "FiberLAnn", "Fiber Length from Annulus");
-		string = replace(string, "FiberLR", "Fiber Length R");
-		string = replace(string, "HSFR", "Hexagon Shape Factor Ratio");
-		string = replace(string, "HSF", "Hexagon Shape Factor");
-		string = replace(string, "Hxgn_", "Hexagon: ");
-		string = replace(string, "Intfc_D", "Interfacial Density ");
-		string = replace(string, "MinSepROI", "Minimum ROI Separation");
-		string = replace(string, "MinSep", "Minimum Separation ");
-		string = replace(string, "NN", "Nearest Neighbor ");
-		string = replace(string, "Perim", "Perimeter");
-		string = replace(string, "Perimetereter", "Perimeter"); /* just in case we already have a perimeter */
-		string = replace(string, "Snk", "\(Snake\)");
-		string = replace(string, "Raw Int Den", "Raw Int. Density");
-		string = replace(string, "Rndnss", "Roundness");
-		string = replace(string, "Rnd_", "Roundness: ");
-		string = replace(string, "Rss1", "/(Russ Formula 1/)");
-		string = replace(string, "Rss1", "/(Russ Formula 2/)");
-		string = replace(string, "Sqr_", "Square: ");
-		string = replace(string, "Squarity_AP","Squarity: from Area and Perimeter");
-		string = replace(string, "Squarity_AF","Squarity: from Area and Feret");
-		string = replace(string, "Squarity_Ff","Squarity: from Feret");
-		string = replace(string, " Th ", " Thickness ");
-		string = replace(string, "ThisROI"," this ROI ");
-		string = replace(string, "Vol_", "Volume: ");
-		string = replace(string, fromCharCode(0x00B0), "degrees");
-		string = replace(string, "0-90", "0-90"+fromCharCode(0x00B0)); /* An exception to the above */
-		string = replace(string, fromCharCode(0x00B0)+", degrees", fromCharCode(0x00B0)); /* That would be otherwise be too many degrees */
-		string = replace(string, fromCharCode(0x00C2), ""); /* Remove mystery Â */
-		// string = replace(string, "^-", fromCharCode(0x207B)); /* Replace ^- with superscript - Not reliable though */
-		// string = replace(string, " ", fromCharCode(0x2009)); /* Use this last so all spaces converted */
-		string = replace(string, "_", " ");
-		string = replace(string, "  ", " ");
-		return string;
+		v230106 Added a few separation abbreviations
+		v230109 Reorganized to priortize all standard IJ labels and make more consistent. Also introduced string.replace and string.substring */
+		requires("1.52t"); /* for string.replace */
+		/* standard IJ labels */
+		if (str=="Angle") str = "Ellipse Angle";
+		else if (str=="AR") str = "Aspect Ratio \(ellipse fit\)";
+		else if (str=="AR_Box") str = "Aspect Ratio \(bounding rectangle\)";
+		else if (str=="AR_Feret") str = "Aspect Ratio \(Feret\)";
+		else if (str=="BX") str = "Bounding Rectangle X Start";
+		else if (str=="BY") str = "Bounding Rectangle Y Start";
+		else if (str=="Circ.") str = "Circularity ";
+		else if (str=="Elongation") str = "Elongation \(of bounding rectangle\)";
+		else if (str=="Feret") str = "Feret's Diameter";
+		else if (str=="FeretX") str = "Feret X Start";
+		else if (str=="FeretX2") str = "Feret X End";
+		else if (str=="FeretY") str = "Feret Y Start";
+		else if (str=="FeretY2") str = "Feret Y End";
+		else if (str=="Heigth") str = "Bounding Rectangle Height";
+		else if (str=="Major") str = "Major Ellipse Axis Length";
+		else if (str=="Minor") str = "Minor Ellipse Axis Length";
+		else if (str=="MinFeret") str = "Minimum Feret's Diameter";
+		else if (str=="MinFeretX") str = "Minimum Feret Start \(x\)";
+		else if (str=="MinFeretY") str = "Minimum Feret Start \(y\)";
+		else if (str=="MinFeretX2") str = "Minimum Feret End \(x\)";
+		else if (str=="MinFeretY2") str = "Minimum Feret End \(y\)";
+		else if (str=="Perim.") str = "Perimeter ";
+		else if (str=="Round") str = "Roundness \(from area and major ellipse axis\)";
+		else if (str=="Rnd_Feret") str = "Roundness \(from maximal Feret's diameter\)";
+		else if (str=="Sqr_Diag_A") str = "Diagonal of Square \(from area\)";
+		else if (str=="X") str = "Centroid \(x\)";
+		else if (str=="Y") str = "Centroid \(y\)";
+		else { /* additional ASC geomotries */
+			str = str.replace(fromCharCode(0x00B0), "degrees");
+			str = str.replace("0-90_degrees", "0-90"+fromCharCode(0x00B0)); /* An exception to the above*/
+			str = str.replace("0-90degrees", "0-90"+fromCharCode(0x00B0)); /* An exception to the above*/
+			str = str.replace("_cAR", "\(Corrected by Aspect Ratio\) ");
+			str = str.replace("AR_", "Aspect Ratio: ");
+			str = str.replace("BoxH","Bounding Rectangle Height ");
+			str = str.replace("BoxW","Bounding Rectangle Width ");
+			str = str.replace("Cir_to_El_Tilt", "Circle Tilt \(tilt of curcle to match measured ellipse\) ");
+			str = str.replace(" Crl ", " Curl ");
+			str = str.replace("Compact_Feret", "Compactness \(from Feret axis\) ");
+			str = str.replace("Da_Equiv","Diameter \(from circle area\) ");
+			str = str.replace("Dp_Equiv","Diameter \(from circle perimeter\) ");
+			str = str.replace("Dsph_Equiv","Diameter \(from spherical Feret diameter\) ");
+			str = str.replace("Da", "Diameter \(from circle area\) ");
+			str = str.replace("Dp", "Diameter \(from circle perimeter\) ");
+			str = str.replace("equiv", "Equivalent ");
+			str = str.replace("FeretAngle", "Feret's Angle ");
+			str = str.replace("Feret's Angle 0to90", "Feret's Angle \(0-90"+fromCharCode(0x00B0)+"\)"); /* fixes a precious labelling inconsistency */
+			str = str.replace("Fbr", "Fiber ");
+			str = str.replace("FiberThAnn", "Fiber Thickness \(from annulus\) ");
+			str = str.replace("FiberLAnn", "Fiber Length (\from annulus\) ");
+			str = str.replace("FiberLR", "Fiber Length R ");
+			str = str.replace("HSFR", "Hexagon Shape Factor Ratio ");
+			str = str.replace("HSF", "Hexagon Shape Factor ");
+			str = str.replace("Hxgn_", "Hexagon: ");
+			str = str.replace("Intfc_D", "Interfacial Density ");
+			str = str.replace("MinSepNNROI", "Minimum Separation NN ROI ");
+			str = str.replace("MinSepROI", "Minimum ROI Separation ");
+			str = str.replace("MinSepThisROI", "Minimum Separation this ROI ");
+			str = str.replace("MinSep", "Minimum Separation ");
+			str = str.replace("NN", "Nearest Neighbor ");
+			str = str.replace("ObjectN", "Object Number ");
+			str = str.replace("Perim.", "Perimeter ");
+			if (indexOf(str,"Perimeter")!=indexOf(str,"Perim")) str.replace("Perim", "Perimeter ");
+			str = str.replace("Perimetereter", "Perimeter "); /* just in case above failed */
+			str = str.replace("Snk", "\(Snake\) ");
+			str = str.replace("Raw Int Den", "Raw Interfacial Density ");
+			str = str.replace("Rndnss", "Roundness ");
+			str = str.replace("Rnd_", "Roundness: ");
+			str = str.replace("Rss1", "/(Russ Formula 1/) ");
+			str = str.replace("Rss1", "/(Russ Formula 2/) ");
+			str = str.replace("Sqr_", "Square: ");
+			str = str.replace("Squarity_AP","Squarity \(from area and perimeter\) ");
+			str = str.replace("Squarity_AF","Squarity \(from area and Feret\) ");
+			str = str.replace("Squarity_Ff","Squarity \(from Feret\) ");
+			str = str.replace(" Th ", " Thickness ");
+			str = str.replace("ThisROI"," this ROI ");
+			str = str.replace("Vol_", "Volume: ");
+			if(str=="Width") str = "Bounding Rectangle Width";
+			str = str.replace("XM", "Center of Mass \(x\)");
+			str = str.replace("XY", "Center of Mass \(y\)");
+			str = str.replace(fromCharCode(0x00C2), ""); /* Remove mystery Â */
+			str = str.replace(fromCharCode(0x2009)," ");
+		}
+		while (indexOf(str,"_")>=0) str = str.replace("_", " ");
+		while (indexOf(str,"  ")>=0) str = str.replace("  ", " ");
+		while (endsWith(str," ")) str = str.substring(0,lengthOf(str)-1);
+		return str;
 	}
   	function getFontChoiceList() {
 		/*	v180723 first version
@@ -850,6 +937,16 @@ macro "ROI Color Coder with settings generated from data"{
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
+		function rangeFinder(dataExtreme,max){
+	/*	For finding good end values for ramps and plot ranges.
+		v230824: 1st version  Peter J. Lee Applied Superconductivity Center FSU */
+		rangeExtremeStr = d2s(dataExtreme,-2);
+		if (max) rangeExtremeA = Math.ceil(10 * parseFloat(substring(rangeExtremeStr,0,indexOf(rangeExtremeStr,"E")))) / 10;
+		else rangeExtremeA = Math.floor(10 * parseFloat(substring(rangeExtremeStr,0,indexOf(rangeExtremeStr,"E")))) / 10;
+		rangeExtremeStrB = substring(rangeExtremeStr,indexOf(rangeExtremeStr,"E")+1);
+		rangeExtreme = parseFloat(rangeExtremeA + "E" + rangeExtremeStrB);
+		return rangeExtreme;
+	}
 	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
 		/* 9/9/2017 added Garbage clean up suggested by Luc LaLonde - LBNL */
 		restoreSettings(); /* Restore previous settings before exiting */
@@ -879,6 +976,7 @@ macro "ROI Color Coder with settings generated from data"{
 		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
 		v230505: Unwanted dupes replaced by unusefulCombos.
 		v230607: Quick fix for infinite loop on one of while statements.
+		v230614: Added AVI.
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -895,7 +993,7 @@ macro "ROI Color Coder with settings generated from data"{
 			}
 		}
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
+			knownExt = newArray("avi", "AVI", "dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
 			kEL = knownExt.length;
 			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
 			for (i=0,k=0; i<kEL; i++) {

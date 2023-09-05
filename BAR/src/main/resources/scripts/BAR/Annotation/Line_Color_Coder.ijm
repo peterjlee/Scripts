@@ -31,10 +31,11 @@
 	+ v211103 Expanded expandlabels macro.
 	+ v211104 Updated stripKnownExtensionFromString function    211112 + 230505(v221201-f2): Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used! F9-10 updated colors.
 	+ v221128 Updated for new version of filterArrayByContents function.
-	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use. f3: updated function stripKnownExtensionFromString v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList function.
+	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use. f3: updated function stripKnownExtensionFromString v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList function. F6: Updated indexOf functions.
+	+ v230905 Added gremlin fix for difficult tables. Added rangeFinder function for auto-ranging.
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v221201-f5.ijm";
+	macroL = "Line_Color_Coder_v230905.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -72,6 +73,30 @@ macro "Line Color Coder with Labels" {
 	getPixelSize(unit, pixelWidth, pixelHeight);
 	lcf = (pixelWidth+pixelHeight)/2; /* length conversion factor */
 	checkForAnyResults();
+	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
+	if (isNaN(getResult(headings[1], 1))){
+		String.copyResults;
+		close("Results");
+		run("Paste");
+		selectWindow("Clipboard");
+		tempFile = getDir("temp") + "IJtemp.tsv";
+		saveAs("Text", tempFile);
+		wait(10);
+		close("IJtemp.tsv");
+		s1 = File.openAsString(tempFile);
+		s1 = zapGremlins(s1,"\n",",","",true);
+		s1 = replace(s1," ","_");
+		iC1 = indexOf(s1,",");
+		if (iC1==1) s1 = "ID" + substring(s1,1);
+		if (File.exists(tempFile)) File.delete(tempFile);
+		tempFile = getDir("temp") + "IJtemp.csv";
+		File.saveString(s1, tempFile);
+		wait(10);
+		open(tempFile);
+		Table.rename("IJtemp.csv", "Results");
+		headings = split(String.getResultsHeadings,"\t");
+		if (File.exists(tempFile)) File.delete(tempFile);
+	}
 	nRes = nResults;
 	setBatchMode(true);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
@@ -83,19 +108,21 @@ macro "Line Color Coder with Labels" {
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
 	defaultLineWidth = maxOf(1,round((imageWidth+imageHeight)/1000));
-	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
 	headingsWithX = filterArrayByContents(headings,newArray("x"),false);
-	headingsWithX = Array.concat("Fixed entry",headingsWithX);
+	headingsWithX = Array.concat(headingsWithX, "Fixed entry");
 	if (lengthOf(headingsWithX)<2) restoreExit("Two X coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithX) + " header\(s\) with 'X' found");
 	headingsWithY = filterArrayByContents(headings,newArray("y"),false);
 	headingsWithY = Array.concat("Fixed entry",headingsWithY);
 	if (lengthOf(headingsWithY)<2) restoreExit("Two Y coordinate sets are required \(a 'from' and a 'to'\); " + lengthOf(headingsWithY) + " header\(s\) with 'Y' found");
-	headingsWithRange= newArray(lengthOf(headings));
+	headingsWithRange= newArray();
 	for (i=0; i<lengthOf(headings); i++) {
 		resultsColumn = newArray(nRes);
-		for (j=0; j<nRes; j++)
-			resultsColumn[j] = getResult(headings[i], j);
+		for (j=0; j<nRes; j++){
+			resultsColumn[j] = parseFloat(getResult(headings[i], j));
+			// print(resultsColumn[j]);
+			if (isNaN(resultsColumn[j])) resultsColumn[j] = parseFloat(resultsColumn[j]);
+		}
 		Array.getStatistics(resultsColumn, min, max, null, null);
 		headingsWithRange[i] = headings[i] + ":  " + min + " - " + max;
 	}
@@ -105,9 +132,11 @@ macro "Line Color Coder with Labels" {
 	parameterIndex = 0;
 	for (i=0; i<lengthOf(lineParameters); i++)
 		parameterIndex = maxOf(parameterIndex,indexOfArrayThatContains(headingsWithRange, lineParameters[i]));
-	/* create the dialog prompt */
+	infoColor = "#0076B6";
+	infoWarningColor = "#ff69b4";
+	infoFontSize = 12;
 	Dialog.create("Line Color Coder: " + macroL);
-		Dialog.addMessage("Image: " + tNL);
+		Dialog.addMessage("Image: " + tNL + "\nData points: " + nRes);
 		Dialog.setInsets(6, 0, 0);
 		iFX = indexOfArray(headingsWithX, call("ij.Prefs.get", "line.color.coder.fromX",headingsWithX[headingsWithX.length-1]),0);
 		iFY = indexOfArray(headingsWithY, call("ij.Prefs.get", "line.color.coder.fromY",headingsWithY[headingsWithY.length-1]),0);
@@ -118,16 +147,25 @@ macro "Line Color Coder with Labels" {
 		Dialog.addChoice("To x coordinate: ", headingsWithX, headingsWithX[iTX]);
 		Dialog.addChoice("To y coordinate: ", headingsWithY, headingsWithY[iTY]);
 		if (lcf!=1){
-			Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor",11,"red");
+			testArray = Table.getColumn(headingsWithX[0]);
+			if (isIntegerArray(testArray)){
+				defDiv = false;
+				Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor",infoFontSize,infoColor);			
+			} 
+			else {
+				defDiv = true;
+				Dialog.addMessage("If the co-ordinates are not in pixels they will need to be divided by the scale factor",infoFontSize,infoWarningColor);
+			}
 			Dialog.setInsets(-1, 20, 16);
-			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", true);
+			Dialog.addCheckbox("Divide coordinates by image calibration \("+lcf+"\)?", defDiv);
 		}
 		Dialog.addNumber("Fixed X Coordinate if 'Fixed entry' is chosen above",0,0,6,"pixels");
 		Dialog.addNumber("Fixed Y Coordinate if 'Fixed entry' is chosen above",0,0,6,"pixels");
 		if (lcf!=1){
-			Dialog.addMessage("If the fixed co-ordinates are not in pixels they will need to be divided by the scale factor",11,"red");
+			if (isIntegerArray(testArray)) Dialog.addMessage("If the fixed co-ordinates are not in pixels they will need to be divided by the scale factor",infoFontSize,infoColor);
+			else Dialog.addMessage("If the fixed co-ordinates are not in pixels they will need to be divided by the scale factor",infoFontSize,infoWarningColor);
 			Dialog.setInsets(-1, 20, 16);
-			Dialog.addCheckbox("Divide fixed coordinates by image calibration \("+lcf+"\)?", false);
+			Dialog.addCheckbox("Divide fixed coordinates by image calibration \("+lcf+"\)?", defDiv);
 		}
 		iPara = indexOfArray(headings, call("ij.Prefs.get", "line.color.coder.parameter",headings[parameterIndex]),parameterIndex);
 		Dialog.addChoice("Line color from: ", headingsWithRange, headingsWithRange[iPara]);
@@ -222,6 +260,21 @@ macro "Line Color Coder with Labels" {
 	}
 	values = Table.getColumn(parameter);
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
+	arrayRange = arrayMax-arrayMin;
+	rampMin = arrayMin;
+	rampMax = arrayMax;
+	rampMax = rangeFinder(rampMax,true);
+	rampMin = rangeFinder(rampMin,false);
+	rampRange = rampMax - rampMin;
+	intStr = d2s(rampRange,-1);
+	intStr = substring(intStr,0,indexOf(intStr,"E"));
+	numIntervals =  parseFloat(intStr);
+	if (numIntervals>4){
+		if (endsWith(d2s(numIntervals,3),".500")) numIntervals *= 2;
+		numIntervals = Math.ceil(numIntervals);	
+	}
+	else if (numIntervals<2) numIntervals = Math.ceil(10 * numIntervals);
+	else numIntervals = Math.ceil(5 * numIntervals);
 	/*	Determine parameter label */
 	parameterLabel = parameter;
 	if (unitLabel=="Auto") unitLabel = unitLabelFromString(parameter, unit);
@@ -241,13 +294,13 @@ macro "Line Color Coder with Labels" {
 	Dialog.create("Ramp - Legend Options");
 		Dialog.addString("Ramp Parameter Label:", rampParameterLabel, 22);
 		Dialog.addString("Ramp Unit:", unitLabel, 5);
-		Dialog.addString("Ramp Range:", arrayMin + "-" + arrayMax, 11);
+		Dialog.addString("Ramp Range:", rampMin + "-" + rampMax, 11);
 		Dialog.setInsets(-35, 248, 0);
 		Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
-		Dialog.addString("Color Coded Range:", arrayMin + "-" + arrayMax, 11);
+		Dialog.addString("Color Coded Range:", rampMin + "-" + rampMax, 11);
 		Dialog.setInsets(-35, 248, 0);
 		Dialog.addMessage("Full: " + arrayMin + "-" + arrayMax);
-		Dialog.addNumber("No. of intervals:", 10, 0, 3, "Defines major ticks/label spacing");
+		Dialog.addNumber("No. of intervals:", numIntervals, 0, 3, "Defines major ticks/label spacing");
 		Dialog.addNumber("Minor tick intervals:", 5, 0, 3, "5 would add 4 ticks between labels ");
 		Dialog.addChoice("Decimal places:", newArray(dP, "Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), dP);
 		Dialog.addChoice("LUT height \(pxls\):", newArray(rampH, 128, 256, 512, 1024, 2048, 4096), rampH);
@@ -344,8 +397,8 @@ macro "Line Color Coder with Labels" {
 	lineColors = loadLutColors(lut);/* load the LUT as a hexColor array: requires function */
 	/* continue the legend design */
 	if(lut!="Grays") run("RGB Color"); /* converts ramp to RGB if not using grays only */
-	setColor(0, 0, 0);
-	setBackgroundColor(255, 255, 255);
+	Color.set("black");
+	Color.setBackground("white");
 	setFont(fontName, fontSize, fontStyle);
 	setLineWidth(rampLW*2);
 	if (ticks) {
@@ -476,17 +529,17 @@ macro "Line Color Coder with Labels" {
 		run("Select None");
 		getSelectionFromMask("label_mask");
 		if (rampOutlineStroke>0) run("Enlarge...", "enlarge=&rampOutlineStroke pixel");
-		setBackgroundFromColorName("black"); /* functionoutlineColor]") */
+		Color.setBackground("black");
 		run("Clear");
 		run("Select None");
 		getSelectionFromMask("label_mask");
-		setBackgroundFromColorName("white");
+		Color.setBackground("white");
 		run("Clear");
 		run("Select None");
 		closeImageByTitle("label_mask");
 		/* reset colors and font */
 		setFont(fontName, fontSize, fontStyle);
-		setColor(0,0,0);
+		Color.set("black");
 	}
 	/*
 	parse symbols in unit and draw final label below ramp */
@@ -602,10 +655,11 @@ macro "Line Color Coder with Labels" {
 		else comboChoice = Array.concat(comboChoice,comboChoiceCurrent,comboChoiceCropNewSelection); /* close enough */
 		if (restrictLines!="No") {
 			comboChoice = Array.concat(comboChoice,comboChoiceCropped,comboChoiceCropNewSelection);
-			Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[4]);
-		}else Dialog.addChoice("Combine labeled image and legend?", comboChoice, comboChoice[2]);
+			Dialog.addRadioButtonGroup("Combine labeled image and legend?",comboChoice,comboChoice.length,1, comboChoice[4]);
+		}
+		else Dialog.addRadioButtonGroup("Combine labeled image and legend?",comboChoice,comboChoice.length,1, comboChoice[2]);
 	Dialog.show();
-		createCombo = Dialog.getChoice();
+		createCombo = Dialog.getRadioButton();
 	if (createCombo!="No") {
 		comboImage = "temp_combo";
 		rampScale =  getHeight()/canvasH; /* default to no scale */
@@ -955,6 +1009,7 @@ macro "Line Color Coder with Labels" {
 		v210715 fixes lengthOf(tableList) error
 		REQUIRES restoreExit and therefore saveSettings
 		v230804: Requires v230804 version of getResultsTableList
+		v230905: Fixed unnecessary log output.
 		*/
 		funcL = "checkForAnyResults_v230804";
 		if ((nResults==0) && ((getValue("results.count"))==0)){
@@ -965,7 +1020,7 @@ macro "Line Color Coder with Labels" {
 				Dialog.addRadioButtonGroup("Do you want to: ", newArray("Open New Table", "Exit"), 1, 2, "Exit");
 				Dialog.show();
 				tableDecision = Dialog.getRadioButton();
-				if (tableDecision=="Exit") restoreExit("GoodBye");
+				if (tableDecision=="Exit") restoreExit("");
 				else open();
 				tableList = getResultsTableList(true);
 			}
@@ -974,17 +1029,20 @@ macro "Line Color Coder with Labels" {
 			Dialog.addChoice("Select Table to Activate", tableList,1);
 			Dialog.show();
 			tableUsed = Dialog.getChoice;
-			if (tableUsed=="none - exit") restoreExit("Goodbye");
+			if (tableUsed=="none - exit") restoreExit("");
 			activateIsOn = "true";
 			restoreResultsFrom(tableUsed);
 		}
-		if ((getValue("results.count"))!=nResults && nResults!=0) {
+		nGVResults = getValue("results.count");
+		nRes = nResults;
+		if (nGVResults!=nRes && nRes!=0) {
 			Dialog.create("Results Checker: " + funcL);
 			Dialog.addMessage();
-			Dialog.addRadioButtonGroup("There are more than one tables open; how do you want to proceed?", newArray("Swap Results with Other Table", "Close Results Table and Exit", "Exit"), 1, 3, "Swap Results with Other Table");
+			tableChoices = newArray("Swap Results with Other Table", "Close Results Table and Exit", "Exit");
+			Dialog.addRadioButtonGroup("There are more than one tables open; how do you want to proceed?", tableChoices, 1, 3, "Swap Results with Other Table");
 			Dialog.show();
 			next = Dialog.getRadioButton;
-			if (next=="Exit") restoreExit("Your have selected \"Exit\", Goodbye");
+			if (next=="Exit") restoreExit("");
 			else if (next=="Close Results Table and Exit") {
 				closeNonImageByTitle("Results");
 				restoreExit("Your have selected \"Exit\", perhaps now change name of your table to \"Results\"");
@@ -1070,7 +1128,7 @@ macro "Line Color Coder with Labels" {
 			Dialog.show();
 			rescaleChoice = Dialog.getRadioButton;
 			if (rescaleChoice==rescaleChoices[0]) run("Set Scale...");
-			else if (rescaleChoice==rescaleChoices[2]) restoreExit("Goodbye");
+			else if (rescaleChoice==rescaleChoices[2]) restoreExit("");
 		}
 	}
 	function cleanLabel(string) {
@@ -1194,78 +1252,6 @@ macro "Line Color Coder with Labels" {
 		return outputArray;
 	}
 		/* ASC mod BAR Color Functions */
-	function getColorArrayFromColorName(colorName) {
-		/* v180828 added Fluorescent Colors
-		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
-		   v191211 added Cyan
-		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
-		   REQUIRES restoreExit function.  57 Colors
-		*/
-		if (colorName == "white") cA = newArray(255,255,255);
-		else if (colorName == "black") cA = newArray(0,0,0);
-		else if (colorName == "off-white") cA = newArray(245,245,245);
-		else if (colorName == "off-black") cA = newArray(10,10,10);
-		else if (colorName == "light_gray") cA = newArray(200,200,200);
-		else if (colorName == "gray") cA = newArray(127,127,127);
-		else if (colorName == "dark_gray") cA = newArray(51,51,51);
-		else if (colorName == "off-black") cA = newArray(10,10,10);
-		else if (colorName == "light_gray") cA = newArray(200,200,200);
-		else if (colorName == "gray") cA = newArray(127,127,127);
-		else if (colorName == "dark_gray") cA = newArray(51,51,51);
-		else if (colorName == "red") cA = newArray(255,0,0);
-		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
-		else if (colorName == "blue") cA = newArray(0,0,255);
-		else if (colorName == "cyan") cA = newArray(0, 255, 255);
-		else if (colorName == "yellow") cA = newArray(255,255,0);
-		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
-		else if (colorName == "pink") cA = newArray(255, 192, 203);
-		else if (colorName == "violet") cA = newArray(127,0,255);
-		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120,47,64);
-		else if (colorName == "gold") cA = newArray(206,184,136);
-		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
-		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
-		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
-		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
-		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu Blue #006db0 */
-		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
-		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
-		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
-		else if (colorName == "green_modern_accent") cA = newArray(214,228,187); /* #D6E4BB AKA "Gin" */
-		else if (colorName == "green_spring_accent") cA = newArray(0,255,102); /* #00FF66 AKA "Spring Green" */
-		else if (colorName == "orange_modern") cA = newArray(247,150,70); /* #f79646 tan hide, light orange */
-		else if (colorName == "pink_modern") cA = newArray(255,105,180); /* hot pink #ff69b4 */
-		else if (colorName == "purple_modern") cA = newArray(128,100,162); /* blue-magenta, purple paradise #8064A2 */
-		else if (colorName == "jazzberry_jam") cA = newArray(165,11,94);
-		else if (colorName == "red_n_modern") cA = newArray(227,24,55);
-		else if (colorName == "red_modern") cA = newArray(192,80,77);
-		else if (colorName == "tan_modern") cA = newArray(238,236,225);
-		else if (colorName == "violet_modern") cA = newArray(76,65,132);
-		else if (colorName == "yellow_modern") cA = newArray(247,238,69);
-		/* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp */
-		else if (colorName == "radical_red") cA = newArray(255,53,94);			/* #FF355E */
-		else if (colorName == "wild_watermelon") cA = newArray(253,91,120);		/* #FD5B78 */
-		else if (colorName == "outrageous_orange") cA = newArray(255,96,55);	/* #FF6037 */
-		else if (colorName == "supernova_orange") cA = newArray(255,191,63);	/* FFBF3F Supernova Neon Orange*/
-		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
-		else if (colorName == "neon_carrot") cA = newArray(255,153,51);			/* #FF9933 */
-		else if (colorName == "sunglow") cA = newArray(255,204,51); 			/* #FFCC33 */
-		else if (colorName == "laser_lemon") cA = newArray(255,255,102); 		/* #FFFF66 "Unmellow Yellow" */
-		else if (colorName == "electric_lime") cA = newArray(204,255,0); 		/* #CCFF00 */
-		else if (colorName == "screamin'_green") cA = newArray(102,255,102); 	/* #66FF66 */
-		else if (colorName == "magic_mint") cA = newArray(170,240,209); 		/* #AAF0D1 */
-		else if (colorName == "blizzard_blue") cA = newArray(80,191,230); 		/* #50BFE6 Malibu */
-		else if (colorName == "dodger_blue") cA = newArray(9,159,255);			/* #099FFF Dodger Neon Blue */
-		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
-		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); 	/* #EE34D2 */
-		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
-		else restoreExit("No color match to " + colorName);
-		return cA;
-	}
-	function setBackgroundFromColorName(colorName) {
-		colorArray = getColorArrayFromColorName(colorName);
-		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
-	}
 	function pad(n) {
 	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
 	  if (lengthOf(n)==1) n= "0"+n; return n;
@@ -1366,16 +1352,17 @@ macro "Line Color Coder with Labels" {
 			IJ.renameResults(deactivatedResults);
 		}
 	}
-	function indexOfArray(array,string, default) {
-		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first instance of string */
-		index = default;
+	function indexOfArray(array, value, default) {
+		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first found value
+			v230902 Limits default value to array size */
+		index = minOf(lengthOf(array) - 1, default);
 		for (i=0; i<lengthOf(array); i++){
-			if (array[i]==string) {
+			if (array[i]==value) {
 				index = i;
 				i = lengthOf(array);
 			}
 		}
-		return index;
+	  return index;
 	}
 	function indexOfArrayThatContains(array, value) {
 		/* Like indexOfArray but partial matches possible
@@ -1389,12 +1376,29 @@ macro "Line Color Coder with Labels" {
 		}
 		return indexFound;
 	}
+	function isIntegerArray(array){
+	/* 	v230905: 1st version PJL  */
+		isInteger = true;
+		arrayN = array.length;
+		for (i=0; i<arrayN; i++) if (array[i]!=round(array[i])) isInteger = false;
+		return isInteger;
+	}
 	function memFlush(waitTime) {
 		run("Reset...", "reset=[Undo Buffer]");
 		wait(waitTime);
 		run("Reset...", "reset=[Locked Image]");
 		wait(waitTime);
 		call("java.lang.System.gc"); /* force a garbage collection */
+	}
+	function rangeFinder(dataExtreme,max){
+	/*	For finding good end values for ramps and plot ranges.
+		v230824: 1st version  Peter J. Lee Applied Superconductivity Center FSU */
+		rangeExtremeStr = d2s(dataExtreme,-2);
+		if (max) rangeExtremeA = Math.ceil(10 * parseFloat(substring(rangeExtremeStr,0,indexOf(rangeExtremeStr,"E")))) / 10;
+		else rangeExtremeA = Math.floor(10 * parseFloat(substring(rangeExtremeStr,0,indexOf(rangeExtremeStr,"E")))) / 10;
+		rangeExtremeStrB = substring(rangeExtremeStr,indexOf(rangeExtremeStr,"E")+1);
+		rangeExtreme = parseFloat(rangeExtremeA + "E" + rangeExtremeStrB);
+		return rangeExtreme;
 	}
 	function removeTrailingZerosAndPeriod(string) {
 	/* Removes any trailing zeros after a period
@@ -1453,7 +1457,7 @@ macro "Line Color Coder with Labels" {
 		/*	Note: Do not use on path as it may change the directory names
 		v210924: Tries to make sure string stays as string
 		v211014: Adds some additional cleanup
-		v211025: fixes multiple knowns issue
+		v211025: fixes multiple 'known's issue
 		v211101: Added ".Ext_" removal
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
@@ -1462,6 +1466,7 @@ macro "Line Color Coder with Labels" {
 		v230505: Unwanted dupes replaced by unusefulCombos.
 		v230607: Quick fix for infinite loop on one of while statements.
 		v230614: Added AVI.
+		v230905: Better fix for infinite loop.
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -1488,9 +1493,9 @@ macro "Line Color Coder with Labels" {
 					if (iChanLabels>0){
 						preChan = substring(string,0,iChanLabels);
 						postChan = substring(string,iChanLabels);
-						while (indexOf(preChan,kExtn)>=0 && k<10){  /* k counter quick fix for infinite loop */
-							string = replace(preChan,kExtn,"") + postChan;
-							k++;
+						while (indexOf(preChan,kExtn)>=0){
+							preChan = replace(preChan,kExtn,"");
+							string =  preChan + postChan;
 						}
 					}
 				}
@@ -1560,7 +1565,7 @@ macro "Line Color Coder with Labels" {
 				i=-1; /* check again */
 			}
 		}
-		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
+		string = replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
 		/* cleanup suffixes */
 		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
 		extStart = lastIndexOf(string,".");
@@ -1589,23 +1594,26 @@ macro "Line Color Coder with Labels" {
 	}
 	function unitLabelFromString(string, imageUnit) {
 	/* v180404 added Feret_MinDAngle_Offset
-		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array
+		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array.
+		v220808 Replaces ° with fromCharCode(0x00B0).
+		v230109 Expand px to pixels. Simpify angleUnits.
 		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit unless it is the 0-90 degress setting */
 				unitLabel = stringUnit;
 			}
+			else if (indexOf(stringUnit,"0-90")<0 || indexOf(stringUnit,"0to90")<0) unitLabel = fromCharCode(0x00B0);
 			else {
 				unitLabel = "";
 			}
 		}
 		else {
 			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
-			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
+			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","0-90",fromCharCode(0x00B0),"0to90","degrees");
 			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
 			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
@@ -1613,6 +1621,37 @@ macro "Line Color Coder with Labels" {
 			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
+			if (indexOf(unitLabel,"px")>=0) unitLabel = "pixels";
 		}
 		return unitLabel;
+	}
+	function zapGremlins(inputString,lfRep,tabRep,nulRep,allElse){
+	/* v220803 Just https://wsr.imagej.net//macros/ZapGremlins.txt
+	 	Basic Latin decimal character numbers are listed here: https://en.wikipedia.org/wiki/List_of_Unicode_characters#Basic_Latin
+		v220812: chars 181 and 63 is mu and 176 is the degree symbol which seem too valuable to risk loosing: this version allows more latin extended symbols, adds allElse option for light pruning
+		v221207: Adds NUL character replacement
+		 */
+		requires("1.39f");
+		LF=10; TAB=9; NUL=0; /* Carriage return = 13 */
+		String.resetBuffer;
+		n = lengthOf(inputString);
+		for (i=0; i<n; i++) {
+			c = charCodeAt(inputString, i);
+			if (c==LF)
+				String.append(lfRep);
+			else if (c==TAB)
+				String.append(tabRep);
+			else if (c==NUL)
+				String.append(nulRep);
+			else if (c==63)
+				String.append(getInfo("micrometer.abbreviation"));
+			else if (c==197)
+				String.append(fromCharCode(0x212B)); /* Ångström */
+			else if (allElse)
+				String.append(fromCharCode(c));
+			else if ((c>=32 && c<=127) || (c>=176 && c<=186))
+				String.append(fromCharCode(c));
+		}
+		return String.buffer;
+		String.resetBuffer;
 	}

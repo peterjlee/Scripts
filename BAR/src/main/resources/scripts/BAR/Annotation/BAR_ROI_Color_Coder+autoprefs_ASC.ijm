@@ -25,10 +25,11 @@
 	+ v211025 updated functions  v211029 Added cividis.lut
 	+ v211103 Expanded expandLabels function
 	+ v211104: Updated stripKnownExtensionFromString function    v211112+v220616+v230505(f8)+060723(f10): Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
-	+ v230825:	Adds rangeFinder function. Intervals automatic.
+	+ v230825:	Adds rangeFinder function. Intervals automatic. f1: Updates indexOf functions.
+	+ v230905: Tweaked rangefinding and updated functions.
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230825.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -897,16 +898,17 @@ macro "ROI Color Coder with settings generated from data"{
 		lutsList=Array.concat(preferredLuts, defaultLuts);
 		return lutsList; /* Required to return new array */
 	}
-	function indexOfArray(array,string, default) {
-		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first instance of string */
-		index = default;
+	function indexOfArray(array, value, default) {
+		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first found value
+			v230902 Limits default value to array size */
+		index = minOf(lengthOf(array) - 1, default);
 		for (i=0; i<lengthOf(array); i++){
-			if (array[i]==string) {
+			if (array[i]==value) {
 				index = i;
 				i = lengthOf(array);
 			}
 		}
-		return index;
+	  return index;
 	}
 	function loadLutColors(lut) {
 		run(lut);
@@ -937,7 +939,7 @@ macro "ROI Color Coder with settings generated from data"{
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
-		function rangeFinder(dataExtreme,max){
+	function rangeFinder(dataExtreme,max){
 	/*	For finding good end values for ramps and plot ranges.
 		v230824: 1st version  Peter J. Lee Applied Superconductivity Center FSU */
 		rangeExtremeStr = d2s(dataExtreme,-2);
@@ -964,11 +966,11 @@ macro "ROI Color Coder with settings generated from data"{
 		resetThreshold();
 		if(is("Inverting LUT")) run("Invert LUT");
 	}
-	function stripKnownExtensionFromString(string) {
+		function stripKnownExtensionFromString(string) {
 		/*	Note: Do not use on path as it may change the directory names
 		v210924: Tries to make sure string stays as string
 		v211014: Adds some additional cleanup
-		v211025: fixes multiple knowns issue
+		v211025: fixes multiple 'known's issue
 		v211101: Added ".Ext_" removal
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
@@ -977,6 +979,7 @@ macro "ROI Color Coder with settings generated from data"{
 		v230505: Unwanted dupes replaced by unusefulCombos.
 		v230607: Quick fix for infinite loop on one of while statements.
 		v230614: Added AVI.
+		v230905: Better fix for infinite loop.
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -1003,9 +1006,9 @@ macro "ROI Color Coder with settings generated from data"{
 					if (iChanLabels>0){
 						preChan = substring(string,0,iChanLabels);
 						postChan = substring(string,iChanLabels);
-						while (indexOf(preChan,kExtn)>=0 && k<10){  /* k counter quick fix for infinite loop */
-							string = replace(preChan,kExtn,"") + postChan;
-							k++;
+						while (indexOf(preChan,kExtn)>=0){
+							preChan = replace(preChan,kExtn,"");
+							string =  preChan + postChan;
 						}
 					}
 				}

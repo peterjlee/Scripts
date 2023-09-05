@@ -12,10 +12,11 @@
 	v230803: Replaced getDir for 1.54g10.
 	v230822: Corrected selectImage to selectWindow. Removes duplicates from image list. f1: Updated function removeDuplicatesInArray.
 	v230823: Guesses appropriate legend range and major intervals. Fixed prefs set error that opened console. Added more saved prefs.
-	v230824-5: Added 'rangeFinder' function. Colors added dialogs to highlight instructions vs. info. vs. warnings. v230825b: Simplified output options.
+	v230824-5: Added 'rangeFinder' function. Colors added dialogs to highlight instructions vs. info. vs. warnings. v230825b: Simplified output options. f1: Updates indexOf functions.
+	v230905: Tweaked range-finding and updated functions.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230825b.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230905.ijm";
 	macroV = substring(macroL,lastIndexOf(macroL,"_v") + 2,maxOf(lastIndexOf(macroL,"."),lastIndexOf(macroL,"_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows */
@@ -242,7 +243,10 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	intStr = d2s(rampRange,-1);
 	intStr = substring(intStr,0,indexOf(intStr,"E"));
 	numIntervals =  parseFloat(intStr);
-	if (numIntervals>4) numIntervals = Math.ceil(numIntervals);
+	if (numIntervals>4){
+		if (endsWith(d2s(numIntervals,3),".500")) numIntervals *= 2;
+		numIntervals = Math.ceil(numIntervals);	
+	}
 	else if (numIntervals<2) numIntervals = Math.ceil(10 * numIntervals);
 	else numIntervals = Math.ceil(5 * numIntervals);
 	 /* Just in case parameter still has units appended... */
@@ -2621,21 +2625,23 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		}
 		return medianVals;
 	}
-	function indexOfArray(array,string, default) {
-		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first instance of string */
-		index = default;
+	function indexOfArray(array, value, default) {
+		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first found value
+			v230902 Limits default value to array size */
+		index = minOf(lengthOf(array) - 1, default);
 		for (i=0; i<lengthOf(array); i++){
-			if (array[i]==string) {
+			if (array[i]==value) {
 				index = i;
 				i = lengthOf(array);
 			}
 		}
-		return index;
+	  return index;
 	}
 	function indexOfArrayThatStartsWith(array, value, default) {
 		/* Like indexOfArray but partial matches possible
-			v220804 1st version */
-		indexFound = default;
+			v220804 1st version
+			v230902 Limits default value to array size */
+		indexFound = minOf(lengthOf(array) - 1, default);
 		for (i=0; i<lengthOf(array); i++){
 			if (indexOf(array[i], value)==0){
 				indexFound = i;
@@ -2747,7 +2753,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		/*	Note: Do not use on path as it may change the directory names
 		v210924: Tries to make sure string stays as string
 		v211014: Adds some additional cleanup
-		v211025: fixes multiple knowns issue
+		v211025: fixes multiple 'known's issue
 		v211101: Added ".Ext_" removal
 		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
 		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
@@ -2756,6 +2762,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		v230505: Unwanted dupes replaced by unusefulCombos.
 		v230607: Quick fix for infinite loop on one of while statements.
 		v230614: Added AVI.
+		v230905: Better fix for infinite loop.
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -2782,9 +2789,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					if (iChanLabels>0){
 						preChan = substring(string,0,iChanLabels);
 						postChan = substring(string,iChanLabels);
-						while (indexOf(preChan,kExtn)>=0 && k<10){  /* k counter quick fix for infinite loop */
-							string = replace(preChan,kExtn,"") + postChan;
-							k++;
+						while (indexOf(preChan,kExtn)>=0){
+							preChan = replace(preChan,kExtn,"");
+							string =  preChan + postChan;
 						}
 					}
 				}

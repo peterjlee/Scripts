@@ -26,7 +26,7 @@
 	+ v211103 Expanded expandLabels function
 	+ v211104: Updated stripKnownExtensionFromString function    v211112+v220616+v230505(f8)+060723(f10): Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
 	+ v230825:	Adds rangeFinder function. Intervals automatic. f1: Updates indexOf functions.
-	+ v230905: Tweaked rangefinding and updated functions.
+	+ v230905: Tweaked rangefinding and updated functions. F1: updated functions.
 */
 macro "ROI Color Coder with settings generated from data"{
 	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905.ijm";
@@ -178,27 +178,31 @@ macro "ROI Color Coder with settings generated from data"{
 			values[i] = getResult(parameter,i);
 	}
 	else for (i=0; i<items; i++) values[i] = i+1;
-	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD); 
-	coeffVar = arraySD*100/arrayMean;
+	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	arrayRange = arrayMax-arrayMin;
-	if (isNaN(rampMin)){
-		rampMin= arrayMin; /* i.e. auto */
-		rampMin = rangeFinder(rampMin,false);
-	} 
-	if (isNaN(rampMax)){
-		rampMax= arrayMax; /* i.e. auto */
-		rampMax = rangeFinder(rampMax,true);
-	}
+	rampMin = arrayMin;
+	rampMax = arrayMax;
+	rampMax = rangeFinder(rampMax,true);
+	rampMin = rangeFinder(rampMin,false);
 	rampRange = rampMax - rampMin;
-	if (isNaN(numIntervals)){
-		intStr = d2s(rampRange,-1);
-		intStr = substring(intStr,0,indexOf(intStr,"E"));
-		numIntervals =  parseFloat(intStr);
-		if (numIntervals>4) numIntervals = Math.ceil(numIntervals);
-		else if (numIntervals<2) numIntervals = Math.ceil(10 * numIntervals);
-		else numIntervals = Math.ceil(5 * numIntervals);
+	if (rampMin<0.05 * rampRange){
+		rampMin = 0;
+		rampRange = rampMax;
 	}
-	else numIntervals = parseInt(numIntervals);
+	intStr = d2s(rampRange,-1);
+	intStr = substring(intStr,0,indexOf(intStr,"E"));
+	numIntervals =  parseFloat(intStr);
+	if (numIntervals>4){
+		if (endsWith(d2s(numIntervals,3),".500")) numIntervals = round(numIntervals * 2);
+	}
+	else if (numIntervals>=2){
+		if (endsWith(d2s(numIntervals,3),"00")){
+			if (endsWith(d2s(numIntervals * 5,3),"000")) numIntervals = round(numIntervals * 5);
+			else numIntervals = round(numIntervals * 10);
+		}
+	}
+	else if (numIntervals<2) numIntervals = Math.ceil(10 * numIntervals);
+	else numIntervals = Math.ceil(5 * numIntervals);
 	rampRange = rampMax - rampMin;
 	numLabels= numIntervals + 1;
 	sortedValues = Array.copy(values);
@@ -537,6 +541,7 @@ macro "ROI Color Coder with settings generated from data"{
 	call("java.lang.System.gc"); 
 	showStatus(macroL + " macro finished");
 	beep(); wait(300); beep(); wait(300); beep();
+	/* End of ROI Color Coder with autoprefs */
 }
 /*
 			( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
@@ -599,23 +604,38 @@ macro "ROI Color Coder with settings generated from data"{
 		return pluginCheck;
 	}
 	function checkForResults() {
+		/* v220706 More friendly to Results tables not called "Results" */
 		nROIs = roiManager("count");
+		tSize = Table.size;
+		if (tSize>0) oTableTitle = Table.title;
 		nRes = nResults;
-		if (nRes==0)	{
+		if (nRes==0 && tSize>0){
+			oTableTitle = Table.title;
+			renameTable = getBoolean("There is no Results table but " + oTableTitle + "has " + tSize + "rows:", "Rename to Results", "No, I will take may chances");
+			if (renameTable) {
+				Table.rename(oTableTitle, "Results");
+				nRes = nResults;
+			}
+		}
+		if (getInfo("window.type")!="ResultsTable" && nRes<=0)	{
 			Dialog.create("No Results to Work With");
-			Dialog.addCheckbox("Run Analyze-particles to generate table?", true);
-			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are   " + nRes +"   results.\nThere are    " + nROIs +"   ROIs.");
+			Dialog.addMessage("This macro requires a Results table to analyze.\n \nThere are " + nRes +" results.\nThere are " + nROIs +" ROIs.");
+			Dialog.addRadioButtonGroup("No Results to Work With:",newArray("Run Analyze-particles to generate table","Import Results table","Exit"),2,1,"Run Analyze-particles to generate table");
 			Dialog.show();
-			analyzeNow = Dialog.getCheckbox(); /* If (analyzeNow==true), ImageJ Analyze Particles will be performed, otherwise exit */
-			if (analyzeNow==true) {
+			actionChoice = Dialog.getRadioButton();
+			if (actionChoice=="Exit") restoreExit("Goodbye, your previous setting will be restored.");
+			else if (actionChoice=="Run Analyze-particles to generate table"){
 				if (roiManager("count")!=0) {
 					roiManager("deselect")
-					roiManager("delete"); 
+					roiManager("delete");
 				}
 				setOption("BlackBackground", false);
 				run("Analyze Particles..."); /* Let user select settings */
 			}
-			else restoreExit("Goodbye, your previous setting will be restored.");
+			else {
+				open(File.openDialog("Select a Results Table to import"));
+				Table.rename(Table.title, "Results");
+			}
 		}
 	}
 	function checkForRoiManager() {
@@ -623,50 +643,89 @@ macro "ROI Color Coder with settings generated from data"{
 			v180104 only asks about ROIs if there is a mismatch with the results
 			v190628 adds option to import saved ROI set
 			v210428	include thresholding if necessary and color check
+			v211108 Uses radio-button group.
 			NOTE: Requires ASC restoreExit function, which assumes that saveSettings has been run at the beginning of the macro
+			v220706: Table friendly version
+			v220816: Enforces non-inverted LUT as well as white background and fixes ROI-less analyze. Adds more dialog labeling.
+			v220823: Extended corner pixel test.
 			*/
-		functionL = "checkForRoiManager_v210428";
+		functionL = "checkForRoiManager_v220816";
 		nROIs = roiManager("count");
-		nRes = nResults; /* Used to check for ROIs:Results mismatch */
+		nRes = nResults;
+		tSize = Table.size;
+		if (nRes==0 && tSize>0){
+			oTableTitle = Table.title;
+			renameTable = getBoolean("There is no Results table but " + oTableTitle + "has " +tSize+ "rows:", "Rename to Results", "No, I will take may chances");
+			if (renameTable) {
+				Table.rename(oTableTitle, "Results");
+				nRes = nResults;
+			}
+		}
 		if(nROIs==0 || nROIs!=nRes){
-			Dialog.create("ROI options: " + functionL);
+			Dialog.create("ROI mismatch options: " + functionL);
 				Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRes +"   results.\nThere are   " + nROIs +"   ROIs.\nDo you want to:");
-				if(nROIs==0) Dialog.addCheckbox("Import a saved ROI list",false);
-				else Dialog.addCheckbox("Replace the current ROI list with a saved ROI list",false);
-				if(nRes==0) Dialog.addCheckbox("Import a Results Table \(csv\) file",false);
-				else Dialog.addCheckbox("Clear Results Table and import saved csv",false);
-				Dialog.addCheckbox("Clear ROI list and Results Table and reanalyze \(overrides above selections\)",true);
+				mismatchOptions = newArray();
+				if(nROIs==0) mismatchOptions = Array.concat(mismatchOptions,"Import a saved ROI list");
+				else mismatchOptions = Array.concat(mismatchOptions,"Replace the current ROI list with a saved ROI list");
+				if(nRes==0) mismatchOptions = Array.concat(mismatchOptions,"Import a Results Table \(csv\) file");
+				else mismatchOptions = Array.concat(mismatchOptions,"Clear Results Table and import saved csv");
+				mismatchOptions = Array.concat(mismatchOptions,"Clear ROI list and Results Table and reanalyze \(overrides above selections\)");
 				if (!is("binary")) Dialog.addMessage("The active image is not binary, so it may require thresholding before analysis");
-				Dialog.addCheckbox("Get me out of here, I am having second thoughts . . .",false);
+				mismatchOptions = Array.concat(mismatchOptions,"Get me out of here, I am having second thoughts . . .");
+				Dialog.addRadioButtonGroup("ROI mismatch; what would you like to do:_____", mismatchOptions, lengthOf(mismatchOptions), 1, mismatchOptions[0]);
 			Dialog.show();
-				importROI = Dialog.getCheckbox;
-				importResults = Dialog.getCheckbox;
-				runAnalyze = Dialog.getCheckbox;
-				if (Dialog.getCheckbox) restoreExit("Sorry this did not work out for you.");
-			if (runAnalyze) {
+				mOption = Dialog.getRadioButton();
+				if (startsWith(mOption,"Sorry")) restoreExit("Sorry this did not work out for you.");
+			if (startsWith(mOption,"Clear ROI list and Results Table and reanalyze")) {
 				if (!is("binary")){
 					if (is("grayscale") && bitDepth()>8){
-						proceed = getBoolean("Image is grayscale but not 8-bit, convert it to 8-bit?", "Convert for thresholding", "Get me out of here");
+						proceed = getBoolean(functionL + ": Image is grayscale but not 8-bit, convert it to 8-bit?", "Convert for thresholding", "Get me out of here");
 						if (proceed) run("8-bit");
-						else restoreExit("Goodbye, perhaps analyze first?");
+						else restoreExit(functionL + ": Goodbye, perhaps analyze first?");
 					}
 					if (bitDepth()==24){
-						colorThreshold = getBoolean("Active image is RGB, so analysis requires thresholding", "Color Threshold", "Convert to 8-bit and threshold");
+						colorThreshold = getBoolean(functionL + ": Active image is RGB, so analysis requires thresholding", "Color Threshold", "Convert to 8-bit and threshold");
 						if (colorThreshold) run("Color Threshold...");
 						else run("8-bit");
 					}
 					if (!is("binary")){
 						/* Quick-n-dirty threshold if not previously thresholded */
-						getThreshold(t1,t2);  
+						getThreshold(t1,t2);
 						if (t1==-1)  {
 							run("Auto Threshold", "method=Default");
 							setOption("BlackBackground", false);
 							run("Make Binary");
 						}
-						if (is("Inverting LUT"))  {
-							trueLUT = getBoolean("The LUT appears to be inverted, do you want the true LUT?", "Yes Please", "No Thanks");
-							if (trueLUT) run("Invert LUT");
+					}
+				}
+				if (is("Inverting LUT"))  run("Invert LUT");
+				/* Make sure black objects on white background for consistency */
+				if (bitDepth()!=24){
+					yMax = Image.height-1;	xMax = Image.width-1;
+					cornerPixels = newArray(getPixel(0,0),getPixel(1,1),getPixel(0,yMax),getPixel(xMax,0),getPixel(xMax,yMax),getPixel(xMax-1,yMax-1));
+					Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
+					if (cornerMax!=cornerMin){
+						actionOptions = newArray("Remove black edge objects","Invert, then remove black edge objects","Exit","Feeling lucky");
+						Dialog.create("Border pixel inconsistency");
+							Dialog.addMessage("cornerMax="+cornerMax+ " but cornerMin=" +cornerMin+ " and cornerMean = "+cornerMean+" problem with image border");
+							Dialog.addRadioButtonGroup("Actions:",actionOptions,actionOptions.length,1,"Remove black edge objects");
+						Dialog.show();
+							edgeAction = Dialog.getRadioButton();
+						if (edgeAction=="Exit") restoreExit();
+						else if (edgeAction=="Invert, then remove black edge objects"){
+							run("Invert");
+							removeBlackEdgeObjects();
 						}
+						else if (edgeAction=="Remove white edge objects, then invert"){
+							removeBlackEdgeObjects();
+							run("Invert");
+						} 
+					}
+					/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
+						i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
+					if (cornerMean<1 && cornerMean!=-1) {
+						inversion = getBoolean("The corner mean has an intensity of " + cornerMean + ", do you want the intensities inverted?", "Yes Please", "No Thanks");
+						if (inversion) run("Invert");
 					}
 				}
 				if (isOpen("ROI Manager"))	roiManager("reset");
@@ -675,25 +734,28 @@ macro "ROI Color Coder with settings generated from data"{
 					selectWindow("Results");
 					run("Close");
 				}
-				run("Analyze Particles..."); /* Let user select settings */
+				run("Analyze Particles...", "display clear include add");
+				nROIs = roiManager("count");
+				nRes = nResults;
 				if (nResults!=roiManager("count"))
-					restoreExit("Results and ROI Manager counts do not match!");
+					restoreExit(functionL + ": Results \(" +nRes+ "\) and ROI Manager \(" +nROIs+ "\) counts still do not match!");
 			}
 			else {
-				if (importROI) {
+				if (startsWith(mOption,"Import a saved ROI")) {
 					if (isOpen("ROI Manager"))	roiManager("reset");
-					msg = "Import ROI set \(zip file\), click \"OK\" to continue to file chooser";
+					msg = functionL + ": Import ROI set \(zip file\), click \"OK\" to continue to file chooser";
 					showMessage(msg);
-					roiManager("Open", "");
+					pathROI = File.openDialog(functionL + ": Select an ROI file set to import");
+                    roiManager("open", pathROI);
 				}
-				if (importResults){
+				if (startsWith(mOption,"Import a Results")){
 					if (isOpen("Results")) {
 						selectWindow("Results");
 						run("Close");
 					}
-					msg = "Import Results Table, click \"OK\" to continue to file chooser";
+					msg = functionL + ": Import Results Table: Click \"OK\" to continue to file chooser";
 					showMessage(msg);
-					open("");
+					open(File.openDialog(functionL + ": Select a Results Table to import"));
 					Table.rename(Table.title, "Results");
 				}
 			}
@@ -701,10 +763,10 @@ macro "ROI Color Coder with settings generated from data"{
 		nROIs = roiManager("count");
 		nRes = nResults; /* Used to check for ROIs:Results mismatch */
 		if(nROIs==0 || nROIs!=nRes)
-			restoreExit("Goodbye, your previous setting will be restored.");
+			restoreExit(functionL + ": Goodbye, there are " + nROIs + " ROIs and " + nRes + " results; your previous settings will be restored.");
 		return roiManager("count"); /* Returns the new count of entries */
 	}
-	function checkForUnits() {  /* Generic version 
+	function checkForUnits() {  /* Generic version
 		/* v161108 (adds inches to possible reasons for checking calibration)
 		 v170914 Radio dialog with more information displayed
 		 v200925 looks for pixels unit too; v210428 just adds function label */
@@ -724,7 +786,8 @@ macro "ROI Color Coder with settings generated from data"{
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
+		v220630 added degrees v220812 Changed Ångström unit code */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
@@ -736,15 +799,16 @@ macro "ROI Color Coder with settings generated from data"{
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(0x212B)); /* Ångström unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -854,37 +918,36 @@ macro "ROI Color Coder with settings generated from data"{
 		return str;
 	}
   	function getFontChoiceList() {
-		/*	v180723 first version
-			v180828 Changed order of favorites
-			v190108 Longer list of favorites
-			v210429 Expandable array version
-		*/
+		/*	v180723 first version. v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization	*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Poppins Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black","Goldman Sans","Serif");
 		faveFontListCheck = newArray(faveFontList.length);
-		for (i=0, countF=0; i<faveFontList.length; i++) {
+		for (i=0,counter=0; i<faveFontList.length; i++) {
 			for (j=0; j<fontNameChoice.length; j++) {
 				if (faveFontList[i] == fontNameChoice[j]) {
-					faveFontListCheck[countF] = faveFontList[i];
-					countF++;
+					faveFontListCheck[counter] = faveFontList[i];
 					j = fontNameChoice.length;
+					counter++;
 				}
 			}
 		}
+		faveFontListCheck = Array.trim(faveFontListCheck, counter);
 		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
 		return fontNameChoice;
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
-			v210429 expandable array version   v211029 added cividis.lut */
+			v210430 expandable array version    v211029 added cividis.lut to LUT favorites v220113 added cividis-asc-linearlumin
+		*/
 		defaultLuts= getList("LUTs");
 		Array.sort(defaultLuts);
 		lutsDir = getDirectory("LUTs");
 		/* A list of frequently used LUTs for the top of the menu list . . . */
-		preferredLutsList = newArray("Your favorite LUTS here", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
+		preferredLutsList = newArray("Your favorite LUTS here", "cividis-asc-linearlumin", "cividis", "viridis-linearlumin", "silver-asc", "mpl-viridis", "mpl-plasma", "Glasbey", "Grays");
 		preferredLuts = newArray;
+		/* Filter preferredLutsList to make sure they are available . . . */
 		for (i=0, countL=0; i<preferredLutsList.length; i++) {
 			for (j=0; j<defaultLuts.length; j++) {
 				if (preferredLutsList[i] == defaultLuts[j]) {
@@ -894,7 +957,6 @@ macro "ROI Color Coder with settings generated from data"{
 				}
 			}
 		}
-		preferredLuts = Array.trim(preferredLuts, countL);
 		lutsList=Array.concat(preferredLuts, defaultLuts);
 		return lutsList; /* Required to return new array */
 	}
@@ -928,14 +990,17 @@ macro "ROI Color Coder with settings generated from data"{
 	/*
 	End of Color Functions 
 	*/
-	function getSelectionFromMask(selection_Mask){
+	function getSelectionFromMask(sel_M){
+		/* v220920 only inverts if full image selection */
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
-		tempTitle = getTitle();
-		selectWindow(selection_Mask);
+		tempID = getImageID();
+		selectWindow(sel_M);
 		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
-		run("Make Inverse");
-		selectWindow(tempTitle);
+		getSelectionBounds(gSelX,gSelY,gWidth,gHeight);
+		if(gSelX==0 && gSelY==0 && gWidth==Image.width && gHeight==Image.height)	run("Make Inverse");
+		run("Select None");
+		selectImage(tempID);
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
@@ -966,7 +1031,7 @@ macro "ROI Color Coder with settings generated from data"{
 		resetThreshold();
 		if(is("Inverting LUT")) run("Invert LUT");
 	}
-		function stripKnownExtensionFromString(string) {
+	function stripKnownExtensionFromString(string) {
 		/*	Note: Do not use on path as it may change the directory names
 		v210924: Tries to make sure string stays as string
 		v211014: Adds some additional cleanup
@@ -1048,25 +1113,25 @@ macro "ROI Color Coder with settings generated from data"{
 	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
 	*/
 		/* Remove bad characters */
-		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
-		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(181)+"m", "um"); /* micron units */
-		string= replace(string, getInfo("micrometer.abbreviation"), "um"); /* micron units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
-		string= replace(string, fromCharCode(0x212B), "Angstrom"); /* the other Ångström unit symbol */
-		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
-		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
-		string= replace(string, "%", "pc"); /* % causes issues with html listing */
-		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		string = string.replace(fromCharCode(178), "\\^2"); /* superscript 2 */
+		string = string.replace(fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(181)+"m", "um"); /* micron units */
+		string = string.replace(getInfo("micrometer.abbreviation"), "um"); /* micron units */
+		string = string.replace(fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string = string.replace(fromCharCode(0x212B), "Angstrom"); /* the other Ångström unit symbol */
+		string = string.replace(fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
+		string = string.replace(fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string = string.replace("%", "pc"); /* % causes issues with html listing */
+		string = string.replace(" ", "_"); /* Replace spaces - these can be a problem with image combination */
 		/* Remove duplicate strings */
 		unwantedDupes = newArray("8bit","8-bit","lzw");
 		for (i=0; i<lengthOf(unwantedDupes); i++){
 			iLast = lastIndexOf(string,unwantedDupes[i]);
 			iFirst = indexOf(string,unwantedDupes[i]);
 			if (iFirst!=iLast) {
-				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDupes[i]));
+				string = string.substring(0,iFirst) + string.substring(iFirst + lengthOf(unwantedDupes[i]));
 				i=-1; /* check again */
 			}
 		}
@@ -1074,11 +1139,11 @@ macro "ROI Color Coder with settings generated from data"{
 		for (i=0; i<lengthOf(unwantedDbls); i++){
 			iFirst = indexOf(string,unwantedDbls[i]);
 			if (iFirst>=0) {
-				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDbls[i])/2);
+				string = string.substring(0,iFirst) + string.substring(string,iFirst + lengthOf(unwantedDbls[i])/2);
 				i=-1; /* check again */
 			}
 		}
-		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
+		string = string.replace("_\\+", "\\+"); /* Clean up autofilenames */
 		/* cleanup suffixes */
 		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
 		extStart = lastIndexOf(string,".");
@@ -1107,23 +1172,26 @@ macro "ROI Color Coder with settings generated from data"{
 	}
 	function unitLabelFromString(string, imageUnit) {
 	/* v180404 added Feret_MinDAngle_Offset
-		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array
+		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array.
+		v220808 Replaces ° with fromCharCode(0x00B0).
+		v230109 Expand px to pixels. Simpify angleUnits.
 		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit unless it is the 0-90 degress setting */
 				unitLabel = stringUnit;
 			}
+			else if (indexOf(stringUnit,"0-90")<0 || indexOf(stringUnit,"0to90")<0) unitLabel = fromCharCode(0x00B0);
 			else {
 				unitLabel = "";
 			}
 		}
 		else {
 			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
-			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
+			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","0-90",fromCharCode(0x00B0),"0to90","degrees");
 			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
 			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
@@ -1131,6 +1199,7 @@ macro "ROI Color Coder with settings generated from data"{
 			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
+			if (indexOf(unitLabel,"px")>=0) unitLabel = "pixels";
 		}
 		return unitLabel;
 	}

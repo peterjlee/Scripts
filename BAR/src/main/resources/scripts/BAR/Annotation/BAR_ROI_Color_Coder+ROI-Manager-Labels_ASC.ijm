@@ -13,13 +13,14 @@
 	v230822: Corrected selectImage to selectWindow. Removes duplicates from image list. f1: Updated function removeDuplicatesInArray.
 	v230823: Guesses appropriate legend range and major intervals. Fixed prefs set error that opened console. Added more saved prefs.
 	v230824-5: Added 'rangeFinder' function. Colors added dialogs to highlight instructions vs. info. vs. warnings. v230825b: Simplified output options. f1: Updates indexOf functions.
-	v230905: Tweaked range-finding and updated functions.
+	v230905: Tweaked range-finding and updated functions. F1-2: Updated getColorArrayFromColorName_v230908.
+	v230911: Reverted to full data range for default LUT color mapping. Set allowable data range overflow of 0.5%. Restricted LUT range to be within ramp range. Fixed outlier range preferences. Add unit separator options.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v230905.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v230911.ijm";
 	macroV = substring(macroL,lastIndexOf(macroL,"_v") + 2,maxOf(lastIndexOf(macroL,"."),lastIndexOf(macroL,"_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
-	close("*Ramp"); /* cleanup: closes previous ramp windows */
+	close("*Ramp"); /* cleanup: closes previous ramp windows Note: Case insensitive */
 	call("java.lang.System.gc");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_plugins for autoCrop */
@@ -108,6 +109,7 @@ macro "ROI Color Coder with ROI Labels" {
 	sup2 = fromCharCode(178);
 	degreeChar = fromCharCode(0x00B0);
 	sigmaChar = fromCharCode(0x03C3);
+	geq = fromCharCode(0x2265);
 	ums = getInfo("micrometer.abbreviation");
 	colorChoicesStd = newArray("red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange", "violet");
 	colorChoicesMod = newArray("garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
@@ -226,12 +228,21 @@ macro "ROI Color Coder with ROI Labels" {
 	rampMax = rangeFinder(rampMax,true);
 	rampMin = rangeFinder(rampMin,false);
 	rampRange = rampMax - rampMin;
+	if (rampMin<0.05 * rampRange){
+		rampMin = 0;
+		rampRange = rampMax;
+	}
 	intStr = d2s(rampRange,-1);
 	intStr = substring(intStr,0,indexOf(intStr,"E"));
 	numIntervals =  parseFloat(intStr);
 	if (numIntervals>4){
-		if (endsWith(d2s(numIntervals,3),".500")) numIntervals *= 2;
-		numIntervals = Math.ceil(numIntervals);	
+		if (endsWith(d2s(numIntervals,3),".500")) numIntervals = round(numIntervals * 2);
+	}
+	else if (numIntervals>=2){
+		if (endsWith(d2s(numIntervals,3),"00")){
+			if (endsWith(d2s(numIntervals * 5,3),"000")) numIntervals = round(numIntervals * 5);
+			else numIntervals = round(numIntervals * 10);
+		}
 	}
 	else if (numIntervals<2) numIntervals = Math.ceil(10 * numIntervals);
 	else numIntervals = Math.ceil(5 * numIntervals);
@@ -263,14 +274,17 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.addChoice("Unit \("+unitLabel+"\) Label:", unitChoices, unitChoices[0]);
 		Dialog.setInsets(-38, 300, 0);
 		Dialog.addMessage("Default shown is based on\nthe selected parameter",infoFontSize,infoColor);
+		unitSeparators = newArray("\(unit\)",", unit","[unit]","{unit}");
+		iUnitSeparators = indexOfArray(unitSeparators, call("ij.Prefs.get", ascPrefsKey + "unitSeparator", "\(unit\)"),unitSeparators[0]);
+		Dialog.addChoice("Unit separator\(s\) in label:",unitSeparators,unitSeparators[iUnitSeparators]);
 		Dialog.setInsets(0, 20, 0);
 		Dialog.addMessage("Original data range:       "+arrayMin+"-"+arrayMax+" \(range = "+(arrayRange)+" "+dialogUnit+"\)",infoFontSize,infoColor);
 		Dialog.addString("Ramp data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 20);
-		Dialog.addString("LUT range \(n-n format\):", "same as ramp range", 20);
-		Dialog.setInsets(-7, 115, 7);
-		Dialog.addMessage("The LUT gradient will be remapped to this range.\nBeyond this range the top and bottom LUT colors will be applied",infoFontSize,instructionColor);
-		Dialog.setInsets(-35, 240, 0);
+		Dialog.setInsets(-20, 370, 0); /* top, left, bottom */
 		Dialog.addMessage("(e.g., 10-100)",infoFontSize,instructionColor);
+		Dialog.addString("LUT range \(n-n format\):", arrayMin+"-"+arrayMax, 20);
+		Dialog.setInsets(-7, 10, 7);
+		Dialog.addMessage("The LUT gradient will be remapped to this range \(limited by the ramp min and max\)\nBeyond this range the top and bottom LUT colors will be applied",infoFontSize,instructionColor);
 		Dialog.setInsets(-4, 120, 0);
 		Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
 		Dialog.addNumber("No. of major intervals:", numIntervals, 0, 3, "Major tick count will be +1 more than this");
@@ -279,8 +293,9 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.addChoice("Ramp height \(pixels\):", newArray(d2s(rampH,0), 128, 256, 512, 1024, 2048, 4096), rampH);
 		Dialog.setInsets(-38, 280, 0);
 		Dialog.addMessage(rampH + " pixels suggested\nby image height",infoFontSize,infoColor);
-		fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
-		Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
+		fontStyleChoice = newArray("bold", "italic", "bold italic", "unstyled");
+		iFontStyle = indexOfArray(fontStyleChoice, call("ij.Prefs.get",  ascPrefsKey + "rampFStyle","bold"),0);
+		Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[iFontStyle]);
 		fontNameChoice = getFontChoiceList();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
 		Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pixels");
@@ -305,6 +320,8 @@ macro "ROI Color Coder with ROI Labels" {
 		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
 		if (unitLabel=="None") unitLabel = "";
+		unitSeparator = Dialog.getChoice();
+		call("ij.Prefs.set",  ascPrefsKey + "unitSeparator",unitSeparator);
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		rangeLUT = Dialog.getString;
 		if (rangeLUT=="same as ramp range") rangeLUT = rangeS;
@@ -315,7 +332,9 @@ macro "ROI Color Coder with ROI Labels" {
 		dpChoice = Dialog.getChoice;
 		rampHChoice = parseInt(Dialog.getChoice);
 		fontStyle = Dialog.getChoice;
+		call("ij.Prefs.set",  ascPrefsKey + "rampFStyle",fontStyle);
 		if (fontStyle=="unstyled") fontStyle="";
+		fontStyle += " antialiased"; /* why not? */
 		fontName = Dialog.getChoice;
 		fontSize = Dialog.getNumber;
 		brdr = Dialog.getCheckbox;
@@ -349,12 +368,17 @@ macro "ROI Color Coder with ROI Labels" {
 	}
 	if (indexOf(rangeS, "-")==0) rampMin = 0 - rampMin; /* checks to see if rampMin is a negative value (lets hope the rampMax isn't). */
 	lutRange = split(rangeLUT, "-");
-	if (lengthOf(lutRange)==1) {
-		minLUT = NaN; maxLUT = parseFloat(lutRange[0]);
-	} else {
-		minLUT = parseFloat(lutRange[0]); maxLUT = parseFloat(lutRange[1]);
+	if (lengthOf(lutRange)==1){
+		minLUT = NaN;
+		maxLUT = parseFloat(lutRange[0]);
+	}else {
+		minLUT = parseFloat(lutRange[0]);
+		maxLUT = parseFloat(lutRange[1]);
 	}
 	if (indexOf(rangeLUT, "-")==0) minLUT = 0 - minLUT; /* checks to see if min is a negative value (lets hope the max isn't). */
+	/* Restrict LUT range to be within set ramp range: */
+	minLUT = maxOf(minLUT,rampMin);
+	maxLUT = minOf(maxLUT,rampMax);
 	fontSR2 = fontSize * thinLinesFontSTweak/100;
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
@@ -435,7 +459,6 @@ macro "ROI Color Coder with ROI Labels" {
 		run(lut);
 		/* modify lut if requested */
 		if (rangeLUT!=rangeS) { /* recode legend if LUT over restricted range */
-			if (minLUT<rampMin || maxLUT>rampMax) exit("Sorry, the LUT range must be the same or within the ramp range");
 			rampIncr = 255/rampRange;
 			maxLUTi = round((maxLUT-rampMin)*rampIncr);
 			minLUTi = round((minLUT-rampMin)*rampIncr);
@@ -531,23 +554,7 @@ macro "ROI Color Coder with ROI Labels" {
 		for (i=0,maxDP=0; i<numLabels; i++) {
 			rampLabel = rampMin + i * stepV;
 			rampLabelString[i] = d2s(rampLabel,decPlaces);
-		}
-		if (dpChoice=="Auto"){
-			/* Remove excess zeros from ramp labels but not if manually set
-			Note that this is not the broader range trimming of the
-			removeTrailingZerosAndPeriod function because it limits to one iteration.
-			*/
-			for (i=0; i<decPlaces; i++) {
-				for (j=0,countL=0; j<numLabels; j++){
-					iP = indexOf(rampLabelString[j], ".");
-					if (endsWith(rampLabelString[i],"0") && iP>0) countL++;
-				}
-				if (countL==numLabels){
-					for (j=0; j<numLabels; j++){
-						rampLabelString[j] = "" + remTZeroP(rampLabelString[j],2);
-					}
-				}
-			}
+			if (i!=0 && i!=numLabels-1) rampLabelString[i] = removeTrailingZerosAndPeriod(rampLabelString[i]);
 		}
 		/* clean up top and bottom labels are special cases even in non-auto mode */
 		while(indexOf(rampLabelString[0],".")>0 && endsWith(rampLabelString[0],"0"))
@@ -645,7 +652,7 @@ macro "ROI Color Coder with ROI Labels" {
 					drawLine(rampLW, plusSDPos[0], tickLR, plusSDPos[0]);
 					drawLine(rampW-1-tickLR, plusSDPos[0], rampW-rampLW-1, plusSDPos[0]);
 				}
-				else print("Warning: Mean not drawn on ramp as determined to be to be out of filled ramp range");
+				else IJ.log("Warning: Mean not drawn on ramp as determined to be to be out of filled ramp range");
 				lastDrawnPlusSDPos = plusSDPos[0];
 				sPLimit = lengthOf(rampMeanPlusSDFactors)-1; /* should be sIntervalsR but this was a voodoo fix for some issue here */
 				sMLimit = lengthOf(rampMeanMinusSDFactors)-1; /* should be sIntervalsR but this was a voodoo fix for some issue here */
@@ -740,7 +747,12 @@ macro "ROI Color Coder with ROI Labels" {
 			getDisplayedArea(null, null, canvasW, canvasH);
 			run("Rotate 90 Degrees Left");
 			canvasW = getHeight + round(2.5*fontSize);
-			if (rampUnitLabel!="") rampParameterLabel += ", " + rampUnitLabel;
+			if (rampUnitLabel!=""){
+				if (unitSeparator=="\(unit\)") rampParameterLabel += " \(" + rampUnitLabel + "\)";
+				else if (unitSeparator=="[unit]") rampParameterLabel += " [" + rampUnitLabel + "]";
+				else if (unitSeparator=="{unit}") rampParameterLabel += " {" + rampUnitLabel + "}";
+				else rampParameterLabel += ", " + rampUnitLabel;
+			}
 			run("Canvas Size...", "width="+canvasH+" height="+canvasW+" position=Bottom-Center");
 			if (rampParameterLabel!=""){
 				rampParLabL = getStringWidth(rampParameterLabel);
@@ -847,6 +859,7 @@ macro "ROI Color Coder with ROI Labels" {
 	}
 	rename(tN + "_" + parameter + "-coded");
 	tNC = getTitle();
+/* Image and Ramp combination dialog */
 	roiManager("Deselect");
 	run("Select None");
 	Dialog.create("Combine labeled image and color-code legend?");
@@ -901,7 +914,7 @@ macro "ROI Color Coder with ROI Labels" {
 		selectWindow(tNC);
 		wait(5);
 		Image.paste(imageWidth + maxOf(2,imageWidth/500),round((imageHeight-canvasH)/2));
-		rename(tNC + "+ramp");
+		rename(tNC + "+legend");
 		if ((imageDepth==8 && lut=="Grays") || is("grayscale")) run("8-bit"); /* restores gray if all gray settings */
 		closeImageByTitle(tR);
 	}
@@ -956,7 +969,7 @@ macro "ROI Color Coder with ROI Labels" {
 			v220510 Looks for both class and jar if no extension is given
 			v220818 Mystery issue fixed, no longer requires restoreExit	*/
 		pluginCheck = false;
-		if (getDirectory("plugins") == "") print("Failure to find any plugins!");
+		if (getDirectory("plugins") == "") IJ.log("Failure to find any plugins!");
 		else {
 			pluginDir = getDirectory("plugins");
 			if (lastIndexOf(pluginName,".")==pluginName.length-1) pluginName = substring(pluginName,0,pluginName.length-1);
@@ -1218,11 +1231,12 @@ macro "ROI Color Coder with ROI Labels" {
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
+		v220630 added degrees v220812 Changed Ångström unit code */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, "\\^-"+ fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-"+ fromCharCode(178), "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-"+fromCharCode(178), "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "\\^-1", "-" + fromCharCode(185)); /* superscript -1 */
@@ -1230,15 +1244,16 @@ macro "ROI Color Coder with ROI Labels" {
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(0x212B)); /* Ångström unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -1475,8 +1490,12 @@ macro "ROI Color Coder with ROI Labels" {
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
-		   REQUIRES restoreExit function.  57 Colors v230130 Added more descriptions and modified order
+		   v230130 Added more descriptions and modified order.
+		   v230908: Returns "white" array if not match is found and logs issues without exiting.
+		     57 Colors 
 		*/
+		functionL = "getColorArrayFromColorName_v230911";
+		cA = newArray(255,255,255); /* defaults to white */
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
 		else if (colorName == "off-white") cA = newArray(245,245,245);
@@ -1489,29 +1508,29 @@ macro "ROI Color Coder with ROI Labels" {
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "red") cA = newArray(255,0,0);
-		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
+		else if (colorName == "green") cA = newArray(0,255,0);					/* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0,0,255);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
 		else if (colorName == "yellow") cA = newArray(255,255,0);
-		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
+		else if (colorName == "magenta") cA = newArray(255,0,255);				/* #FF00FF */
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "violet") cA = newArray(127,0,255);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120,47,64); /* #782F40 */
-		else if (colorName == "gold") cA = newArray(206,184,136); /* #CEB888 */
-		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
+		else if (colorName == "garnet") cA = newArray(120,47,64);				/* #782F40 */
+		else if (colorName == "gold") cA = newArray(206,184,136);				/* #CEB888 */
+		else if (colorName == "aqua_modern") cA = newArray(75,172,198);		/* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
-		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
-		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu blue #006db0 */
-		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
-		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
-		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
-		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
+		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);	/* #1F497D */
+		else if (colorName == "blue_honolulu") cA = newArray(0,118,182);		/* Honolulu Blue #006db0 */
+		else if (colorName == "blue_modern") cA = newArray(58,93,174);			/* #3a5dae */
+		else if (colorName == "gray_modern") cA = newArray(83,86,90);			/* bright gray #53565A */
+		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);	/* Wasabi #798541 */
+		else if (colorName == "green_modern") cA = newArray(155,187,89);		/* #9bbb59 AKA "Chelsea Cucumber" */
 		else if (colorName == "green_modern_accent") cA = newArray(214,228,187); /* #D6E4BB AKA "Gin" */
-		else if (colorName == "green_spring_accent") cA = newArray(0,255,102); /* #00FF66 AKA "Spring Green" */
-		else if (colorName == "orange_modern") cA = newArray(247,150,70); 		/* #f79646 tan hide, light orange */
-		else if (colorName == "pink_modern") cA = newArray(255,105,180); 		/* hot pink #ff69b4 */
-		else if (colorName == "purple_modern") cA = newArray(128,100,162); 	/* blue-magenta, purple paradise #8064A2 */
+		else if (colorName == "green_spring_accent") cA = newArray(0,255,102);	/* #00FF66 AKA "Spring Green" */
+		else if (colorName == "orange_modern") cA = newArray(247,150,70);		/* #f79646 tan hide, light orange */
+		else if (colorName == "pink_modern") cA = newArray(255,105,180);		/* hot pink #ff69b4 */
+		else if (colorName == "purple_modern") cA = newArray(128,100,162);		/* blue-magenta, purple paradise #8064A2 */
 		else if (colorName == "jazzberry_jam") cA = newArray(165,11,94);
 		else if (colorName == "red_n_modern") cA = newArray(227,24,55);
 		else if (colorName == "red_modern") cA = newArray(192,80,77);
@@ -1522,20 +1541,20 @@ macro "ROI Color Coder with ROI Labels" {
 		else if (colorName == "radical_red") cA = newArray(255,53,94);			/* #FF355E */
 		else if (colorName == "wild_watermelon") cA = newArray(253,91,120);	/* #FD5B78 */
 		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
-		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); /* #EE34D2 */
+		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210);	/* #EE34D2 */
 		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		else if (colorName == "outrageous_orange") cA = newArray(255,96,55);	/* #FF6037 */
 		else if (colorName == "supernova_orange") cA = newArray(255,191,63);	/* FFBF3F Supernova Neon Orange*/
-		else if (colorName == "sunglow") cA = newArray(255,204,51); 			/* #FFCC33 */
+		else if (colorName == "sunglow") cA = newArray(255,204,51);			/* #FFCC33 */
 		else if (colorName == "neon_carrot") cA = newArray(255,153,51);		/* #FF9933 */
-		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 - AKA Ultra yellow,  complimentary to Honolulu blue */
-		else if (colorName == "laser_lemon") cA = newArray(255,255,102); 		/* #FFFF66 "Unmellow Yellow" */
-		else if (colorName == "electric_lime") cA = newArray(204,255,0); 		/* #CCFF00 */
-		else if (colorName == "screamin'_green") cA = newArray(102,255,102); 	/* #66FF66 */
-		else if (colorName == "magic_mint") cA = newArray(170,240,209); 		/* #AAF0D1 */
-		else if (colorName == "blizzard_blue") cA = newArray(80,191,230); 		/* #50BFE6 Malibu */
+		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
+		else if (colorName == "laser_lemon") cA = newArray(255,255,102);		/* #FFFF66 "Unmellow Yellow" */
+		else if (colorName == "electric_lime") cA = newArray(204,255,0);		/* #CCFF00 */
+		else if (colorName == "screamin'_green") cA = newArray(102,255,102);	/* #66FF66 */
+		else if (colorName == "magic_mint") cA = newArray(170,240,209);		/* #AAF0D1 */
+		else if (colorName == "blizzard_blue") cA = newArray(80,191,230);		/* #50BFE6 Malibu */
 		else if (colorName == "dodger_blue") cA = newArray(9,159,255);			/* #099FFF Dodger Neon Blue */
-		else restoreExit("No color match to " + colorName);
+		else IJ.log(colorName + " not found in " + functionL + ": Color defaulted to white");
 		return cA;
 	}
 	function setBackgroundFromColorName(colorName) {
@@ -1556,7 +1575,7 @@ macro "ROI Color Coder with ROI Labels" {
 	  if (lengthOf(n)==1) n= "0"+n; return n;
 	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
-	function getHexColorFromRGBArray(colorNameString) {
+	function getHexColorFromColorName(colorNameString) {
 		colorArray = getColorArrayFromColorName(colorNameString);
 		 r = toHex(colorArray[0]); g = toHex(colorArray[1]); b = toHex(colorArray[2]);
 		 hexName= "#" + ""+pad(r) + ""+pad(g) + ""+pad(b);
@@ -1598,11 +1617,11 @@ macro "ROI Color Coder with ROI Labels" {
 	End of ASC mod BAR Color Functions
 	*/
   	function getFontChoiceList() {
-		/*	v180723 first version, v180828 Changed order of favorites, v190108 Longer list of favorites, v230209 Minor optimization	*/
+		/*	v180723 first version. v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization	*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Poppins Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black","Goldman Sans","Serif");
 		faveFontListCheck = newArray(faveFontList.length);
 		for (i=0,counter=0; i<faveFontList.length; i++) {
 			for (j=0; j<fontNameChoice.length; j++) {
@@ -1801,7 +1820,7 @@ macro "ROI Color Coder with ROI Labels" {
 		resetThreshold();
 		if(is("Inverting LUT")) run("Invert LUT");
 	}
-		function stripKnownExtensionFromString(string) {
+	function stripKnownExtensionFromString(string) {
 		/*	Note: Do not use on path as it may change the directory names
 		v210924: Tries to make sure string stays as string
 		v211014: Adds some additional cleanup

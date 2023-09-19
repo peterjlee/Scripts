@@ -14,13 +14,14 @@
 	v230823: Guesses appropriate legend range and major intervals. Fixed prefs set error that opened console. Added more saved prefs.
 	v230824-5: Added 'rangeFinder' function. Colors added dialogs to highlight instructions vs. info. vs. warnings. v230825b: Simplified output options. f1: Updates indexOf functions.
 	v230905: Tweaked range-finding and updated functions. F1-2: Updated getColorArrayFromColorName_v230908.
-	v230911: Reverted to full data range for default LUT color mapping. Set allowable data range overflow of 0.5%. Restricted LUT range to be within ramp range. Fixed outlier range preferences. Add unit separator options.
+	v230911-15b: Restricted LUT range to be within ramp range. Fixed outlier range preferences. Add unit separator options.
+	v230916: Most parameters now saved in user prefs. Streamlined trailing zeros detection for legend.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v230911.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v230916-f1.ijm";
 	macroV = substring(macroL,lastIndexOf(macroL,"_v") + 2,maxOf(lastIndexOf(macroL,"."),lastIndexOf(macroL,"_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
-	close("*Ramp"); /* cleanup: closes previous ramp windows Note: Case insensitive */
+	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
 	call("java.lang.System.gc");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_plugins for autoCrop */
@@ -54,7 +55,7 @@ macro "ROI Color Coder with ROI Labels" {
 	checkForResults(); /* macro requires that there are results to display */	
 	/* Check for unwanted black border */
 	oImageDepth = bitDepth();
-	if (oImageDepth!=24){
+	if (!is("binary") && nROIs<1){
 		yMax = Image.height-1;	xMax = Image.width-1;
 		cornerPixels = newArray(getPixel(0,0),getPixel(1,1),getPixel(0,yMax),getPixel(xMax,0),getPixel(xMax,yMax),getPixel(xMax-1,yMax-1));
 		Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
@@ -130,7 +131,7 @@ macro "ROI Color Coder with ROI Labels" {
 		for (j=0; j<items; j++)
 			resultsColumn[j] = getResult(headings[i], j);
 		Array.getStatistics(resultsColumn, min, max, null, null);
-		if (min!=max){ /* No point in listing parameters without a range */
+		if (min!=max && min>=0 && !endsWith(max,"Infinity")) { /* No point in listing parameters without a range , also, the macro does not handle negative numbers well (let me know if you need them)*/
 			headingsWithRange[countH] = headings[i] + ":  " + min + " - " + max;
 			countH++;
 		}
@@ -151,7 +152,8 @@ macro "ROI Color Coder with ROI Labels" {
 		/* if called from the BAR menu there will be no macro.filepath so the following checks for that */
 		startInfo = "Filename: " + tNL + "\nImage has " + nROIs + " ROIs that will be color coded";
 		if (tPath.length>60) startInfo += "\nDirectory: " + substring(tPath,0,tPath.length / 2) + "...\n       ..." + substring(tPath, tPath.length / 2);
-		Dialog.addMessage(startInfo,infoFontSize,infoColor);
+		Dialog.setInsets(0,10,20);
+		Dialog.addMessage(startInfo, infoFontSize+1.5, infoColor);
 		Dialog.setInsets(0, 20, 0);
 		Dialog.addDirectory("Output directory:",tPath);
 		Dialog.setInsets(0, 20, 10);
@@ -159,6 +161,7 @@ macro "ROI Color Coder with ROI Labels" {
 			colImage = t;
 			colImageL = lengthOf(colImage);
 			if (colImageL>50) colImage = "" + substring(colImage,0,24) + "..." + substring(colImage,colImageL-24);
+			Dialog.setInsets(0, 40, 0);
 			Dialog.addMessage("Image for coloring is: " + colImage,infoFontSize,infoColor);
 		}
 		else if (imageN>5) Dialog.addChoice("Image for color coding", imageList, t);
@@ -168,10 +171,10 @@ macro "ROI Color Coder with ROI Labels" {
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 		Dialog.addChoice("LUT:", luts, call("ij.Prefs.get", ascPrefsKey + "lut",luts[0]));
 		Dialog.setInsets(0, 120, 12);
-		Dialog.addCheckbox("Reverse LUT?", false);
+		Dialog.addCheckbox("Reverse LUT?", call("ij.Prefs.get", ascPrefsKey + "revLut", false));
 		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?",infoFontSize,instructionColor);
-		Dialog.addNumber("Outlines or Solid?", 0, 0, 3, "Width \(pixels\), 0=fill ROIs, -1= label only");
-		Dialog.addSlider("Coding opacity (%):", 0, 100, 100);
+		Dialog.addNumber("Outlines or Solid?", 0, 0, parseInt(call("ij.Prefs.get", ascPrefsKey + "stroke", 0)), "Width \(pixels\), 0=fill ROIs, -1= label only");
+		Dialog.addSlider("Coding opacity (%):", 0, 100, parseInt(call("ij.Prefs.get", ascPrefsKey + "opacity", 100)));
 		roiLabelOptions = newArray("Add ROI labels \(rename ROIs with parameter values\)","Restore original ROI names after labeling");
 		roiLabelOptionChecks = newArray(true,true);
 		Dialog.addCheckboxGroup(2,1,roiLabelOptions,roiLabelOptionChecks);
@@ -194,10 +197,14 @@ macro "ROI Color Coder with ROI Labels" {
 		parameter = substring(parameterWithLabel, 0, indexOf(parameterWithLabel, ":  "));
 		call("ij.Prefs.set", ascPrefsKey + "parameter",parameter);
 		lut = Dialog.getChoice;
-		call("ij.Prefs.set", ascPrefsKey + "lut",lut);
+		call("ij.Prefs.set", ascPrefsKey + "lut", lut);
 		revLut = Dialog.getCheckbox;
+		call("ij.Prefs.set", ascPrefsKey + "revLut", revLut);
 		stroke = Dialog.getNumber;
-		alpha = pad(toHex(255 * Dialog.getNumber() / 100));
+		call("ij.Prefs.set", ascPrefsKey + "stroke", stroke);
+		opacity = Dialog.getNumber();
+		call("ij.Prefs.set", ascPrefsKey + "opacity", opacity);
+		alpha = pad(toHex(255 * opacity / 100));
 		addLabels = Dialog.getCheckbox;
 		restoreROINames = Dialog.getCheckbox;
 		if (selectionExists) {
@@ -252,12 +259,12 @@ macro "ROI Color Coder with ROI Labels" {
 	else parameterLabel = parameter;
 	parameterLabelExp = expandLabel(parameterLabel);
 	/* Create dialog prompt to determine look */
-	Dialog.create("Ramp options: ROI Color Coder Version " + macroV);
+	Dialog.create("Ramp \(Legend\) Options: ROI Color Coder Version " + macroV);
 		Dialog.setInsets(2, 0, 6);
 		Dialog.addMessage("       Legend \(ramp\) options \(LUT "+lut+"\):",infoFontSize,infoColor);
-		Dialog.addString("Parameter label", parameterLabelExp, 3+maxOf(30, lengthOf(parameterLabelExp)));
+		Dialog.addString("Parameter label", parameterLabelExp, 3 + maxOf(20, lengthOf(parameterLabelExp)));
 		Dialog.setInsets(-7, 145, 7);
-		Dialog.addMessage("Edit for ramp label \(do NOT include the 'unit' in the this\nlabel as it will be added from options below...\)",infoFontSize,instructionColor);
+		Dialog.addMessage("Edit for legend \(ramp\) label \(do NOT include the 'unit' in the this\nlabel as it will be added from options below...\)",infoFontSize,instructionColor);
 		unitChoices = newArray("Manual", "None");
 		unitLinearChoices = newArray(unitLabel, unit, "pixels", "%", "arb.");
 		if (unit=="microns" && (unitLabel!=ums || unitLabel!=ums+sup2)) unitLinearChoices = Array.concat(ums,unitLinearChoices);
@@ -271,27 +278,27 @@ macro "ROI Color Coder with ROI Labels" {
 		else unitChoices = Array.concat(unitLinearChoices,unitChoices,unitAreaChoices,unitAngleChoices);
 		if (unitLabel=="None" || unitLabel=="") dialogUnit = "";
 		else dialogUnit = " " + unitLabel;
-		Dialog.addChoice("Unit \("+unitLabel+"\) Label:", unitChoices, unitChoices[0]);
-		Dialog.setInsets(-38, 300, 0);
+		Dialog.addChoice("Unit label \(" + unitLabel + "\):", unitChoices, unitChoices[0]);
+		Dialog.setInsets(-38, 350, 0);
 		Dialog.addMessage("Default shown is based on\nthe selected parameter",infoFontSize,infoColor);
 		unitSeparators = newArray("\(unit\)",", unit","[unit]","{unit}");
 		iUnitSeparators = indexOfArray(unitSeparators, call("ij.Prefs.get", ascPrefsKey + "unitSeparator", "\(unit\)"),unitSeparators[0]);
 		Dialog.addChoice("Unit separator\(s\) in label:",unitSeparators,unitSeparators[iUnitSeparators]);
-		Dialog.setInsets(0, 20, 0);
+		Dialog.setInsets(0, 20, -15);
 		Dialog.addMessage("Original data range:       "+arrayMin+"-"+arrayMax+" \(range = "+(arrayRange)+" "+dialogUnit+"\)",infoFontSize,infoColor);
-		Dialog.addString("Ramp data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 20);
+		Dialog.addString("Legend \(ramp\) data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 10);
 		Dialog.setInsets(-20, 370, 0); /* top, left, bottom */
-		Dialog.addMessage("(e.g., 10-100)",infoFontSize,instructionColor);
-		Dialog.addString("LUT range \(n-n format\):", arrayMin+"-"+arrayMax, 20);
+		Dialog.addMessage("\(e.g. n-n\)", infoFontSize+2, instructionColor);
+		Dialog.addString("LUT colors applied across range \(n-n format\):", arrayMin+"-"+arrayMax, 10);
 		Dialog.setInsets(-7, 10, 7);
 		Dialog.addMessage("The LUT gradient will be remapped to this range \(limited by the ramp min and max\)\nBeyond this range the top and bottom LUT colors will be applied",infoFontSize,instructionColor);
 		Dialog.setInsets(-4, 120, 0);
-		Dialog.addCheckbox("Add ramp labels at Min. & Max. if inside Range", true);
+		Dialog.addCheckbox("Add legend \(ramp\) labels at Min. & Max. if inside Range", true);
 		Dialog.addNumber("No. of major intervals:", numIntervals, 0, 3, "Major tick count will be +1 more than this");
 		Dialog.addNumber("No. of ticks between major ticks:", 5, 0, 3, "i.e. 4 ticks for 5 minor intervals");
 		Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
-		Dialog.addChoice("Ramp height \(pixels\):", newArray(d2s(rampH,0), 128, 256, 512, 1024, 2048, 4096), rampH);
-		Dialog.setInsets(-38, 280, 0);
+		Dialog.addChoice("Legend \(ramp\) height \(pixels\):", newArray(d2s(rampH,0), 128, 256, 512, 1024, 2048, 4096), rampH);
+		Dialog.setInsets(-38, 350, 0);
 		Dialog.addMessage(rampH + " pixels suggested\nby image height",infoFontSize,infoColor);
 		fontStyleChoice = newArray("bold", "italic", "bold italic", "unstyled");
 		iFontStyle = indexOfArray(fontStyleChoice, call("ij.Prefs.get",  ascPrefsKey + "rampFStyle","bold"),0);
@@ -306,12 +313,12 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.setInsets(3, 0, -2);
 		rampStatsOptions = newArray("No", "Linear", "Ln");
 		Dialog.setInsets(-20, 15, 18);
-		Dialog.addRadioButtonGroup("Ramp Stats: Mean and " + fromCharCode(0x00B1) + sigmaChar + " on ramp", rampStatsOptions, 1, 5, "Linear");
+		Dialog.addRadioButtonGroup("Legend \(Ramp\) Stats: Mean and " + fromCharCode(0x00B1) + sigmaChar + " on ramp \(if \"Ln\" then outlier " + sigmaChar + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "Linear");
 		/* will be used for sigma outlines too */
 		Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 		Dialog.setInsets(4, 120, 0);
-		Dialog.addCheckbox("Add Frequency Distribution Plot to Ramp", true);
+		Dialog.addCheckbox("Add frequency distribution plot to legend \(ramp\)", true);
 		binForHoles = is("binary");
 		if (binForHoles) Dialog.addCheckbox("Calculate 'Max' image to restore holes if ROIs NOT composite \(experimental\)",false);
 		else Dialog.addCheckbox("Use binary image of holes to restore holes if ROIs NOT composite \(experimental\)",false);
@@ -324,7 +331,7 @@ macro "ROI Color Coder with ROI Labels" {
 		call("ij.Prefs.set",  ascPrefsKey + "unitSeparator",unitSeparator);
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		rangeLUT = Dialog.getString;
-		if (rangeLUT=="same as ramp range") rangeLUT = rangeS;
+		if (rangeLUT=="same as ramp range") rangeLUT = rangeS; /* maintained for old preferences */
 		rampMinMaxLines = Dialog.getCheckbox;
 		numIntervals = Dialog.getNumber; /* The number intervals along ramp */
 		numLabels = numIntervals + 1;  /* The number of major ticks/labels is one more than the intervals */
@@ -368,12 +375,10 @@ macro "ROI Color Coder with ROI Labels" {
 	}
 	if (indexOf(rangeS, "-")==0) rampMin = 0 - rampMin; /* checks to see if rampMin is a negative value (lets hope the rampMax isn't). */
 	lutRange = split(rangeLUT, "-");
-	if (lengthOf(lutRange)==1){
-		minLUT = NaN;
-		maxLUT = parseFloat(lutRange[0]);
-	}else {
-		minLUT = parseFloat(lutRange[0]);
-		maxLUT = parseFloat(lutRange[1]);
+	if (lengthOf(lutRange)==1) {
+		minLUT = NaN; maxLUT = parseFloat(lutRange[0]);
+	} else {
+		minLUT = parseFloat(lutRange[0]); maxLUT = parseFloat(lutRange[1]);
 	}
 	if (indexOf(rangeLUT, "-")==0) minLUT = 0 - minLUT; /* checks to see if min is a negative value (lets hope the max isn't). */
 	/* Restrict LUT range to be within set ramp range: */
@@ -554,15 +559,37 @@ macro "ROI Color Coder with ROI Labels" {
 		for (i=0,maxDP=0; i<numLabels; i++) {
 			rampLabel = rampMin + i * stepV;
 			rampLabelString[i] = d2s(rampLabel,decPlaces);
-			if (i!=0 && i!=numLabels-1) rampLabelString[i] = removeTrailingZerosAndPeriod(rampLabelString[i]);
+		}
+		/* Ramp number label cleanup */
+		for (i=0; i<decPlaces; i++){
+			for (nL=0, allEndZeros=true; nL<numLabels; nL++) 
+				if (!endsWith(rampLabelString[nL],"0") && indexOf(rampLabelString[nL],".")>=0) allEndZeros = false;
+			for (nL=0; nL<numLabels && allEndZeros; nL++)  if (indexOf(rampLabelString[nL],".")>=0)
+				rampLabelString[nL] = substring(rampLabelString[nL], 0, rampLabelString[nL].length-1);
+			for (nL=0, allEndPeriods=true; nL<numLabels; nL++) if (!endsWith(rampLabelString[nL],".")) allEndPeriods = false;
+			for (nL=0; nL<numLabels && allEndPeriods; nL++) rampLabelString[nL] = substring(rampLabelString[nL], 0, rampLabelString[nL].length-1);
+			for (nL=0; nL<numLabels && !allEndPeriods; nL++) if (endsWith(rampLabelString[nL],".")) rampLabelString[nL] = rampLabelString[nL] + "0";
 		}
 		/* clean up top and bottom labels are special cases even in non-auto mode */
-		while(indexOf(rampLabelString[0],".")>0 && endsWith(rampLabelString[0],"0"))
-			rampLabelString[0] = substring(rampLabelString[0],0,lengthOf(rampLabelString[0])-1);
-		if	(endsWith(rampLabelString[0],".")) rampLabelString[0] = substring(rampLabelString[0],0,lengthOf(rampLabelString[0])-1);
-		while(indexOf(rampLabelString[numLabels-1],".")>0 && endsWith(rampLabelString[numLabels-1],"0"))
-			rampLabelString[numLabels-1] = substring(rampLabelString[numLabels-1],0,lengthOf(rampLabelString[numLabels-1])-1);
-		if	(endsWith(rampLabelString[numLabels-1],".")) rampLabelString[numLabels-1] = substring(rampLabelString[numLabels-1],0,lengthOf(rampLabelString[numLabels-1])-1);
+		for (i=0; i<numLabels; i=i+numLabels-1){
+			while (lastIndexOf(rampLabelString[i],".")<lastIndexOf(rampLabelString[i],"0") && endsWith(rampLabelString[i],"0") && indexOf(rampLabelString[i],".")>=0)
+				rampLabelString[i] = substring(rampLabelString[i], 0, lengthOf(rampLabelString[i])-1);
+			while (endsWith(rampLabelString[i],".")){
+				rampLabelString[i] = substring(rampLabelString[i], 0, lengthOf(rampLabelString[i])-1);
+			}
+		}
+	// This section in development: issue with ramp sizing //
+	// if (decPlaces==0){
+		// for (nL=0,expos=numLabels; nL<numLabels; nL++){
+			// for (i=0, endZeros=0; i<rampLabelString[nL].length && endsWith(substring(rampLabelString[nL], 0, rampLabelString[nL].length-i), "0"); i++) endZeros += 1;
+			// expos = minOf(expos, endZeros);
+		// }
+		// if (expos>=2){
+			// for (nL=0; nL<numLabels; nL++) rampLabelString[nL] = d2s(parseInt(rampLabelString[nL])/ pow(10, expos), 0);
+			// rampParameterLabel += "/" + d2s(pow(10, expos),0);
+			// rampUnitLabel += "*" + d2s(pow(10, expos),0);
+		// }
+	// }
 		/* end of ramp number label cleanup */
 		setLineWidth(rampLW);
 		for (i=0; i<numLabels; i++) {
@@ -803,7 +830,10 @@ macro "ROI Color Coder with ROI Labels" {
 				roiManager("Set Fill Color", alpha+roiColors[lutIndex]);
 		}
 	}
-	else IJ.log("Stroke not set");
+	else {
+		IJ.log("Stroke/fill option set to labels only ,we are headed into untested territory   D:");
+		decPlaces = autoCalculateDecPlaces3(rampMin,rampMax,numIntervals);
+	}
 	/*
 	End of object coloring
 	*/
@@ -1006,42 +1036,36 @@ macro "ROI Color Coder with ROI Labels" {
 	}
 	function checkForPluginNameContains(pluginNamePart) {
 		/* v180831 1st version to check for partial names so avoid versioning problems
-			v181005 1st version that works correctly ?
-			v210429 Updates for expandable arrays
-			v220510 Fixed subfolder error
-			NOTE: requires ASC restoreExit function which requires previous run of saveSettings
+			...
+			v220722 Uses File.separator and adds .class
+			v230912 This version is case insensitive and does NOT require restoreExit.
 			NOTE: underlines are NOT converted to spaces in names */
-		var pluginCheck = false;
-		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
-		else pluginDir = getDirectory("plugins");
-		pluginList = getFileList(pluginDir);
-		/* First check root plugin folder */
-		for (i=0; i<lengthOf(pluginList); i++) {
-			if (!endsWith(pluginList[i], "/") && endsWith(pluginList[i], ".jar")) {
-				if (indexOf(pluginList[i], pluginNamePart)>=0) {
-					pluginCheck = true;
-					i=lengthOf(pluginList);
-				}
-			}
-		}
-		/* If not in the root try the subfolders */
-		if (!pluginCheck) {
+		pluginCheck = false;
+		pluginNamePart = toLowerCase(pluginNamePart);
+		fS = File.separator;
+		pluginDir = getDirectory("plugins");
+		if (pluginDir == "") IJ.log("Failure to find any plugins!");
+		else {
+			pluginFolderList = getFileList(pluginDir);
 			subFolderList = newArray();
-			for (i=0,countSF=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")){
-					subFolderList[countSF] = pluginList[i];
-					countSF++;
-				}
+			pluginList = newArray();
+			for (l=0; l<pluginFolderList.length; l++){
+				if (endsWith(pluginFolderList[l], fS)) subFolderList = Array.concat(subFolderList,pluginFolderList[l]);
+				else if (endsWith(pluginFolderList[l], "/")) subFolderList = Array.concat(subFolderList,pluginFolderList[l]); /* File.separator does not seem to be working here */
+				else if (endsWith(toLowerCase(pluginFolderList[l]), ".jar") || endsWith(toLowerCase(pluginFolderList[l]), ".class")) pluginList = Array.concat(pluginList,toLowerCase(pluginFolderList[l]));
 			}
-			for (i=0; i<countSF; i++) {
-				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
-				for (j=0; j<lengthOf(subFolderPluginList); j++) {
-					if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class")) {
-						if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) {
-							pluginCheck = true;
-							i=lengthOf(subFolderList);
-							j=lengthOf(subFolderPluginList);
-						}
+			/* First check root plugin folder */
+			for (i=0; i<lengthOf(pluginList) && !pluginCheck; i++) {
+				if (indexOf(pluginList[i], pluginNamePart)>=0) pluginCheck = true;
+			}
+			/* If not in the root try the subfolders */
+			if (!pluginCheck) {
+				for (i=0; i<subFolderList.length && !pluginCheck; i++) {
+					subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
+					for (k=0; k<subFolderPluginList.length; k++) subFolderPluginList[k] = toLowerCase(subFolderPluginList[k]);
+					for (j=0; j<subFolderPluginList.length && !pluginCheck; j++) {
+						if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class"))
+							if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) pluginCheck = true;
 					}
 				}
 			}
@@ -1617,24 +1641,47 @@ macro "ROI Color Coder with ROI Labels" {
 	End of ASC mod BAR Color Functions
 	*/
   	function getFontChoiceList() {
-		/*	v180723 first version. v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization	*/
+		/*	v180723 first version
+			v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization.
+			v230919 You can add a list of fonts that do not produce good results with the macro.
+		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
-		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Poppins Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black","Goldman Sans","Serif");
+		fontNameChoices = Array.concat(IJFonts,systemFonts);
+		blackFonts = Array.filter(fontNameChoices, "(.*[bB]l.*k)");
+		eBFonts = Array.filter(fontNameChoices,  "(.*[Ee]xtra[Bb]old)");
+		fontNameChoices = Array.concat(blackFonts, eBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
+		faveFontList = newArray("Your favorite fonts here", "Archivo Black", "Arial Black", "Lato Black", "Merriweather Black", "Noto Sans Black", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
+		offFontList = newArray("Poppins.*", "Fira.*", "Montserrat.*", "Alegreya SC Black", "Libre.*", "Olympia.*"); /* These don't work so well. Use a ".*" to remove families */
 		faveFontListCheck = newArray(faveFontList.length);
 		for (i=0,counter=0; i<faveFontList.length; i++) {
-			for (j=0; j<fontNameChoice.length; j++) {
-				if (faveFontList[i] == fontNameChoice[j]) {
+			for (j=0; j<fontNameChoices.length; j++) {
+				if (faveFontList[i] == fontNameChoices[j]) {
 					faveFontListCheck[counter] = faveFontList[i];
-					j = fontNameChoice.length;
+					j = fontNameChoices.length;
 					counter++;
 				}
 			}
 		}
 		faveFontListCheck = Array.trim(faveFontListCheck, counter);
-		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
-		return fontNameChoice;
+		for (i=0; i<fontNameChoices.length; i++) {
+			for (j=0; j<offFontList.length; j++){
+				if (fontNameChoices[i]==offFontList[j]) fontNameChoices = Array.deleteIndex(fontNameChoices, i);
+				if (endsWith(offFontList[j],".*")){
+					if (startsWith(fontNameChoices[i], substring(offFontList[j], 0, indexOf(offFontList[j],".*")))){
+						fontNameChoices = Array.deleteIndex(fontNameChoices, i);
+						i = maxOf(0, i-1); 
+					} 
+					// fontNameChoices = Array.filter(fontNameChoices, "(^" + offFontList[j] + ")"); /* RegEx not working and very slow */
+				} 
+			} 
+		}
+		fontNameChoices = Array.concat(faveFontListCheck, fontNameChoices);
+		for (i=0; i<fontNameChoices.length; i++) {
+			for (j=i+1; j<fontNameChoices.length; j++)
+				if (fontNameChoices[i]==fontNameChoices[j]) fontNameChoices = Array.deleteIndex(fontNameChoices, j);
+		}
+		return fontNameChoices;
 	}
 	function getSelectionFromMask(sel_M){
 		/* v220920 only inverts if full image selection */
@@ -1822,18 +1869,11 @@ macro "ROI Color Coder with ROI Labels" {
 	}
 	function stripKnownExtensionFromString(string) {
 		/*	Note: Do not use on path as it may change the directory names
-		v210924: Tries to make sure string stays as string
-		v211014: Adds some additional cleanup
-		v211025: fixes multiple 'known's issue
-		v211101: Added ".Ext_" removal
-		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
-		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
-		v220615: Tries to fix the fix for the trapped extensions ...
-		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
-		v230505: Unwanted dupes replaced by unusefulCombos.
-		v230607: Quick fix for infinite loop on one of while statements.
-		v230614: Added AVI.
-		v230905: Better fix for infinite loop.
+		v210924: Tries to make sure string stays as string.	v211014: Adds some additional cleanup.	v211025: fixes multiple 'known's issue.	v211101: Added ".Ext_" removal.
+		v211104: Restricts cleanup to end of string to reduce risk of corrupting path.	v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
+		v220615: Tries to fix the fix for the trapped extensions ...	v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
+		v230505: Unwanted dupes replaced by unusefulCombos.	v230607: Quick fix for infinite loop on one of while statements.
+		v230614: Added AVI.	v230905: Better fix for infinite loop. v230914: Added BMP and "_transp" and rearranged
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -1850,26 +1890,27 @@ macro "ROI Color Coder with ROI Labels" {
 			}
 		}
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("avi", "AVI", "dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
-			kEL = knownExt.length;
-			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			knownExts = newArray(".avi", ".csv", ".bmp", ".dsx", ".gif", ".jpg", ".jpeg", ".jp2", ".png", ".tif", ".txt", ".xlsx");
+			knownExts = Array.concat(knownExts,knownExts,"_transp","_lzw");
+			kEL = knownExts.length;
+			for (i=0; i<kEL/2; i++) knownExts[i] = toUpperCase(knownExts[i]);
+			chanLabels = newArray(" \(red\)"," \(green\)"," \(blue\)","\(red\)","\(green\)","\(blue\)");
 			for (i=0,k=0; i<kEL; i++) {
-				kExtn = "." + knownExt[i];
-				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+				for (j=0; j<chanLabels.length; j++){ /* Looking for channel-label-trapped extensions */
 					iChanLabels = lastIndexOf(string, chanLabels[j])-1;
 					if (iChanLabels>0){
 						preChan = substring(string,0,iChanLabels);
 						postChan = substring(string,iChanLabels);
-						while (indexOf(preChan,kExtn)>=0){
-							preChan = replace(preChan,kExtn,"");
+						while (indexOf(preChan,knownExts[i])>0){
+							preChan = replace(preChan,knownExts[i],"");
 							string =  preChan + postChan;
 						}
 					}
 				}
-				while (endsWith(string,kExtn)) string = "" + substring(string, 0, lastIndexOf(string, kExtn));
+				while (endsWith(string,knownExts[i])) string = "" + substring(string, 0, lastIndexOf(string, knownExts[i]));
 			}
 		}
-		unwantedSuffixes = newArray("_lzw"," ", "_","-");
+		unwantedSuffixes = newArray(" ", "_","-");
 		for (i=0; i<unwantedSuffixes.length; i++){
 			while (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,string.length-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
 		}

@@ -29,7 +29,7 @@
 	+ v230905: Tweaked rangefinding and updated functions. F1: updated functions.
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905-f4.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -561,42 +561,36 @@ macro "ROI Color Coder with settings generated from data"{
 	}
 	function checkForPluginNameContains(pluginNamePart) {
 		/* v180831 1st version to check for partial names so avoid versioning problems
-			v181005 1st version that works correctly ?
-			v210429 Updates for expandable arrays
-			v220510 Fixed subfolder error
-			NOTE: requires ASC restoreExit function which requires previous run of saveSettings
+			...
+			v220722 Uses File.separator and adds .class
+			v230912 This version is case insensitive and does NOT require restoreExit.
 			NOTE: underlines are NOT converted to spaces in names */
-		var pluginCheck = false;
-		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
-		else pluginDir = getDirectory("plugins");
-		pluginList = getFileList(pluginDir);
-		/* First check root plugin folder */
-		for (i=0; i<lengthOf(pluginList); i++) {
-			if (!endsWith(pluginList[i], "/") && endsWith(pluginList[i], ".jar")) {
-				if (indexOf(pluginList[i], pluginNamePart)>=0) {
-					pluginCheck = true;
-					i=lengthOf(pluginList);
-				}
-			}
-		}
-		/* If not in the root try the subfolders */
-		if (!pluginCheck) {
+		pluginCheck = false;
+		pluginNamePart = toLowerCase(pluginNamePart);
+		fS = File.separator;
+		pluginDir = getDirectory("plugins");
+		if (pluginDir == "") IJ.log("Failure to find any plugins!");
+		else {
+			pluginFolderList = getFileList(pluginDir);
 			subFolderList = newArray();
-			for (i=0,countSF=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")){
-					subFolderList[countSF] = pluginList[i];
-					countSF++;
-				}
+			pluginList = newArray();
+			for (l=0; l<pluginFolderList.length; l++){
+				if (endsWith(pluginFolderList[l], fS)) subFolderList = Array.concat(subFolderList,pluginFolderList[l]);
+				else if (endsWith(pluginFolderList[l], "/")) subFolderList = Array.concat(subFolderList,pluginFolderList[l]); /* File.separator does not seem to be working here */
+				else if (endsWith(toLowerCase(pluginFolderList[l]), ".jar") || endsWith(toLowerCase(pluginFolderList[l]), ".class")) pluginList = Array.concat(pluginList,toLowerCase(pluginFolderList[l]));
 			}
-			for (i=0; i<countSF; i++) {
-				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
-				for (j=0; j<lengthOf(subFolderPluginList); j++) {
-					if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class")) {
-						if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) {
-							pluginCheck = true;
-							i=lengthOf(subFolderList);
-							j=lengthOf(subFolderPluginList);
-						}
+			/* First check root plugin folder */
+			for (i=0; i<lengthOf(pluginList) && !pluginCheck; i++) {
+				if (indexOf(pluginList[i], pluginNamePart)>=0) pluginCheck = true;
+			}
+			/* If not in the root try the subfolders */
+			if (!pluginCheck) {
+				for (i=0; i<subFolderList.length && !pluginCheck; i++) {
+					subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
+					for (k=0; k<subFolderPluginList.length; k++) subFolderPluginList[k] = toLowerCase(subFolderPluginList[k]);
+					for (j=0; j<subFolderPluginList.length && !pluginCheck; j++) {
+						if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class"))
+							if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) pluginCheck = true;
 					}
 				}
 			}
@@ -1033,18 +1027,11 @@ macro "ROI Color Coder with settings generated from data"{
 	}
 	function stripKnownExtensionFromString(string) {
 		/*	Note: Do not use on path as it may change the directory names
-		v210924: Tries to make sure string stays as string
-		v211014: Adds some additional cleanup
-		v211025: fixes multiple 'known's issue
-		v211101: Added ".Ext_" removal
-		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
-		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
-		v220615: Tries to fix the fix for the trapped extensions ...
-		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
-		v230505: Unwanted dupes replaced by unusefulCombos.
-		v230607: Quick fix for infinite loop on one of while statements.
-		v230614: Added AVI.
-		v230905: Better fix for infinite loop.
+		v210924: Tries to make sure string stays as string.	v211014: Adds some additional cleanup.	v211025: fixes multiple 'known's issue.	v211101: Added ".Ext_" removal.
+		v211104: Restricts cleanup to end of string to reduce risk of corrupting path.	v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
+		v220615: Tries to fix the fix for the trapped extensions ...	v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
+		v230505: Unwanted dupes replaced by unusefulCombos.	v230607: Quick fix for infinite loop on one of while statements.
+		v230614: Added AVI.	v230905: Better fix for infinite loop. v230914: Added BMP and "_transp" and rearranged
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -1061,26 +1048,27 @@ macro "ROI Color Coder with settings generated from data"{
 			}
 		}
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("avi", "AVI", "dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
-			kEL = knownExt.length;
-			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			knownExts = newArray(".avi", ".csv", ".bmp", ".dsx", ".gif", ".jpg", ".jpeg", ".jp2", ".png", ".tif", ".txt", ".xlsx");
+			knownExts = Array.concat(knownExts,knownExts,"_transp","_lzw");
+			kEL = knownExts.length;
+			for (i=0; i<kEL/2; i++) knownExts[i] = toUpperCase(knownExts[i]);
+			chanLabels = newArray(" \(red\)"," \(green\)"," \(blue\)","\(red\)","\(green\)","\(blue\)");
 			for (i=0,k=0; i<kEL; i++) {
-				kExtn = "." + knownExt[i];
-				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+				for (j=0; j<chanLabels.length; j++){ /* Looking for channel-label-trapped extensions */
 					iChanLabels = lastIndexOf(string, chanLabels[j])-1;
 					if (iChanLabels>0){
 						preChan = substring(string,0,iChanLabels);
 						postChan = substring(string,iChanLabels);
-						while (indexOf(preChan,kExtn)>=0){
-							preChan = replace(preChan,kExtn,"");
+						while (indexOf(preChan,knownExts[i])>0){
+							preChan = replace(preChan,knownExts[i],"");
 							string =  preChan + postChan;
 						}
 					}
 				}
-				while (endsWith(string,kExtn)) string = "" + substring(string, 0, lastIndexOf(string, kExtn));
+				while (endsWith(string,knownExts[i])) string = "" + substring(string, 0, lastIndexOf(string, knownExts[i]));
 			}
 		}
-		unwantedSuffixes = newArray("_lzw"," ", "_","-");
+		unwantedSuffixes = newArray(" ", "_","-");
 		for (i=0; i<unwantedSuffixes.length; i++){
 			while (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,string.length-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
 		}

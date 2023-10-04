@@ -17,9 +17,11 @@
 	v230910: Fixed incorrect outlier prefs request, more tweaks to range. Reverted to full data range for default LUT color mapping. Set allowable data range overflow of 0.5%.
 	v230911-15b: Restricted LUT range to be within ramp range. Fixed outlier range preferences. Add unit separator options.
 	v230916: Most parameters now saved in user prefs. Streamlined trailing zeros detection for legend.
+	v230921: 'Holes' option removed: Composite ROIs preferred. Some cosmetic improvements to menu layouts.
+	v231004: Removed parenthesis in wrong place on line 1720. Added near-white and near-black for labels.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v230916-f1.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v231004.ijm";
 	macroV = substring(macroL,lastIndexOf(macroL,"_v") + 2,maxOf(lastIndexOf(macroL,"."),lastIndexOf(macroL,"_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -38,6 +40,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	t = getTitle();
 	tPath = getDirectory("image");
 	if (tPath=="") tPath = File.directory;
+	if (indexOf(tPath, "AutoRun")>=0) tPath = "";
 	/* Check to see if there is a rectangular location already set for the summary */
 	if (selectionType()==0) {
 		getSelectionBounds(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
@@ -103,7 +106,6 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	run("Remove Overlay");
-	setBatchMode(true);
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
 	// menuLimit = 700; /* for testing only resolution options only */
@@ -171,27 +173,33 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[iDefHeading]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 		Dialog.addChoice("LUT:", luts, call("ij.Prefs.get", ascPrefsKey + "lut",luts[0]));
-		Dialog.setInsets(0, 120, 12);
+		Dialog.setInsets(0, 170, 0);
 		Dialog.addCheckbox("Reverse LUT?", call("ij.Prefs.get", ascPrefsKey + "revLut", false));
 		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?",infoFontSize,instructionColor);
+		Dialog.setInsets(5, 20, 0);
 		Dialog.addNumber("Outlines or Solid?", 0, 0, parseInt(call("ij.Prefs.get", ascPrefsKey + "stroke", 0)), "Width \(pixels\), 0=fill ROIs, -1= label only");
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addSlider("Coding opacity (%):", 0, 100, parseInt(call("ij.Prefs.get", ascPrefsKey + "opacity", 100)));
 		outlierOptions = newArray("No", "1" + sigmaChar, "2" + sigmaChar,"3" + sigmaChar, "Ramp_Range", "Manual_Input");
 		iOutlierChoice = indexOfArray(outlierOptions, call("ij.Prefs.get", ascPrefsKey + "outlierChoice", "No"),0);
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addRadioButtonGroup("Outliers: Outline if outside the following values:", outlierOptions, 2, 4, outlierOptions[iOutlierChoice]);
 		Dialog.setInsets(3, 0, 15);
-		iOutlierColor = indexOfArray(allColors, call("ij.Prefs.get", ascPrefsKey + "outlierColor", allColors[0]),0); 
+		iOutlierColor = indexOfArray(allColors, call("ij.Prefs.get", ascPrefsKey + "outlierColor", allColors[0]),0);
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addChoice("Outliers: Outline color:", allColors, allColors[iOutlierColor]);
-		Dialog.setInsets(-5,0, 5);
+		Dialog.setInsets(-1, 20, 0);
 		Dialog.addMessage("Negative " + sigmaChar + " \('<'\) outliers can be reported separately and set to a different color:", infoFontSize,instructionColor);
 		allColorsS = Array.concat("same",allColors);
 		iOutlierColorsS = indexOfArray(allColorsS, call("ij.Prefs.get", ascPrefsKey + "outlierColor2", allColorsS[0]),0); 
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addChoice("Outliers '<': Outline color:", allColorsS, allColorsS[iOutlierColorsS]);
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addNumber("Outlier outline thickness:",9,0,3,"% of font size");
+		Dialog.setInsets(10, 20, 0);
 		Dialog.addCheckbox("Apply colors and formatted labels to image copy \(no change to original\)", true);
 		Dialog.setInsets(6, 120, 10);
 		if (selectionExists) {
-			tPath = Dialog.getString();
 			Dialog.addCheckbox("Summary/Parameter at selected location \(below\)?", true);
 			Dialog.addNumber("Starting",selPosStartX,0,5,"X");
 			Dialog.setInsets(-28, 150, 0);
@@ -200,6 +208,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			Dialog.setInsets(-28, 150, 0);
 			Dialog.addNumber("Selected",originalSelEHeight,0,5,"Height");
 		}
+		Dialog.setInsets(0, 20, 0);
+		Dialog.addCheckbox("Diagnostics", false);
 	Dialog.show;
 		if (imageN==1) imageChoice = t;
 		else if (imageN > 5) imageChoice = Dialog.getChoice();
@@ -233,6 +243,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			originalSelEWidth = Dialog.getNumber;
 			originalSelEHeight = Dialog.getNumber;
 		}
+		diagnostics = Dialog.getCheckbox();
+	if (!diagnostics) setBatchMode(true);
 	selectWindow(imageChoice);
 	orID = getImageID(); /* update after selection of image */
 	t = getTitle();
@@ -302,10 +314,10 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (outlierChoice=="1" + sigmaChar) Dialog.addMessage("Outlier range \("+sigmaChar+"\):        < "+(arrayMean-arraySD)+" > "+(arrayMean+arraySD) + dialogUnit,infoFontSize,infoColor);
 		else if (outlierChoice=="2" + sigmaChar) Dialog.addMessage("Outlier range \(2 "+sigmaChar+"\):       < "+(arrayMean-2*arraySD)+" > "+(arrayMean+2*arraySD) + dialogUnit,infoFontSize,infoColor);
 		else Dialog.addMessage("Outlier range \(3"+sigmaChar+"\):       < "+(arrayMean-3*arraySD)+" > "+(arrayMean+3*arraySD) + dialogUnit,infoFontSize,infoColor);
-		Dialog.addString("Legend \(ramp\) data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 10);
-		Dialog.setInsets(-20, 370, 0); /* top, left, bottom */
+		Dialog.addString("Legend \(ramp\) data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 15);
+		Dialog.setInsets(-20, 400, 0); /* top, left, bottom */
 		Dialog.addMessage("\(e.g. n-n\)", infoFontSize+2, instructionColor);
-		Dialog.addString("LUT colors applied across range \(n-n format\):", arrayMin+"-"+arrayMax, 10);
+		Dialog.addString("LUT colors applied across range \(n-n format\):", arrayMin+"-"+arrayMax, 15);
 		Dialog.setInsets(-7, 10, 7);
 		Dialog.addMessage("The LUT gradient will be remapped to this range \(limited by the ramp min and max\)\nBeyond this range the top and bottom LUT colors will be applied",infoFontSize,instructionColor);
 		Dialog.setInsets(-4, 120, 0);
@@ -322,10 +334,10 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		fontNameChoice = getFontChoiceList();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
 		Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pixels");
-		Dialog.setInsets(-5, 215, 0);
-		Dialog.addCheckbox("Draw border and top/bottom tick marks", true);
-		Dialog.setInsets(2, 120, 0);
-		Dialog.addCheckbox("Force clockwise rotated legend label", false);
+		rampFormatChoices = newArray("Draw border and top/bottom tick marks", "Force clockwise rotated legend label", "Add frequency distribution plot to legend \(ramp\)");
+		rampFormatChecks = newArray(true, false, true);
+		Dialog.setInsets(0, 120, 0);
+		Dialog.addCheckboxGroup(3, 1, rampFormatChoices, rampFormatChecks);
 		Dialog.setInsets(3, 0, -2);
 		rampStatsOptions = newArray("No", "Linear", "Ln");
 		Dialog.setInsets(-20, 15, 18);
@@ -334,10 +346,6 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 		Dialog.setInsets(4, 120, 0);
-		Dialog.addCheckbox("Add frequency distribution plot to legend \(ramp\)", true);
-		binForHoles = is("binary");
-		if (binForHoles) Dialog.addCheckbox("Calculate 'Max' image to restore holes if ROIs NOT composite \(experimental\)",false);
-		else Dialog.addCheckbox("Use binary image of holes to restore holes if ROIs NOT composite \(experimental\)",false);
 		Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterLabel = Dialog.getString;
@@ -362,11 +370,10 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		fontSize = Dialog.getNumber;
 		brdr = Dialog.getCheckbox;
 		rotLegend = Dialog.getCheckbox;
+		freqDistRamp = Dialog.getCheckbox();
 		statsRampLines = Dialog.getRadioButton;
 		statsRampTicks = Dialog.getNumber;
 		thinLinesFontSTweak = Dialog.getNumber;
-		freqDistRamp = Dialog.getCheckbox();
-		restoreHoles = Dialog.getCheckbox();
 	if (imageChoice!=t) {
 		t = imageChoice;
 		tN = stripKnownExtensionFromString(t);
@@ -594,18 +601,6 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				rampLabelString[i] = substring(rampLabelString[i], 0, lengthOf(rampLabelString[i])-1);
 			}
 		}
-	// This section in development: issue with ramp sizing //
-	// if (decPlaces==0){
-		// for (nL=0,expos=numLabels; nL<numLabels; nL++){
-			// for (i=0, endZeros=0; i<rampLabelString[nL].length && endsWith(substring(rampLabelString[nL], 0, rampLabelString[nL].length-i), "0"); i++) endZeros += 1;
-			// expos = minOf(expos, endZeros);
-		// }
-		// if (expos>=2){
-			// for (nL=0; nL<numLabels; nL++) rampLabelString[nL] = d2s(parseInt(rampLabelString[nL])/ pow(10, expos), 0);
-			// rampParameterLabel += "/" + d2s(pow(10, expos),0);
-			// rampUnitLabel += "*" + d2s(pow(10, expos),0);
-		// }
-	// }
 		/* end of ramp number label cleanup */
 		setLineWidth(rampLW);
 		for (i=0; i<numLabels; i++) {
@@ -761,9 +756,10 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			run("Gaussian Blur...", "sigma="+rampOutlineStroke);
 			run("Select None");
 			getSelectionFromMask("label_mask");
-			setBackgroundColor(255, 255, 255);
+			setBackgroundColor(250, 250, 250);  /* set to near-white so that these labels are not transparent when white is set as the transparent layer */
 			run("Clear");
 			run("Select None");
+			setBackgroundColor(255, 255, 255);  /* Restore background to white for ramp expansion */
 			/* The following steps smooth the interior of the text labels */
 			selectWindow("stats_text");
 			getSelectionFromMask("label_mask");
@@ -772,8 +768,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			run("Invert");
 			run("Select None");
 			imageCalculator("Min",tR,"stats_text");
-			closeImageByTitle("label_mask");
-			closeImageByTitle("stats_text");
+			if (!diagnostics) closeImageByTitle("label_mask");
+			if (!diagnostics) closeImageByTitle("stats_text");
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
 			setColor(0,0,0);
@@ -905,35 +901,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		paraLabelExp = parameterLabelExp + ", " + unitLabel;
 	}
 	if (!addLabels) {
-		if (restoreHoles && binForHoles) { /* Not fully tested yet but should be harmless */
-			mI1 = getImageID();
-			roiManager("show all without labels");
-			run("Flatten");
-			mI1F = getTitle();
-			imageCalculator("Max", mI1F,orID);
-			closeImageByTitle(mI1);
-			selectWindow(mI1F);
-			rename(tN);
-		}
 		selectWindow(tN);
 		roiManager("show all with labels");
 		run("Flatten"); /* creates an RGB copy of the image with color coded objects or not */
-		if (restoreHoles && !binForHoles){
-			holesPath = File.openDialog("Select an image of the holes");
-			open(holesPath);
-			rename(holesTemp);
-			run("Convert to Mask");
-			getSelectionFromMask(holesTemp);
-			run("Select None");
-			close(holesTemp);
-			selectImage(orID);
-			run("Restore Selection");
-			run("Copy");
-			selectWindow(tN);
-			run("Restore Selection");
-			run("Paste");
-			run("Select None");
-		}
 	}
 	else {
 		roiManager("Show All without labels");
@@ -953,11 +923,11 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.create("Feature Label Formatting Options");
 			Dialog.setInsets(0, 150, 6);
 			Dialog.addCheckbox("Add feature labels to each ROI?", false);
-			allGrays = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
+			allGrays = newArray("white", "black", "near-white", "off-white", "near-black", "off-black", "light_gray", "gray", "dark_gray");
 			if (lut!="Grays")
 				colorChoices = Array.concat(allGrays,allColors);
 			else colorChoices = allGrays;
-			iColor = indexOfArray(colorChoices, call("ij.Prefs.get", ascPrefsKey + "objectFontColor",colorChoices[0]),0);
+			iColor = indexOfArray(colorChoices, call("ij.Prefs.get", ascPrefsKey + "objectFontColor",colorChoices[2]),2);
 			Dialog.addChoice("Object label color:", colorChoices, iColor);
 			Dialog.addNumber("Font scaling:", 60,0,3,"\% of auto \(" + round(fontSize) + "\)");
 			minROIFont = round(imageWidth/90);
@@ -1083,7 +1053,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				run("Duplicate...", "title=temp_binary_for_MCs");
 				run("8-bit");
 				AddMCsToResultsTable();
-				closeImageByTitle("temp_binary_for_MCs");
+				if (!diagnostics) closeImageByTitle("temp_binary_for_MCs");
 			}
 			else AddMCsToResultsTable();
 		}
@@ -1097,64 +1067,14 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (fontStyle=="unstyled") fontStyle="";
 		if (stroke>=0) {
 			run("Flatten"); /* Flatten converts to RGB so . . .  */
-			if (restoreHoles){
-				if (binForHoles) {  /* To overcome issue of complete ROI-fill, not fully tested yet */
-					mI1i = getImageID();
-					run("Flatten");
-					rename("flatImage");
-					mI1Fi = getImageID();
-					imageCalculator("Max", "flatImage",orID);
-					if (mI1i!=mI1Fi){
-						selectImage(mI1i);
-						close();
-					}
-					selectWindow("flatImage");
-				}
-				else {
-					preHolesID = getImageID();
-					holesPath = File.openDialog("Select an image of the holes");
-					open(holesPath);
-					rename("holesTemp");
-					run("Convert to Mask");
-					getSelectionFromMask("holesTemp");
-					run("Select None");
-					close("holesTemp");
-					selectImage(orID);
-					run("Restore Selection");
-					run("Copy");
-					selectImage(preHolesID);
-					run("Restore Selection");
-					run("Paste");
-					run("Select None");
-				}
-			}
 			rename(tN + "_" + parameterLabel + "_labels");
 			if ((imageDepth==8) && (lut=="Grays")) run("8-bit"); /* restores gray if all gray settings */
 		} else {
 			run("Duplicate...", "title=labeled");
-			if (restoreHoles){ /* Not fully tested yet but should be harmless */
-				if (binForHoles) imageCalculator("Max", "labeled",orID);
-				else {
-					holesPath = File.openDialog("Select an image of the holes");
-					open(holesPath);
-					rename("holesTemp");
-					run("Convert to Mask");
-					getSelectionFromMask("holesTemp");
-					run("Select None");
-					close("holesTemp");
-					selectImage(orID);
-					run("Restore Selection");
-					run("Copy");
-					selectWindow(labeled);
-					run("Restore Selection");
-					run("Paste");
-					run("Select None");
-				}
-			}
 			rename(tN + "_" + parameterLabel + "_labels");
 		}
 		workingImage = getTitle();
-		if (is("Batch Mode")==false) setBatchMode(true);
+		if (!diagnostics || is("Batch Mode")==false) setBatchMode(true);
 		if (outlierChoice!="No")  {
 			if (outlierChoice=="Manual_Input") {
 				Dialog.create("Input Outlier Limits");
@@ -1293,7 +1213,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			roiManager("show none");
 			if (minFontSize<12) innerTextEffect = "none";
 			fancyTextOverImage2(fontColor,outlineColor,objectLabelShadowDrop,objectLabelShadowDisp,objectLabelShadowBlur,shadowDarkness,objectOutlineStroke,innerTextEffect); /* requires "textImage" and original workingImage */
-			closeImageByTitle("textImage");
+			if (!diagnostics) closeImageByTitle("textImage");
 			if (stroke>=0) workingImage = getTitle();
 		}
 		/*
@@ -1419,7 +1339,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				else sText = false;
 			}
 		}
-		Dialog.create("Parameter Label and Summary Formatting Options");
+		Dialog.create("Parameter Label and Summary Formatting Options: " + macroV);
 			if (paraLabAdd) {
 				Dialog.addString("Parameter Label or Title:",paraLabelExp,3+minOf(32,lengthOf(paraLabelExp)));
 				Dialog.addNumber("Parameter Label font size:", paraLabFontSize,1,4,"");
@@ -1449,7 +1369,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			else Dialog.addCheckbox("Tweak summary format?",false);
 			fancyInnerEffectsChoices = newArray("None", "Recessed", "Raised");
 			fancyInnerEffectsChoice = call("ij.Prefs.get", ascPrefsKey + "summaryTextInnerEffects","None");
-			Dialog.addChoice("Inner text effects \(font size " + geq + "12):",fancyInnerEffectsChoices,fancyInnerEffectsChoice);
+			Dialog.addRadioButtonGroup("Inner text effects \(font size " + geq + "12):__________", fancyInnerEffectsChoices, 1, fancyInnerEffectsChoices.length, fancyInnerEffectsChoice);
 		Dialog.show();
 			if (paraLabAdd) {
 				paraLabel = Dialog.getString();
@@ -1489,7 +1409,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				textLabelShadowBlur = floor(0.75 * shadowDropPC);
 				textLabelShadowDarkness = 50;
 			}
-			summaryTextEffect = Dialog.getChoice();
+			summaryTextEffect = Dialog.getRadioButton();
 			call("ij.Prefs.set", ascPrefsKey + "summaryTextInnerEffects",summaryTextEffect);
 			fontFactor = statsLabFontSize/100;
 			if (paraLabFontSize<12 ||  statsLabFontSize<12) summaryTextEffect = "none";
@@ -1611,7 +1531,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				run("Select None");
 				posStartX = selPosStartX;
 				posStartY = selPosStartY;
-				if (batchOn) setBatchMode(true); /* Return to original batch mode setting */
+				if (!diagnostics || if (batchOn) setBatchMode(true); /* Return to original batch mode setting */
 			} else if (paraLabPos == "Current Selection"){
 				posStartX = selPosStartX;
 				posStartY = selPosStartY;
@@ -1679,7 +1599,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		}
 		if (summaryToImage || paraLabAdd){
 			/* Draw summary over top of object labels */
-			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+			if (!diagnostics || is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 			textImages = newArray("textImage","antiAliased");
 			/* Create Label Mask */
 			newImage("textImage", "8-bit black", imageWidth, imageHeight, 1);
@@ -1736,9 +1656,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					imageCalculator("Max","textImage","antiAliased");
 					imageCalculator("Min",workingImage,"textImage");
 				}
-				closeImageByTitle("textImage");
-				closeImageByTitle("label_mask");
-				closeImageByTitle("antiAliased");
+				if (!diagnostics) closeImageByTitle("textImage");
+				if (!diagnostics) closeImageByTitle("label_mask");
+				if (!diagnostics) closeImageByTitle("antiAliased");
 			}
 		}
 	if(summaryToLog || summaryToFile){
@@ -1773,7 +1693,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			createCombo = Dialog.getRadioButton;
 		if (createCombo!="No") {
 			if (indexOf(createCombo,"cropped")>0){
-				if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
+				if (!diagnostics || is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
 				selectWindow(tNC);
 				run("Duplicate...", "title=" + tNC + "_crop");
 				cropID = getImageID;
@@ -1787,12 +1707,12 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					msg = "1. Select the area that you want to crop to. 2. Click on OK";
 					waitForUser(title, msg);
 				}
-				if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+				if (!diagnostics || is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 				selectImage(cropID);
 				if(selectionType>=0) run("Crop");
 				else IJ.log("Combination with cropped image desired by no crop made");
 				run("Select None");
-				closeImageByTitle(tNC);
+				if (!diagnostics) closeImageByTitle(tNC);
 				rename(tNC);
 				imageHeight = getHeight();
 				imageWidth = getWidth();
@@ -1801,7 +1721,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				rampScale = imageHeight/canvasH;
 				selectWindow(tR);
 				run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
-				closeImageByTitle(tR);
+				if (!diagnostics) closeImageByTitle(tR);
 				rename(tR);
 				canvasH = getHeight(); /* update ramp height */
 				canvasW = getWidth(); /* update ramp height */
@@ -1809,7 +1729,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			rampMargin = maxOf(2,imageWidth/500);
 			rampSelW = canvasW + rampMargin;
 			comboW = imageWidth + rampSelW;
-			if (is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
+			if (!diagnostics || is("Batch Mode")==true) setBatchMode("exit & display");	/* toggle batch mode off */
 			selectWindow(tNC);
 			run("Canvas Size...", "width="+comboW+" height="+imageHeight+" position=Top-Left");
 			selectWindow(tR);
@@ -1820,7 +1740,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			Image.paste(imageWidth + maxOf(2,imageWidth/500),round((imageHeight-canvasH)/2));
 			rename(tNC + "+legend");
 			if ((imageDepth==8 && lut=="Grays") || is("grayscale")) run("8-bit"); /* restores gray if all gray settings */
-			closeImageByTitle(tR);
+			if (!diagnostics) closeImageByTitle(tR);
 		}
 	}
 	if (selectionExists){
@@ -1892,7 +1812,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 					j = lengthOf(RPx); /* one point and done */
 				}
 			}
-			closeImageByTitle("Contained Points");
+			if (!diagnostics) closeImageByTitle("Contained Points");
 			if(addRadii) {
 				/* Now measure min and max radii from M-Centroid */
 				rMin = Rwidth + Rheight; rMax = 0;
@@ -2203,7 +2123,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-"+ fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
@@ -2462,13 +2382,16 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
 		   v230130 Added more descriptions and modified order.
 		   v230908: Returns "white" array if not match is found and logs issues without exiting.
-		     57 Colors 
+		   v231004: Adds near-black and near-white.
+		     59 Colors 
 		*/
 		functionL = "getColorArrayFromColorName_v230911";
 		cA = newArray(255,255,255); /* defaults to white */
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
+		else if (colorName == "near-white") cA = newArray(250,250,250);
 		else if (colorName == "off-white") cA = newArray(245,245,245);
+		else if (colorName == "near-black") cA = newArray(5,5,5);
 		else if (colorName == "off-black") cA = newArray(10,10,10);
 		else if (colorName == "light_gray") cA = newArray(200,200,200);
 		else if (colorName == "gray") cA = newArray(127,127,127);
@@ -2589,16 +2512,18 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
   	function getFontChoiceList() {
 		/*	v180723 first version
 			v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization.
-			v230919 You can add a list of fonts that do not produce good results with the macro.
+			v230919 You can add a list of fonts that do not produce good results with the macro. 230921 more exclusions.
 		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoices = Array.concat(IJFonts,systemFonts);
-		blackFonts = Array.filter(fontNameChoices, "(.*[bB]l.*k)");
-		eBFonts = Array.filter(fontNameChoices,  "(.*[Ee]xtra[Bb]old)");
-		fontNameChoices = Array.concat(blackFonts, eBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
-		faveFontList = newArray("Your favorite fonts here", "Archivo Black", "Arial Black", "Lato Black", "Merriweather Black", "Noto Sans Black", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
-		offFontList = newArray("Poppins.*", "Fira.*", "Montserrat.*", "Alegreya SC Black", "Libre.*", "Olympia.*"); /* These don't work so well. Use a ".*" to remove families */
+		blackFonts = Array.filter(fontNameChoices, "([A-Za-z]+.*[bB]l.*k)");
+		eBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Ee]xtra.*[Bb]old)");
+		uBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Uu]ltra.*[Bb]old)");
+		fontNameChoices = Array.concat(blackFonts, eBFonts, uBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
+		faveFontList = newArray("Your favorite fonts here", "Arial Black", "Myriad Pro Black", "Myriad Pro Black Cond", "Noto Sans Blk", "Noto Sans Disp Cond Blk", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
+		/* Some fonts or font families don't work well with ASC macros, typically they do not support all useful symbols, they can be excluded here using the .* regular expression */
+		offFontList = newArray("Alegreya SC Black", "Archivo.*", "Arial Rounded.*", "Bodon.*", "Cooper.*", "Eras.*", "Fira.*", "Gill Sans.*", "Lato.*", "Libre.*", "Lucida.*",  "Merriweather.*", "Montserrat.*", "Nunito.*", "Olympia.*", "Poppins.*", "Rockwell.*", "Tw Cen.*", "Wingdings.*", "ZWAdobe.*"); /* These don't work so well. Use a ".*" to remove families */
 		faveFontListCheck = newArray(faveFontList.length);
 		for (i=0,counter=0; i<faveFontList.length; i++) {
 			for (j=0; j<fontNameChoices.length; j++) {

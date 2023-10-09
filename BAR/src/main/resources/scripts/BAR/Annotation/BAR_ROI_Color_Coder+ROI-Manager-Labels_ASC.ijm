@@ -16,9 +16,12 @@
 	v230905: Tweaked range-finding and updated functions. F1-2: Updated getColorArrayFromColorName_v230908.
 	v230911-15b: Restricted LUT range to be within ramp range. Fixed outlier range preferences. Add unit separator options.
 	v230916: Most parameters now saved in user prefs. Streamlined trailing zeros detection for legend.
+	v231005: 'Holes' option removed: Composite ROIs preferred. Some cosmetic improvements to menu layouts.
+			Removed parenthesis in wrong place on line 1720.
+			Suggests optimum tick count. Minor tick length corrected. Added more saved prefs.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v230916-f1.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v231005.ijm";
 	macroV = substring(macroL,lastIndexOf(macroL,"_v") + 2,maxOf(lastIndexOf(macroL,"."),lastIndexOf(macroL,"_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -37,7 +40,8 @@ macro "ROI Color Coder with ROI Labels" {
 	t = getTitle();
 	tPath = getDirectory("image");
 	if (tPath=="") tPath = File.directory;
-	/* Check to see if there is a rectangular location already set */
+	if (indexOf(tPath, "AutoRun")>=0) tPath = "";
+	/* Check to see if there is a rectangular location already set for the summary */
 	if (selectionType()==0) {
 		getSelectionBounds(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 		selectionExists = true;
@@ -102,7 +106,6 @@ macro "ROI Color Coder with ROI Labels" {
 	if (nROIs<=1) restoreExit("Exit: ROI Manager has only \(" + nROIs + "\) entries."); /* exit so that this ambiguity can be cleared up */
 	items = nROIs;
 	run("Remove Overlay");
-	setBatchMode(true);
 	countNaN = 0; /* Set this counter here so it is not skipped by later decisions */
 	menuLimit = 0.8 * screenHeight; /* used to limit menu size for small screens */
 	// menuLimit = 700; /* for testing only resolution options only */
@@ -128,6 +131,11 @@ macro "ROI Color Coder with ROI Labels" {
 	headingsWithRange= newArray;
 	for (i=0, countH=0; i<lengthOf(headings); i++) {
 		resultsColumn = newArray(items);
+		headingClean = cleanLabel(headings[i]);
+		if (headingClean!=headings[i]){
+			Table.renameColumn(headings[i], headingClean);
+			headings[i] = headingClean;
+		}
 		for (j=0; j<items; j++)
 			resultsColumn[j] = getResult(headings[i], j);
 		Array.getStatistics(resultsColumn, min, max, null, null);
@@ -170,17 +178,18 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[iDefHeading]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 		Dialog.addChoice("LUT:", luts, call("ij.Prefs.get", ascPrefsKey + "lut",luts[0]));
-		Dialog.setInsets(0, 120, 12);
+		Dialog.setInsets(0, 170, 0);
 		Dialog.addCheckbox("Reverse LUT?", call("ij.Prefs.get", ascPrefsKey + "revLut", false));
 		Dialog.addMessage("Color Coding:______Borders, Filled ROIs or None \(just labels\)?",infoFontSize,instructionColor);
+		Dialog.setInsets(5, 20, 0);
 		Dialog.addNumber("Outlines or Solid?", 0, 0, parseInt(call("ij.Prefs.get", ascPrefsKey + "stroke", 0)), "Width \(pixels\), 0=fill ROIs, -1= label only");
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addSlider("Coding opacity (%):", 0, 100, parseInt(call("ij.Prefs.get", ascPrefsKey + "opacity", 100)));
 		roiLabelOptions = newArray("Add ROI labels \(rename ROIs with parameter values\)","Restore original ROI names after labeling");
 		roiLabelOptionChecks = newArray(true,true);
 		Dialog.addCheckboxGroup(2,1,roiLabelOptions,roiLabelOptionChecks);
 		Dialog.setInsets(6, 120, 10);
 		if (selectionExists) {
-			tPath = Dialog.getString();
 			Dialog.addCheckbox("Parameter at selected location \(below\)?", true);
 			Dialog.addNumber("Starting",selPosStartX,0,5,"X");
 			Dialog.setInsets(-28, 150, 0);
@@ -189,6 +198,8 @@ macro "ROI Color Coder with ROI Labels" {
 			Dialog.setInsets(-28, 150, 0);
 			Dialog.addNumber("Selected",originalSelEHeight,0,5,"Height");
 		}
+		Dialog.setInsets(0, 20, 0);
+		Dialog.addCheckbox("Diagnostics", false);
 	Dialog.show;
 		if (imageN==1) imageChoice = t;
 		else if (imageN > 5) imageChoice = Dialog.getChoice();
@@ -214,6 +225,8 @@ macro "ROI Color Coder with ROI Labels" {
 			originalSelEWidth = Dialog.getNumber;
 			originalSelEHeight = Dialog.getNumber;
 		}
+		diagnostics = Dialog.getCheckbox();
+	if (!diagnostics) setBatchMode(true);
 	if (restoreROINames){
 		orROINames = newArray();
 		for (countNaN=0, i=0; i<items; i++)
@@ -284,18 +297,19 @@ macro "ROI Color Coder with ROI Labels" {
 		unitSeparators = newArray("\(unit\)",", unit","[unit]","{unit}");
 		iUnitSeparators = indexOfArray(unitSeparators, call("ij.Prefs.get", ascPrefsKey + "unitSeparator", "\(unit\)"),unitSeparators[0]);
 		Dialog.addChoice("Unit separator\(s\) in label:",unitSeparators,unitSeparators[iUnitSeparators]);
-		Dialog.setInsets(0, 20, -15);
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addMessage("Original data range:       "+arrayMin+"-"+arrayMax+" \(range = "+(arrayRange)+" "+dialogUnit+"\)",infoFontSize,infoColor);
-		Dialog.addString("Legend \(ramp\) data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 10);
-		Dialog.setInsets(-20, 370, 0); /* top, left, bottom */
+		Dialog.addString("Legend \(ramp\) data range \(" + rampRange + "\):", rampMin+"-"+rampMax, 15);
+		Dialog.setInsets(-20, 400, 0); /* top, left, bottom */
 		Dialog.addMessage("\(e.g. n-n\)", infoFontSize+2, instructionColor);
-		Dialog.addString("LUT colors applied across range \(n-n format\):", arrayMin+"-"+arrayMax, 10);
+		Dialog.addString("LUT colors applied across range \(n-n format\):", arrayMin+"-"+arrayMax, 15);
 		Dialog.setInsets(-7, 10, 7);
 		Dialog.addMessage("The LUT gradient will be remapped to this range \(limited by the ramp min and max\)\nBeyond this range the top and bottom LUT colors will be applied",infoFontSize,instructionColor);
 		Dialog.setInsets(-4, 120, 0);
 		Dialog.addCheckbox("Add legend \(ramp\) labels at Min. & Max. if inside Range", true);
 		Dialog.addNumber("No. of major intervals:", numIntervals, 0, 3, "Major tick count will be +1 more than this");
-		Dialog.addNumber("No. of ticks between major ticks:", 5, 0, 3, "i.e. 4 ticks for 5 minor intervals");
+		defTickN = 5 * (floor(20/numIntervals)) -1;
+		Dialog.addNumber("No. of ticks between major ticks:", defTickN, 0, 3, "i.e. 4 ticks for 5 minor intervals");
 		Dialog.addChoice("Decimal places:", newArray("Auto", "Manual", "Scientific", "0", "1", "2", "3", "4"), "Auto");
 		Dialog.addChoice("Legend \(ramp\) height \(pixels\):", newArray(d2s(rampH,0), 128, 256, 512, 1024, 2048, 4096), rampH);
 		Dialog.setInsets(-38, 350, 0);
@@ -306,29 +320,32 @@ macro "ROI Color Coder with ROI Labels" {
 		fontNameChoice = getFontChoiceList();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
 		Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pixels");
-		Dialog.setInsets(-5, 215, 0);
-		Dialog.addCheckbox("Draw border and top/bottom tick marks", true);
-		Dialog.setInsets(2, 120, 0);
-		Dialog.addCheckbox("Force clockwise rotated legend label", false);
+		rampFormatChoices = newArray("Draw border and top/bottom ticks", "Force vertical \(rotated\) legend label", "Frequency plotted inside legend", "Off-white statistics labels in legend");
+		brdr = call("ij.Prefs.get",  ascPrefsKey + "brdr", true);
+		rotLegend = call("ij.Prefs.get",  ascPrefsKey + "rotLegend", false);
+		freqDistRamp = call("ij.Prefs.get",  ascPrefsKey + "freqDistRamp", true);
+		offWhiteStats = call("ij.Prefs.get", ascPrefsKey + "offWhiteStats", false);
+		rampFormatChecks = newArray(brdr, rotLegend, freqDistRamp, offWhiteStats);
+		Dialog.setInsets(0, 70, 0);
+		Dialog.addCheckboxGroup(2, 2, rampFormatChoices, rampFormatChecks);
 		Dialog.setInsets(3, 0, -2);
 		rampStatsOptions = newArray("No", "Linear", "Ln");
+		statsRampLines = call("ij.Prefs.get",  ascPrefsKey + "statsRampLines", "Linear");
 		Dialog.setInsets(-20, 15, 18);
-		Dialog.addRadioButtonGroup("Legend \(Ramp\) Stats: Mean and " + fromCharCode(0x00B1) + sigmaChar + " on ramp \(if \"Ln\" then outlier " + sigmaChar + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, "Linear");
+		Dialog.addRadioButtonGroup("Legend \(Ramp\) Stats: Mean and " + fromCharCode(0x00B1) + sigmaChar + " on ramp \(if \"Ln\" then outlier " + sigmaChar + " will be \"Ln\" too\)", rampStatsOptions, 1, 5, statsRampLines);
 		/* will be used for sigma outlines too */
-		Dialog.addNumber("Tick length:", 50, 0, 3, "% of major tick. Also Min. & Max. Lines");
+		statsRampTick = parseInt(call("ij.Prefs.get",  ascPrefsKey + "statsRampTickL", 50));
+		Dialog.addNumber("Tick length:", statsRampTick, 0, 3, "% of major tick. Also Min. & Max. Lines");
+		thinLinesFontSTweak = parseInt(call("ij.Prefs.get",  ascPrefsKey + "thinLinesFontSTweak", 100));
 		Dialog.addNumber("Label font:", 100, 0, 3, "% of font size. Also Min. & Max. Lines");
 		Dialog.setInsets(4, 120, 0);
-		Dialog.addCheckbox("Add frequency distribution plot to legend \(ramp\)", true);
-		binForHoles = is("binary");
-		if (binForHoles) Dialog.addCheckbox("Calculate 'Max' image to restore holes if ROIs NOT composite \(experimental\)",false);
-		else Dialog.addCheckbox("Use binary image of holes to restore holes if ROIs NOT composite \(experimental\)",false);
 		Dialog.addHelp("https://imagej.net/doku.php?id=macro:roi_color_coder");
 	Dialog.show;
 		parameterLabel = Dialog.getString;
 		unitLabel = Dialog.getChoice();
 		if (unitLabel=="None") unitLabel = "";
 		unitSeparator = Dialog.getChoice();
-		call("ij.Prefs.set",  ascPrefsKey + "unitSeparator",unitSeparator);
+		call("ij.Prefs.set", ascPrefsKey + "unitSeparator",unitSeparator);
 		rangeS = Dialog.getString; /* changed from original to allow negative values - see below */
 		rangeLUT = Dialog.getString;
 		if (rangeLUT=="same as ramp range") rangeLUT = rangeS; /* maintained for old preferences */
@@ -339,18 +356,26 @@ macro "ROI Color Coder with ROI Labels" {
 		dpChoice = Dialog.getChoice;
 		rampHChoice = parseInt(Dialog.getChoice);
 		fontStyle = Dialog.getChoice;
-		call("ij.Prefs.set",  ascPrefsKey + "rampFStyle",fontStyle);
+		call("ij.Prefs.set", ascPrefsKey + "rampFStyle",fontStyle);
 		if (fontStyle=="unstyled") fontStyle="";
 		fontStyle += " antialiased"; /* why not? */
 		fontName = Dialog.getChoice;
 		fontSize = Dialog.getNumber;
 		brdr = Dialog.getCheckbox;
+		call("ij.Prefs.set", ascPrefsKey + "brdr", brdr);
 		rotLegend = Dialog.getCheckbox;
-		statsRampLines = Dialog.getRadioButton;
-		statsRampTicks = Dialog.getNumber;
-		thinLinesFontSTweak = Dialog.getNumber;
+		call("ij.Prefs.set", ascPrefsKey + "rotLegend", rotLegend);
 		freqDistRamp = Dialog.getCheckbox();
-		restoreHoles = Dialog.getCheckbox();
+		call("ij.Prefs.set", ascPrefsKey + "freqDistRamp", freqDistRamp);
+		offWhiteStats = Dialog.getCheckbox();
+		call("ij.Prefs.set", ascPrefsKey + "offWhiteStats", offWhiteStats);
+		statsRampLines = Dialog.getRadioButton;
+		call("ij.Prefs.set", ascPrefsKey + "statsRampLines", statsRampLines);
+		statsRampTickL = Dialog.getNumber;
+		call("ij.Prefs.set", ascPrefsKey + "statsRampTickL", statsRampTickL);
+		thinLinesFontSTweak = Dialog.getNumber;
+		call("ij.Prefs.set", ascPrefsKey + "thinLinesFontSTweak", thinLinesFontSTweak);
+	setBatchMode(true);
 	if (imageChoice!=t) {
 		t = imageChoice;
 		tN = stripKnownExtensionFromString(t);
@@ -453,7 +478,7 @@ macro "ROI Color Coder with ROI Labels" {
 		canvasW = round(rampH/2);
 		tickL = round(rampW/4);
 		if (statsRampLines!="No" || rampMinMaxLines) tickL = round(tickL/2); /* reduce tick length to provide more space for inside label */
-		tickLR = round(tickL * statsRampTicks/100);
+		tickLR = round(tickL * statsRampTickL/100);
 		getLocationAndSize(imgx, imgy, imgwidth, imgheight);
 		call("ij.gui.ImageWindow.setNextLocation", imgx + imgwidth, imgy);
 		tR = replace(tN + "_" + parameterLabel +"_Ramp", " ","_");
@@ -578,18 +603,6 @@ macro "ROI Color Coder with ROI Labels" {
 				rampLabelString[i] = substring(rampLabelString[i], 0, lengthOf(rampLabelString[i])-1);
 			}
 		}
-	// This section in development: issue with ramp sizing //
-	// if (decPlaces==0){
-		// for (nL=0,expos=numLabels; nL<numLabels; nL++){
-			// for (i=0, endZeros=0; i<rampLabelString[nL].length && endsWith(substring(rampLabelString[nL], 0, rampLabelString[nL].length-i), "0"); i++) endZeros += 1;
-			// expos = minOf(expos, endZeros);
-		// }
-		// if (expos>=2){
-			// for (nL=0; nL<numLabels; nL++) rampLabelString[nL] = d2s(parseInt(rampLabelString[nL])/ pow(10, expos), 0);
-			// rampParameterLabel += "/" + d2s(pow(10, expos),0);
-			// rampUnitLabel += "*" + d2s(pow(10, expos),0);
-		// }
-	// }
 		/* end of ramp number label cleanup */
 		setLineWidth(rampLW);
 		for (i=0; i<numLabels; i++) {
@@ -617,8 +630,8 @@ macro "ROI Color Coder with ROI Labels" {
 			for (i=1; i<numTick; i++) { /* no bottom tick */
 				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 				setLineWidth(round(rampLW/4));
-				drawLine(0, yPos, tickL/4, yPos);					/* left minor tick */
-				drawLine(rampW-tickL/4-1, yPos, rampW-1, yPos);		/* right minor tick */
+				drawLine(0, yPos, tickLR, yPos);					/* left minor tick */
+				drawLine(rampW-tickLR-1, yPos, rampW-1, yPos);		/* right minor tick */
 			}
 		}
 		/* end draw minor ticks */
@@ -745,9 +758,11 @@ macro "ROI Color Coder with ROI Labels" {
 			run("Gaussian Blur...", "sigma="+rampOutlineStroke);
 			run("Select None");
 			getSelectionFromMask("label_mask");
-			setBackgroundColor(255, 255, 255);
+			if (offWhiteStats) setBackgroundColor(245, 245, 245);  /* set to off-white so that these labels are not transparent when white is set as the transparent layer */
+			else setBackgroundColor(255, 255, 255);
 			run("Clear");
 			run("Select None");
+			setBackgroundColor(255, 255, 255);  /* Restore background to white for ramp expansion */
 			/* The following steps smooth the interior of the text labels */
 			selectWindow("stats_text");
 			getSelectionFromMask("label_mask");
@@ -756,8 +771,8 @@ macro "ROI Color Coder with ROI Labels" {
 			run("Invert");
 			run("Select None");
 			imageCalculator("Min",tR,"stats_text");
-			closeImageByTitle("label_mask");
-			closeImageByTitle("stats_text");
+			if (!diagnostics) closeImageByTitle("label_mask");
+			if (!diagnostics) closeImageByTitle("stats_text");
 			/* reset colors and font */
 			setFont(fontName, fontSize, fontStyle);
 			setColor(0,0,0);
@@ -845,35 +860,9 @@ macro "ROI Color Coder with ROI Labels" {
 		paraLabelExp = parameterLabelExp + ", " + unitLabel;
 	}
 	if (!addLabels) {
-		if (restoreHoles && binForHoles) { /* Not fully tested yet but should be harmless */
-			mI1 = getImageID();
-			roiManager("show all without labels");
-			run("Flatten");
-			mI1F = getTitle();
-			imageCalculator("Max", mI1F,orID);
-			closeImageByTitle(mI1);
-			selectWindow(mI1F);
-			rename(tN);
-		}
 		selectWindow(tN);
 		roiManager("show all with labels");
 		run("Flatten"); /* creates an RGB copy of the image with color coded objects or not */
-		if (restoreHoles && !binForHoles){
-			holesPath = File.openDialog("Select an image of the holes");
-			open(holesPath);
-			rename(holesTemp);
-			run("Convert to Mask");
-			getSelectionFromMask(holesTemp);
-			run("Select None");
-			close(holesTemp);
-			selectImage(orID);
-			run("Restore Selection");
-			run("Copy");
-			selectWindow(tN);
-			run("Restore Selection");
-			run("Paste");
-			run("Select None");
-		}
 	}
 	else {
 		for (countNaN=0, i=0; i<items; i++) {
@@ -913,12 +902,12 @@ macro "ROI Color Coder with ROI Labels" {
 				msg = "1. Select the area that you want to crop to. 2. Click on OK";
 				waitForUser(title, msg);
 			}
-			if (is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
+			if (!diagnostics || is("Batch Mode")==false) setBatchMode(true);	/* toggle batch mode back on */
 			selectImage(cropID);
 			if(selectionType>=0) run("Crop");
 			else IJ.log("Combination with cropped image desired by no crop made");
 			run("Select None");
-			closeImageByTitle(tNC);
+			if (!diagnostics) closeImageByTitle(tNC);
 			rename(tNC);
 			imageHeight = getHeight();
 			imageWidth = getWidth();
@@ -927,7 +916,7 @@ macro "ROI Color Coder with ROI Labels" {
 			rampScale = imageHeight/canvasH;
 			selectWindow(tR);
 			run("Scale...", "x="+rampScale+" y="+rampScale+" interpolation=Bicubic average create title=scaled_ramp");
-			closeImageByTitle(tR);
+			if (!diagnostics) closeImageByTitle(tR);
 			rename(tR);
 			canvasH = getHeight(); /* update ramp height */
 			canvasW = getWidth(); /* update ramp height */
@@ -952,6 +941,7 @@ macro "ROI Color Coder with ROI Labels" {
 		/* Restore original selection to original image */
 		finalID = getImageID();
 		selectImage(orID);
+		roiManager("Show None");
 		makeRectangle(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 		selectImage(finalID);
 	}
@@ -1256,7 +1246,8 @@ macro "ROI Color Coder with ROI Labels" {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
 		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
-		v220630 added degrees v220812 Changed Ångström unit code */
+		v220630 added degrees v220812 Changed Ångström unit code
+		v231005 Weird Excel characters added, micron unit correction */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
@@ -1278,6 +1269,7 @@ macro "ROI Color Coder with ROI Labels" {
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
 		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
+		if (indexOf(string,"mý")>1) string = substring(string, 0, indexOf(string,"mý")-1) + getInfo("micrometer.abbreviation") + fromCharCode(178);
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -1389,7 +1381,7 @@ macro "ROI Color Coder with ROI Labels" {
 		else if (str=="Sqr_Diag_A") str = "Diagonal of Square \(from area\)";
 		else if (str=="X") str = "Centroid \(x\)";
 		else if (str=="Y") str = "Centroid \(y\)";
-		else { /* additional ASC geomotries */
+		else { /* additional ASC geometries */
 			str = str.replace(fromCharCode(0x00B0), "degrees");
 			str = str.replace("0-90_degrees", "0-90"+fromCharCode(0x00B0)); /* An exception to the above*/
 			str = str.replace("0-90degrees", "0-90"+fromCharCode(0x00B0)); /* An exception to the above*/
@@ -1643,16 +1635,18 @@ macro "ROI Color Coder with ROI Labels" {
   	function getFontChoiceList() {
 		/*	v180723 first version
 			v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization.
-			v230919 You can add a list of fonts that do not produce good results with the macro.
+			v230919 You can add a list of fonts that do not produce good results with the macro. 230921 more exclusions.
 		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoices = Array.concat(IJFonts,systemFonts);
-		blackFonts = Array.filter(fontNameChoices, "(.*[bB]l.*k)");
-		eBFonts = Array.filter(fontNameChoices,  "(.*[Ee]xtra[Bb]old)");
-		fontNameChoices = Array.concat(blackFonts, eBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
-		faveFontList = newArray("Your favorite fonts here", "Archivo Black", "Arial Black", "Lato Black", "Merriweather Black", "Noto Sans Black", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
-		offFontList = newArray("Poppins.*", "Fira.*", "Montserrat.*", "Alegreya SC Black", "Libre.*", "Olympia.*"); /* These don't work so well. Use a ".*" to remove families */
+		blackFonts = Array.filter(fontNameChoices, "([A-Za-z]+.*[bB]l.*k)");
+		eBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Ee]xtra.*[Bb]old)");
+		uBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Uu]ltra.*[Bb]old)");
+		fontNameChoices = Array.concat(blackFonts, eBFonts, uBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
+		faveFontList = newArray("Your favorite fonts here", "Arial Black", "Myriad Pro Black", "Myriad Pro Black Cond", "Noto Sans Blk", "Noto Sans Disp Cond Blk", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
+		/* Some fonts or font families don't work well with ASC macros, typically they do not support all useful symbols, they can be excluded here using the .* regular expression */
+		offFontList = newArray("Alegreya SC Black", "Archivo.*", "Arial Rounded.*", "Bodon.*", "Cooper.*", "Eras.*", "Fira.*", "Gill Sans.*", "Lato.*", "Libre.*", "Lucida.*",  "Merriweather.*", "Montserrat.*", "Nunito.*", "Olympia.*", "Poppins.*", "Rockwell.*", "Tw Cen.*", "Wingdings.*", "ZWAdobe.*"); /* These don't work so well. Use a ".*" to remove families */
 		faveFontListCheck = newArray(faveFontList.length);
 		for (i=0,counter=0; i<faveFontList.length; i++) {
 			for (j=0; j<fontNameChoices.length; j++) {
@@ -1965,12 +1959,13 @@ macro "ROI Color Coder with ROI Labels" {
 	+ v220128 add loops that allow removal of multiple duplication.
 	+ v220131 fixed so that suffix cleanup works even if extensions are included.
 	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
+	+ v231005 Replaced superscript abbreviations that did not work.
 	*/
 		/* Remove bad characters */
-		string = string.replace(fromCharCode(178), "\\^2"); /* superscript 2 */
-		string = string.replace(fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string = string.replace(fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string = string.replace(fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(178), "sup2"); /* superscript 2 */
+		string = string.replace(fromCharCode(179), "sup3"); /* superscript 3 UTF-16 (decimal) */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(185), "sup-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(178), "sup-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string = string.replace(fromCharCode(181)+"m", "um"); /* micron units */
 		string = string.replace(getInfo("micrometer.abbreviation"), "um"); /* micron units */
 		string = string.replace(fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
@@ -2028,7 +2023,8 @@ macro "ROI Color Coder with ROI Labels" {
 	/* v180404 added Feret_MinDAngle_Offset
 		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array.
 		v220808 Replaces ° with fromCharCode(0x00B0).
-		v230109 Expand px to pixels. Simpify angleUnits.
+		v230109 Expand px to pixels. Simplify angleUnits.
+		v231005 Look and underscores replaced by spaces too.
 		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
@@ -2044,13 +2040,19 @@ macro "ROI Color Coder with ROI Labels" {
 			}
 		}
 		else {
-			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			noUnits = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			noUnitSs = newArray;
+			for (i=0; i<noUnits.length; i++) noUnitSs[i] = replace(noUnits[i], "_", " ");
 			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","0-90",fromCharCode(0x00B0),"0to90","degrees");
+			angleUnitSs = newArray;
+			for (i=0 ; i<angleUnits.length; i++) angleUnitSs[i] = replace(angleUnits[i], "_", " ");
 			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(noUnits, string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(noUnitSs, string,-1)>=0) unitLabel = "None";
 			else if (indexOfArray(chooseUnits,string,-1)>=0) unitLabel = "";
 			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
+			else if (indexOfArray(angleUnitSs,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 			if (indexOf(unitLabel,"px")>=0) unitLabel = "pixels";

@@ -29,7 +29,7 @@
 	+ v230905: Tweaked rangefinding and updated functions. F1: updated functions.
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905-f4.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905-f6.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -79,7 +79,7 @@ macro "ROI Color Coder with settings generated from data"{
 		for (j=0; j<items; j++)
 			resultsColumn[j] = getResult(headings[i], j);
 		Array.getStatistics(resultsColumn, min, max, null, null);
-		if (min!=max){ /* No point in listing parameters without a range */
+		if (min!=max && min>=0 && !endsWith(max,"Infinity")) { /* No point in listing parameters without a range , also, the macro does not handle negative numbers well (let me know if you need them)*/
 			headingsWithRange[countH] = headings[i] + ":  " + min + " - " + max;
 			countH++;
 		}
@@ -781,7 +781,8 @@ macro "ROI Color Coder with settings generated from data"{
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
 		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
-		v220630 added degrees v220812 Changed Ångström unit code */
+		v220630 added degrees v220812 Changed Ångström unit code
+		v231005 Weird Excel characters added, micron unit correction */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
@@ -803,6 +804,7 @@ macro "ROI Color Coder with settings generated from data"{
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
 		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
 		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
+		if (indexOf(string,"mý")>1) string = substring(string, 0, indexOf(string,"mý")-1) + getInfo("micrometer.abbreviation") + fromCharCode(178);
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -851,7 +853,7 @@ macro "ROI Color Coder with settings generated from data"{
 		else if (str=="Sqr_Diag_A") str = "Diagonal of Square \(from area\)";
 		else if (str=="X") str = "Centroid \(x\)";
 		else if (str=="Y") str = "Centroid \(y\)";
-		else { /* additional ASC geomotries */
+		else { /* additional ASC geometries */
 			str = str.replace(fromCharCode(0x00B0), "degrees");
 			str = str.replace("0-90_degrees", "0-90"+fromCharCode(0x00B0)); /* An exception to the above*/
 			str = str.replace("0-90degrees", "0-90"+fromCharCode(0x00B0)); /* An exception to the above*/
@@ -912,24 +914,49 @@ macro "ROI Color Coder with settings generated from data"{
 		return str;
 	}
   	function getFontChoiceList() {
-		/*	v180723 first version. v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization	*/
+		/*	v180723 first version
+			v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization.
+			v230919 You can add a list of fonts that do not produce good results with the macro. 230921 more exclusions.
+		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
-		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Poppins Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black","Goldman Sans","Serif");
+		fontNameChoices = Array.concat(IJFonts,systemFonts);
+		blackFonts = Array.filter(fontNameChoices, "([A-Za-z]+.*[bB]l.*k)");
+		eBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Ee]xtra.*[Bb]old)");
+		uBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Uu]ltra.*[Bb]old)");
+		fontNameChoices = Array.concat(blackFonts, eBFonts, uBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
+		faveFontList = newArray("Your favorite fonts here", "Arial Black", "Myriad Pro Black", "Myriad Pro Black Cond", "Noto Sans Blk", "Noto Sans Disp Cond Blk", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
+		/* Some fonts or font families don't work well with ASC macros, typically they do not support all useful symbols, they can be excluded here using the .* regular expression */
+		offFontList = newArray("Alegreya SC Black", "Archivo.*", "Arial Rounded.*", "Bodon.*", "Cooper.*", "Eras.*", "Fira.*", "Gill Sans.*", "Lato.*", "Libre.*", "Lucida.*",  "Merriweather.*", "Montserrat.*", "Nunito.*", "Olympia.*", "Poppins.*", "Rockwell.*", "Tw Cen.*", "Wingdings.*", "ZWAdobe.*"); /* These don't work so well. Use a ".*" to remove families */
 		faveFontListCheck = newArray(faveFontList.length);
 		for (i=0,counter=0; i<faveFontList.length; i++) {
-			for (j=0; j<fontNameChoice.length; j++) {
-				if (faveFontList[i] == fontNameChoice[j]) {
+			for (j=0; j<fontNameChoices.length; j++) {
+				if (faveFontList[i] == fontNameChoices[j]) {
 					faveFontListCheck[counter] = faveFontList[i];
-					j = fontNameChoice.length;
+					j = fontNameChoices.length;
 					counter++;
 				}
 			}
 		}
 		faveFontListCheck = Array.trim(faveFontListCheck, counter);
-		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
-		return fontNameChoice;
+		for (i=0; i<fontNameChoices.length; i++) {
+			for (j=0; j<offFontList.length; j++){
+				if (fontNameChoices[i]==offFontList[j]) fontNameChoices = Array.deleteIndex(fontNameChoices, i);
+				if (endsWith(offFontList[j],".*")){
+					if (startsWith(fontNameChoices[i], substring(offFontList[j], 0, indexOf(offFontList[j],".*")))){
+						fontNameChoices = Array.deleteIndex(fontNameChoices, i);
+						i = maxOf(0, i-1); 
+					} 
+					// fontNameChoices = Array.filter(fontNameChoices, "(^" + offFontList[j] + ")"); /* RegEx not working and very slow */
+				} 
+			} 
+		}
+		fontNameChoices = Array.concat(faveFontListCheck, fontNameChoices);
+		for (i=0; i<fontNameChoices.length; i++) {
+			for (j=i+1; j<fontNameChoices.length; j++)
+				if (fontNameChoices[i]==fontNameChoices[j]) fontNameChoices = Array.deleteIndex(fontNameChoices, j);
+		}
+		return fontNameChoices;
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
@@ -1099,12 +1126,13 @@ macro "ROI Color Coder with settings generated from data"{
 	+ v220128 add loops that allow removal of multiple duplication.
 	+ v220131 fixed so that suffix cleanup works even if extensions are included.
 	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
+	+ v231005 Replaced superscript abbreviations that did not work.
 	*/
 		/* Remove bad characters */
-		string = string.replace(fromCharCode(178), "\\^2"); /* superscript 2 */
-		string = string.replace(fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string = string.replace(fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string = string.replace(fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(178), "sup2"); /* superscript 2 */
+		string = string.replace(fromCharCode(179), "sup3"); /* superscript 3 UTF-16 (decimal) */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(185), "sup-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(178), "sup-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string = string.replace(fromCharCode(181)+"m", "um"); /* micron units */
 		string = string.replace(getInfo("micrometer.abbreviation"), "um"); /* micron units */
 		string = string.replace(fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
@@ -1162,7 +1190,8 @@ macro "ROI Color Coder with settings generated from data"{
 	/* v180404 added Feret_MinDAngle_Offset
 		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array.
 		v220808 Replaces ° with fromCharCode(0x00B0).
-		v230109 Expand px to pixels. Simpify angleUnits.
+		v230109 Expand px to pixels. Simplify angleUnits.
+		v231005 Look and underscores replaced by spaces too.
 		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
@@ -1178,13 +1207,19 @@ macro "ROI Color Coder with settings generated from data"{
 			}
 		}
 		else {
-			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			noUnits = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			noUnitSs = newArray;
+			for (i=0; i<noUnits.length; i++) noUnitSs[i] = replace(noUnits[i], "_", " ");
 			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","0-90",fromCharCode(0x00B0),"0to90","degrees");
+			angleUnitSs = newArray;
+			for (i=0 ; i<angleUnits.length; i++) angleUnitSs[i] = replace(angleUnits[i], "_", " ");
 			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(noUnits, string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(noUnitSs, string,-1)>=0) unitLabel = "None";
 			else if (indexOfArray(chooseUnits,string,-1)>=0) unitLabel = "";
 			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
+			else if (indexOfArray(angleUnitSs,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
 			if (indexOf(unitLabel,"px")>=0) unitLabel = "pixels";

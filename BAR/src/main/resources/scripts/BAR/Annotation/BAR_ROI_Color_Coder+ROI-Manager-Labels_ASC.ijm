@@ -19,9 +19,11 @@
 	v231005: 'Holes' option removed: Composite ROIs preferred. Some cosmetic improvements to menu layouts.
 			Removed parenthesis in wrong place on line 1720.
 			Suggests optimum tick count. Minor tick length corrected. Added more saved prefs.
+	v231006: Can examine a subset of ROIs.
+	v231009: If there is a rectangular selection there will be an option to just examine the ROIs enclosed by the selection. Fixed DP issue with summary.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v231005.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v231009.ijm";
 	macroV = substring(macroL,lastIndexOf(macroL,"_v") + 2,maxOf(lastIndexOf(macroL,"."),lastIndexOf(macroL,"_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -45,7 +47,8 @@ macro "ROI Color Coder with ROI Labels" {
 	if (selectionType()==0) {
 		getSelectionBounds(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
 		selectionExists = true;
-	} else selectionExists = false;
+	}
+	else selectionExists = false;
 	run("Select None");
 	if (roiManager("count")>0) roiManager("deselect");
 	/*
@@ -151,6 +154,19 @@ macro "ROI Color Coder with ROI Labels" {
 		imageList = removeDuplicatesInArray(getList("image.titles"),false);
 		imageN = lengthOf(imageList);
 	}
+	subset = false;
+	subsetROIs = "";
+	if (selectionExists){
+		/* finds sub-elements inside and at selection */
+		for (i=0; i<items; i++){
+			roiManager("select", i);
+			Roi.getBounds(x, y, width, height);
+			if (x>=selPosStartX && y>=selPosStartY && (x+width)<=(selPosStartX+originalSelEWidth) && (y+height)<=(selPosStartY+originalSelEHeight))
+				subsetROIs += "" + i+1 + ",";
+		}
+		roiManager("deselect");
+		if (endsWith(subsetROIs,",")) subsetROIs = substring(subsetROIs, 0, lengthOf(subsetROIs)-1);
+	}
 	infoColor = "#006db0"; /* Honolulu blue */
 	instructionColor = "#798541"; /* green_dark_modern (121,133,65) AKA Wasabi */
 	infoWarningColor = "#ff69b4"; /* pink_modern AKA hot pink */
@@ -186,11 +202,13 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.setInsets(0, 20, 0);
 		Dialog.addSlider("Coding opacity (%):", 0, 100, parseInt(call("ij.Prefs.get", ascPrefsKey + "opacity", 100)));
 		roiLabelOptions = newArray("Add ROI labels \(rename ROIs with parameter values\)","Restore original ROI names after labeling");
-		roiLabelOptionChecks = newArray(true,true);
+		roiLabelOptionChecks = newArray(true, true);
+		Dialog.setInsets(0, 20, 0);
 		Dialog.addCheckboxGroup(2,1,roiLabelOptions,roiLabelOptionChecks);
 		Dialog.setInsets(6, 120, 10);
 		if (selectionExists) {
-			Dialog.addCheckbox("Parameter at selected location \(below\)?", true);
+			Dialog.setInsets(10, 20, 0);
+			Dialog.addMessage("A rectangular selection exists that can be used for the Summary/Parameter location, you can edit it here:", infoFontSize, infoColor);
 			Dialog.addNumber("Starting",selPosStartX,0,5,"X");
 			Dialog.setInsets(-28, 150, 0);
 			Dialog.addNumber("Starting",selPosStartY,0,5,"Y");
@@ -199,8 +217,13 @@ macro "ROI Color Coder with ROI Labels" {
 			Dialog.addNumber("Selected",originalSelEHeight,0,5,"Height");
 		}
 		Dialog.setInsets(0, 20, 0);
+		if (selectionExists) Dialog.addCheckbox("Restrict statistics and labeling to ROIs \(list populated below from selected area\)?", call("ij.Prefs.get", ascPrefsKey + "subset", false));
+		else Dialog.addCheckbox("Restrict statistics and labeling to ROIs listed below?", call("ij.Prefs.get", ascPrefsKey + "subset", false));
+		Dialog.setInsets(0, 20, 0);
+		Dialog.addString("ROIs \(list separated by commas\)", subsetROIs, 40);
 		Dialog.addCheckbox("Diagnostics", false);
 	Dialog.show;
+		tPath = Dialog.getString();
 		if (imageN==1) imageChoice = t;
 		else if (imageN > 5) imageChoice = Dialog.getChoice();
 		else imageChoice = Dialog.getRadioButton();
@@ -219,17 +242,37 @@ macro "ROI Color Coder with ROI Labels" {
 		addLabels = Dialog.getCheckbox;
 		restoreROINames = Dialog.getCheckbox;
 		if (selectionExists) {
-			selectionExists = Dialog.getCheckbox;
 			selPosStartX = Dialog.getNumber;
 			selPosStartY = Dialog.getNumber;
 			originalSelEWidth = Dialog.getNumber;
 			originalSelEHeight = Dialog.getNumber;
 		}
+		subset = Dialog.getCheckbox();
+		if (subset){
+			if (subsetROIs!=""){
+				subsetArray = split(subsetROIs, ",,");
+				subsetArray = Array.sort(subsetArray);
+				if (lengthOf(subsetArray)>0){
+					items = lengthOf(subsetArray);
+					subset = true;
+					IJ.log("Analysis restricted to " + items + " selected ROIs:");
+					Array.print(subsetArray);
+					iROIs = newArray;
+					for (i=0; i<items; i++) iROIs[i] = parseInt(subsetArray[i])-1;
+				}
+				else subset = false;
+			}
+		}
 		diagnostics = Dialog.getCheckbox();
+	if (items==nROIs){
+		subset = false;
+		iROIs = Array.getSequence(nROIs);
+	}
+	call("ij.Prefs.set", ascPrefsKey + "subset", subset);
 	if (!diagnostics) setBatchMode(true);
 	if (restoreROINames){
 		orROINames = newArray();
-		for (countNaN=0, i=0; i<items; i++)
+		for (countNaN=0, i=0; i<nROIs; i++)
 			orROINames[i] = RoiManager.getName(i);
 	}
 	selectWindow(imageChoice);
@@ -238,9 +281,9 @@ macro "ROI Color Coder with ROI Labels" {
 	unitLabel = cleanLabel(unitLabelFromString(parameter, unit));
 	unitLabel = replace(unitLabel, degreeChar, "degrees"); /* replace lonely ° symbol */
 	/* get values for chosen parameter */
-	values= newArray(items);
-	if (parameter=="Object") for (i=0; i<items; i++) values[i]= i+1;
-	else for (i=0; i<items; i++) values[i]= getResult(parameter,i);
+	values = newArray();
+	if (parameter=="Object") for (i=0; i<items; i++) values[i] = iROIs[i] + 1;
+	else for (i=0; i<items; i++) values[i]= getResult(parameter, iROIs[i]);
 	Array.getStatistics(values, arrayMin, arrayMax, arrayMean, arraySD);
 	arrayRange = arrayMax-arrayMin;
 	rampMin = arrayMin;
@@ -276,8 +319,8 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.setInsets(2, 0, 6);
 		Dialog.addMessage("       Legend \(ramp\) options \(LUT "+lut+"\):",infoFontSize,infoColor);
 		Dialog.addString("Parameter label", parameterLabelExp, 3 + maxOf(20, lengthOf(parameterLabelExp)));
-		Dialog.setInsets(-7, 145, 7);
-		Dialog.addMessage("Edit for legend \(ramp\) label \(do NOT include the 'unit' in the this\nlabel as it will be added from options below...\)",infoFontSize,instructionColor);
+		Dialog.setInsets(-5, 20, 5);
+		Dialog.addMessage("Do NOT include the 'unit' in the this label as it will be added from options below...\)", infoFontSize, infoWarningColor);
 		unitChoices = newArray("Manual", "None");
 		unitLinearChoices = newArray(unitLabel, unit, "pixels", "%", "arb.");
 		if (unit=="microns" && (unitLabel!=ums || unitLabel!=ums+sup2)) unitLinearChoices = Array.concat(ums,unitLinearChoices);
@@ -292,7 +335,7 @@ macro "ROI Color Coder with ROI Labels" {
 		if (unitLabel=="None" || unitLabel=="") dialogUnit = "";
 		else dialogUnit = " " + unitLabel;
 		Dialog.addChoice("Unit label \(" + unitLabel + "\):", unitChoices, unitChoices[0]);
-		Dialog.setInsets(-38, 350, 0);
+		Dialog.setInsets(-38, 400, 0);
 		Dialog.addMessage("Default shown is based on\nthe selected parameter",infoFontSize,infoColor);
 		unitSeparators = newArray("\(unit\)",", unit","[unit]","{unit}");
 		iUnitSeparators = indexOfArray(unitSeparators, call("ij.Prefs.get", ascPrefsKey + "unitSeparator", "\(unit\)"),unitSeparators[0]);
@@ -375,7 +418,6 @@ macro "ROI Color Coder with ROI Labels" {
 		call("ij.Prefs.set", ascPrefsKey + "statsRampTickL", statsRampTickL);
 		thinLinesFontSTweak = Dialog.getNumber;
 		call("ij.Prefs.set", ascPrefsKey + "thinLinesFontSTweak", thinLinesFontSTweak);
-	setBatchMode(true);
 	if (imageChoice!=t) {
 		t = imageChoice;
 		tN = stripKnownExtensionFromString(t);
@@ -837,7 +879,7 @@ macro "ROI Color Coder with ROI Labels" {
 				else
 					lutIndex = round(255 * (rampMax - values[i]) / (rampRange));
 	 		}
-			roiManager("select", i);
+			roiManager("select", iROIs[i]);
 			if (stroke>0) {
 				roiManager("Set Line Width", stroke);
 				roiManager("Set Color", alpha+roiColors[lutIndex]);
@@ -866,7 +908,7 @@ macro "ROI Color Coder with ROI Labels" {
 	}
 	else {
 		for (countNaN=0, i=0; i<items; i++) {
-			roiManager("select", i);
+			roiManager("select", iROIs[i]);
 			labelValue = values[i];
 			labelString = d2s(labelValue,decPlaces); /* Reduce decimal places for labeling (move these two lines to below the labels you prefer) */
 			labelString = removeTrailingZerosAndPeriod(labelString); /* Remove trailing zeros and periods */
@@ -895,8 +937,11 @@ macro "ROI Color Coder with ROI Labels" {
 			run("Select Bounding Box (guess background color)");
 			run("Enlarge...", "enlarge=" + round(imageHeight*0.02) + " pixel"); /* Adds a 2% margin */
 			if (startsWith(createCombo,"Manual")) {
-				getSelectionBounds(xA, yA, widthA, heightA);
-				makeRectangle(maxOf(2,xA), maxOf(2,yA), minOf(imageWidth-4,widthA), minOf(imageHeight-4,heightA));
+				if (subset) makeRectangle(selPosStartX, selPosStartY, originalSelEWidth, originalSelEHeight);
+				else {
+					getSelectionBounds(xA, yA, widthA, heightA);
+					makeRectangle(maxOf(2,xA), maxOf(2,yA), minOf(imageWidth-4,widthA), minOf(imageHeight-4,heightA));
+				}
 				setTool("rectangle");
 				title = "Crop Location for Combined Image";
 				msg = "1. Select the area that you want to crop to. 2. Click on OK";
@@ -946,7 +991,7 @@ macro "ROI Color Coder with ROI Labels" {
 		selectImage(finalID);
 	}
 	if (restoreROINames){
-		for (countNaN=0, i=0; i<items; i++) {
+		for (i=0; i<nROIs; i++) {
 			RoiManager.select(i);
 			Roi.setName(orROINames[i]);
 		}

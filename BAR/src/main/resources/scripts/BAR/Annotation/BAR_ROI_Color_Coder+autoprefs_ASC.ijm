@@ -26,10 +26,10 @@
 	+ v211103 Expanded expandLabels function
 	+ v211104: Updated stripKnownExtensionFromString function    v211112+v220616+v230505(f8)+060723(f10): Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
 	+ v230825:	Adds rangeFinder function. Intervals automatic. f1: Updates indexOf functions.
-	+ v230905: Tweaked rangefinding and updated functions. F1: updated functions.
+	+ v230905: Tweaked rangefinding and updated functions. F1: updated functions. F7 : Replaced function: pad. F8: Updated function checkForRoiManager_v231211
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905-f6.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905-f8.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -137,7 +137,7 @@ macro "ROI Color Coder with settings generated from data"{
 		lut= Dialog.getChoice;
 		revLut= Dialog.getCheckbox;
 		stroke= Dialog.getNumber;
-		alpha= pad(toHex(255*Dialog.getNumber/100));
+		alpha = String.pad(toHex(255*Dialog.getNumber/100), 2);
 		unitLabel= Dialog.getChoice();
 		rangeS= Dialog.getString; /* changed from original to allow negative values - see below */
 		rampMinMaxLines= Dialog.getCheckbox;
@@ -640,11 +640,18 @@ macro "ROI Color Coder with settings generated from data"{
 			v211108 Uses radio-button group.
 			NOTE: Requires ASC restoreExit function, which assumes that saveSettings has been run at the beginning of the macro
 			v220706: Table friendly version
-			v220816: Enforces non-inverted LUT as well as white background and fixes ROI-less analyze. Adds more dialog labeling.
-			v220823: Extended corner pixel test.
+			v220816: Enforces non-inverted LUT as well as white background and fixes ROI-less analyze.  Adds more dialog labeling.
+			v230126: Does not change foreground or background colors.
+			v230130: Cosmetic improvements to dialog.
+			v230720: Does not initially open ROI Manager.
+			v231211: Adds option to measure ROIs.
 			*/
-		functionL = "checkForRoiManager_v220816";
-		nROIs = roiManager("count");
+		functionL = "checkForRoiManager_v231211";
+		if (isOpen("ROI Manager")){
+			nROIs = roiManager("count");
+			if (nROIs==0) close("ROI Manager");
+		}
+		else nROIs = 0;
 		nRes = nResults;
 		tSize = Table.size;
 		if (nRes==0 && tSize>0){
@@ -657,20 +664,26 @@ macro "ROI Color Coder with settings generated from data"{
 		}
 		if(nROIs==0 || nROIs!=nRes){
 			Dialog.create("ROI mismatch options: " + functionL);
-				Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRes +"   results.\nThere are   " + nROIs +"   ROIs.\nDo you want to:");
+				Dialog.addMessage("This macro requires that all objects have been loaded into the ROI manager.\n \nThere are   " + nRes +"   results.\nThere are   " + nROIs + "   ROIs",12, "#782F40");
 				mismatchOptions = newArray();
-				if(nROIs==0) mismatchOptions = Array.concat(mismatchOptions,"Import a saved ROI list");
-				else mismatchOptions = Array.concat(mismatchOptions,"Replace the current ROI list with a saved ROI list");
-				if(nRes==0) mismatchOptions = Array.concat(mismatchOptions,"Import a Results Table \(csv\) file");
-				else mismatchOptions = Array.concat(mismatchOptions,"Clear Results Table and import saved csv");
-				mismatchOptions = Array.concat(mismatchOptions,"Clear ROI list and Results Table and reanalyze \(overrides above selections\)");
+				if (nROIs==0) mismatchOptions = Array.concat(mismatchOptions, "Import a saved ROI list");
+				else mismatchOptions = Array.concat(mismatchOptions, "Replace the current ROI list with a saved ROI list");
+				if (nRes==0) mismatchOptions = Array.concat(mismatchOptions, "Import a Results Table \(csv\) file");
+				else mismatchOptions = Array.concat(mismatchOptions, "Clear Results Table and import saved csv");
+				if (nRes==0 && nROIs>0) mismatchOptions = Array.concat(mismatchOptions, "Measure all the ROIs");
+				mismatchOptions = Array.concat(mismatchOptions, "Clear ROI list and Results Table and reanalyze \(overrides above selections\)");
 				if (!is("binary")) Dialog.addMessage("The active image is not binary, so it may require thresholding before analysis");
-				mismatchOptions = Array.concat(mismatchOptions,"Get me out of here, I am having second thoughts . . .");
-				Dialog.addRadioButtonGroup("ROI mismatch; what would you like to do:_____", mismatchOptions, lengthOf(mismatchOptions), 1, mismatchOptions[0]);
+				mismatchOptions = Array.concat(mismatchOptions, "Get me out of here, I am having second thoughts . . .");
+				Dialog.addRadioButtonGroup("How would you like to proceed:_____", mismatchOptions, lengthOf(mismatchOptions), 1, mismatchOptions[0]);
 			Dialog.show();
 				mOption = Dialog.getRadioButton();
-				if (startsWith(mOption,"Sorry")) restoreExit("Sorry this did not work out for you.");
-			if (startsWith(mOption,"Clear ROI list and Results Table and reanalyze")) {
+				if (startsWith(mOption, "Sorry")) restoreExit("Sorry this did not work out for you.");
+			if (startsWith(mOption, "Measure all")) {
+				roiManager("Deselect");
+				roiManager("Measure");
+				nRes = nResults;
+			}	
+			else if (startsWith(mOption, "Clear ROI list and Results Table and reanalyze")) {
 				if (!is("binary")){
 					if (is("grayscale") && bitDepth()>8){
 						proceed = getBoolean(functionL + ": Image is grayscale but not 8-bit, convert it to 8-bit?", "Convert for thresholding", "Get me out of here");
@@ -687,47 +700,26 @@ macro "ROI Color Coder with settings generated from data"{
 						getThreshold(t1,t2);
 						if (t1==-1)  {
 							run("Auto Threshold", "method=Default");
-							setOption("BlackBackground", false);
-							run("Make Binary");
+							run("Convert to Mask");
+							if (is("Inverting LUT")) run("Invert LUT");
+							if(getPixel(0,0)==0) run("Invert");
 						}
 					}
 				}
 				if (is("Inverting LUT"))  run("Invert LUT");
 				/* Make sure black objects on white background for consistency */
-				if (bitDepth()!=24){
-					yMax = Image.height-1;	xMax = Image.width-1;
-					cornerPixels = newArray(getPixel(0,0),getPixel(1,1),getPixel(0,yMax),getPixel(xMax,0),getPixel(xMax,yMax),getPixel(xMax-1,yMax-1));
-					Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
-					if (cornerMax!=cornerMin){
-						actionOptions = newArray("Remove black edge objects","Invert, then remove black edge objects","Exit","Feeling lucky");
-						Dialog.create("Border pixel inconsistency");
-							Dialog.addMessage("cornerMax="+cornerMax+ " but cornerMin=" +cornerMin+ " and cornerMean = "+cornerMean+" problem with image border");
-							Dialog.addRadioButtonGroup("Actions:",actionOptions,actionOptions.length,1,"Remove black edge objects");
-						Dialog.show();
-							edgeAction = Dialog.getRadioButton();
-						if (edgeAction=="Exit") restoreExit();
-						else if (edgeAction=="Invert, then remove black edge objects"){
-							run("Invert");
-							removeBlackEdgeObjects();
-						}
-						else if (edgeAction=="Remove white edge objects, then invert"){
-							removeBlackEdgeObjects();
-							run("Invert");
-						} 
-					}
-					/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
-						i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
-					if (cornerMean<1 && cornerMean!=-1) {
-						inversion = getBoolean("The corner mean has an intensity of " + cornerMean + ", do you want the intensities inverted?", "Yes Please", "No Thanks");
-						if (inversion) run("Invert");
-					}
-				}
+				cornerPixels = newArray(getPixel(0, 0), getPixel(0, 1), getPixel(1, 0), getPixel(1, 1));
+				Array.getStatistics(cornerPixels, cornerMin, cornerMax, cornerMean, cornerStdDev);
+				if (cornerMax!=cornerMin) restoreExit("Problem with image border: Different pixel intensities at corners");
+				/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
+					i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
+				if (cornerMean==0) run("Invert");
 				if (isOpen("ROI Manager"))	roiManager("reset");
-				setOption("BlackBackground", false);
 				if (isOpen("Results")) {
 					selectWindow("Results");
 					run("Close");
 				}
+				// run("Analyze Particles..."); /* Letting users select settings does not create ROIs  ¯\_(?)_/¯ */
 				run("Analyze Particles...", "display clear include add");
 				nROIs = roiManager("count");
 				nRes = nResults;
@@ -735,14 +727,14 @@ macro "ROI Color Coder with settings generated from data"{
 					restoreExit(functionL + ": Results \(" +nRes+ "\) and ROI Manager \(" +nROIs+ "\) counts still do not match!");
 			}
 			else {
-				if (startsWith(mOption,"Import a saved ROI")) {
+				if (startsWith(mOption, "Import a saved ROI")) {
 					if (isOpen("ROI Manager"))	roiManager("reset");
 					msg = functionL + ": Import ROI set \(zip file\), click \"OK\" to continue to file chooser";
 					showMessage(msg);
 					pathROI = File.openDialog(functionL + ": Select an ROI file set to import");
                     roiManager("open", pathROI);
 				}
-				if (startsWith(mOption,"Import a Results")){
+				if (startsWith(mOption, "Import a Results")){
 					if (isOpen("Results")) {
 						selectWindow("Results");
 						run("Close");
@@ -755,6 +747,7 @@ macro "ROI Color Coder with settings generated from data"{
 			}
 		}
 		nROIs = roiManager("count");
+		if (nROIs==0) close("ROI Manager");
 		nRes = nResults; /* Used to check for ROIs:Results mismatch */
 		if(nROIs==0 || nROIs!=nRes)
 			restoreExit(functionL + ": Goodbye, there are " + nROIs + " ROIs and " + nRes + " results; your previous settings will be restored.");
@@ -994,19 +987,15 @@ macro "ROI Color Coder with settings generated from data"{
 	  return index;
 	}
 	function loadLutColors(lut) {
+		/* v231207: Uses String.pad instead of function: pad */
 		run(lut);
 		getLut(reds, greens, blues);
 		hexColors= newArray(256);
 		for (i=0; i<256; i++) {
 			r= toHex(reds[i]); g= toHex(greens[i]); b= toHex(blues[i]);
-			hexColors[i]= ""+ pad(r) +""+ pad(g) +""+ pad(b);
+			hexColors[i]= ""+ String.pad(r, 2) + "" + String.pad(g, 2) + "" + String.pad(b, 2);
 		}
 		return hexColors;
-	}
-	function pad(n) {
-	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
-	  if (lengthOf(n)==1) n= "0"+n; return n;
-	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
 	/*
 	End of Color Functions 

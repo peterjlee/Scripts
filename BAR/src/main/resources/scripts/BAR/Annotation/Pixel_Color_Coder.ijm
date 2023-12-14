@@ -1,10 +1,10 @@
 /* This macro is based on the Line-Color_Coder macros which itself was based on ROI_Color_Coder.ijm
 	IJ BAR: https://github.com/tferr/Scripts#scripts
 	https://imagej.net/doku.php?id=macro:roi_color_coder
-	v221128: 1st version  f2f3: Updated stripKnownExtensionFromString function.
+	v221128: 1st version  f2f3: Updated stripKnownExtensionFromString function.v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList and selectResultsWindow functions. F6: Updated indexOf functions. F13 : Replaced function: pad.
  */
 macro "Pixel Color Coder with Labels" {
-	macroL = "Pixel_Color_Coder_v221128-f3.ijm";
+	macroL = "Pixel_Color_Coder_v221128-f13.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -802,13 +802,15 @@ macro "Pixel Color Coder with Labels" {
 		   ( 8(|)	( 8(|)	ASC Functions	@@@@@:-)	@@@@@:-)
    */
 	function addImageToStack(stackName,baseImage) {
+		/* v230614: Added "Select None" */
 		run("Copy");
 		selectWindow(stackName);
 		run("Add Slice");
 		run("Paste");
+		run("Select None");
 		selectWindow(baseImage);
 	}
-	 function autoCalculateDecPlaces(min,max,intervals){
+	function autoCalculateDecPlaces(min,max,intervals){
 		/* v210428 3 variable version */
 		step = (max-min)/intervals;
 		stepSci = d2s(step, -1);
@@ -830,10 +832,11 @@ macro "Pixel Color Coder with Labels" {
 	/* v180918 uses getResultsTableList function
 		v210715 fixes lengthOf(tableList) error
 		REQUIRES restoreExit and therefore saveSettings
+		v230804: Requires v230804 version of getResultsTableList
 		*/
-		funcL = "checkForAnyResults_v210715";
+		funcL = "checkForAnyResults_v230804";
 		if ((nResults==0) && ((getValue("results.count"))==0)){
-			tableList = getResultsTableList();
+			tableList = getResultsTableList(true);
 			if (lengthOf(tableList)==0) {
 				Dialog.create("No Results to Work With: " + funcL);
 				Dialog.addMessage("No obvious tables open to work with  ¯|_(?)_/¯\nThis macro needs a table that includes the following columns in any order:\n   1.\) The parameter to color code with\n   2.\) 4 columns containing the to and from xy pixel coordinates");
@@ -842,7 +845,7 @@ macro "Pixel Color Coder with Labels" {
 				tableDecision = Dialog.getRadioButton();
 				if (tableDecision=="Exit") restoreExit("GoodBye");
 				else open();
-				tableList = getResultsTableList();
+				tableList = getResultsTableList(true);
 			}
 			tableList = Array.concat(newArray("none - exit"), tableList);
 			Dialog.create("Select table to use...");
@@ -864,7 +867,7 @@ macro "Pixel Color Coder with Labels" {
 				closeNonImageByTitle("Results");
 				restoreExit("Your have selected \"Exit\", perhaps now change name of your table to \"Results\"");
 			}else {
-				tableList = getResultsTableList();
+				tableList = getResultsTableList(true);
 				if (lengthOf(tableList)==0) restoreExit("Whoops, no other tables either");
 				Dialog.create("Select table to analyze...");
 				Dialog.addChoice("Select Table to Activate", tableList);
@@ -876,7 +879,7 @@ macro "Pixel Color Coder with Labels" {
 			}
 		}
 		else if ((getValue("results.count"))!=0 && nResults==0) {
-			tableList = getResultsTableList();
+			tableList = getResultsTableList(true);
 			if (lengthOf(tableList)==0) restoreExit("Whoops, no other tables either");
 			Dialog.create("Select table to analyze...");
 			Dialog.addChoice("Select Table to Activate", tableList);
@@ -888,42 +891,36 @@ macro "Pixel Color Coder with Labels" {
 	}
 	function checkForPluginNameContains(pluginNamePart) {
 		/* v180831 1st version to check for partial names so avoid versioning problems
-			v181005 1st version that works correctly ?
-			v210429 Updates for expandable arrays
-			v220510 Fixed subfolder error
-			NOTE: requires ASC restoreExit function which requires previous run of saveSettings
+			...
+			v220722 Uses File.separator and adds .class
+			v230912 This version is case insensitive and does NOT require restoreExit.
 			NOTE: underlines are NOT converted to spaces in names */
-		var pluginCheck = false;
-		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
-		else pluginDir = getDirectory("plugins");
-		pluginList = getFileList(pluginDir);
-		/* First check root plugin folder */
-		for (i=0; i<lengthOf(pluginList); i++) {
-			if (!endsWith(pluginList[i], "/") && endsWith(pluginList[i], ".jar")) {
-				if (indexOf(pluginList[i], pluginNamePart)>=0) {
-					pluginCheck = true;
-					i=lengthOf(pluginList);
-				}
-			}
-		}
-		/* If not in the root try the subfolders */
-		if (!pluginCheck) {
+		pluginCheck = false;
+		pluginNamePart = toLowerCase(pluginNamePart);
+		fS = File.separator;
+		pluginDir = getDirectory("plugins");
+		if (pluginDir == "") IJ.log("Failure to find any plugins!");
+		else {
+			pluginFolderList = getFileList(pluginDir);
 			subFolderList = newArray();
-			for (i=0,countSF=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")){
-					subFolderList[countSF] = pluginList[i];
-					countSF++;
-				}
+			pluginList = newArray();
+			for (l=0; l<pluginFolderList.length; l++){
+				if (endsWith(pluginFolderList[l], fS)) subFolderList = Array.concat(subFolderList,pluginFolderList[l]);
+				else if (endsWith(pluginFolderList[l], "/")) subFolderList = Array.concat(subFolderList,pluginFolderList[l]); /* File.separator does not seem to be working here */
+				else if (endsWith(toLowerCase(pluginFolderList[l]), ".jar") || endsWith(toLowerCase(pluginFolderList[l]), ".class")) pluginList = Array.concat(pluginList,toLowerCase(pluginFolderList[l]));
 			}
-			for (i=0; i<countSF; i++) {
-				subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
-				for (j=0; j<lengthOf(subFolderPluginList); j++) {
-					if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class")) {
-						if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) {
-							pluginCheck = true;
-							i=lengthOf(subFolderList);
-							j=lengthOf(subFolderPluginList);
-						}
+			/* First check root plugin folder */
+			for (i=0; i<lengthOf(pluginList) && !pluginCheck; i++) {
+				if (indexOf(pluginList[i], pluginNamePart)>=0) pluginCheck = true;
+			}
+			/* If not in the root try the subfolders */
+			if (!pluginCheck) {
+				for (i=0; i<subFolderList.length && !pluginCheck; i++) {
+					subFolderPluginList = getFileList(pluginDir + subFolderList[i]);
+					for (k=0; k<subFolderPluginList.length; k++) subFolderPluginList[k] = toLowerCase(subFolderPluginList[k]);
+					for (j=0; j<subFolderPluginList.length && !pluginCheck; j++) {
+						if (endsWith(subFolderPluginList[j], ".jar") || endsWith(subFolderPluginList[j], ".class"))
+							if (indexOf(subFolderPluginList[j], pluginNamePart)>=0) pluginCheck = true;
 					}
 				}
 			}
@@ -951,7 +948,9 @@ macro "Pixel Color Coder with Labels" {
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
+		v220630 added degrees v220812 Changed Ångström unit code
+		v231005 Weird Excel characters added, micron unit correction */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
@@ -963,15 +962,17 @@ macro "Pixel Color Coder with Labels" {
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
-		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(197)); /* Ångström unit symbol */
+		string= replace(string, "\\b[aA]ngstrom\\b", fromCharCode(0x212B)); /* Ångström unit symbol */
 		string= replace(string, "  ", " "); /* Replace double spaces with single spaces */
 		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
+		if (indexOf(string,"mý")>1) string = substring(string, 0, indexOf(string,"mý")-1) + getInfo("micrometer.abbreviation") + fromCharCode(178);
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -1075,8 +1076,12 @@ macro "Pixel Color Coder with Labels" {
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
-		   REQUIRES restoreExit function.  57 Colors
+		   v230130 Added more descriptions and modified order.
+		   v230908: Returns "white" array if not match is found and logs issues without exiting.
+		     57 Colors 
 		*/
+		functionL = "getColorArrayFromColorName_v230911";
+		cA = newArray(255,255,255); /* defaults to white */
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
 		else if (colorName == "off-white") cA = newArray(245,245,245);
@@ -1089,29 +1094,29 @@ macro "Pixel Color Coder with Labels" {
 		else if (colorName == "gray") cA = newArray(127,127,127);
 		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "red") cA = newArray(255,0,0);
-		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
+		else if (colorName == "green") cA = newArray(0,255,0);					/* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0,0,255);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
 		else if (colorName == "yellow") cA = newArray(255,255,0);
-		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
+		else if (colorName == "magenta") cA = newArray(255,0,255);				/* #FF00FF */
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "violet") cA = newArray(127,0,255);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120,47,64);
-		else if (colorName == "gold") cA = newArray(206,184,136);
-		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
+		else if (colorName == "garnet") cA = newArray(120,47,64);				/* #782F40 */
+		else if (colorName == "gold") cA = newArray(206,184,136);				/* #CEB888 */
+		else if (colorName == "aqua_modern") cA = newArray(75,172,198);		/* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
-		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
-		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
-		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu Blue #006db0 */
-		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
-		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
-		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
+		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125);	/* #1F497D */
+		else if (colorName == "blue_honolulu") cA = newArray(0,118,182);		/* Honolulu Blue #006db0 */
+		else if (colorName == "blue_modern") cA = newArray(58,93,174);			/* #3a5dae */
+		else if (colorName == "gray_modern") cA = newArray(83,86,90);			/* bright gray #53565A */
+		else if (colorName == "green_dark_modern") cA = newArray(121,133,65);	/* Wasabi #798541 */
+		else if (colorName == "green_modern") cA = newArray(155,187,89);		/* #9bbb59 AKA "Chelsea Cucumber" */
 		else if (colorName == "green_modern_accent") cA = newArray(214,228,187); /* #D6E4BB AKA "Gin" */
-		else if (colorName == "green_spring_accent") cA = newArray(0,255,102); /* #00FF66 AKA "Spring Green" */
-		else if (colorName == "orange_modern") cA = newArray(247,150,70); /* #f79646 tan hide, light orange */
-		else if (colorName == "pink_modern") cA = newArray(255,105,180); /* hot pink #ff69b4 */
-		else if (colorName == "purple_modern") cA = newArray(128,100,162); /* blue-magenta, purple paradise #8064A2 */
+		else if (colorName == "green_spring_accent") cA = newArray(0,255,102);	/* #00FF66 AKA "Spring Green" */
+		else if (colorName == "orange_modern") cA = newArray(247,150,70);		/* #f79646 tan hide, light orange */
+		else if (colorName == "pink_modern") cA = newArray(255,105,180);		/* hot pink #ff69b4 */
+		else if (colorName == "purple_modern") cA = newArray(128,100,162);		/* blue-magenta, purple paradise #8064A2 */
 		else if (colorName == "jazzberry_jam") cA = newArray(165,11,94);
 		else if (colorName == "red_n_modern") cA = newArray(227,24,55);
 		else if (colorName == "red_modern") cA = newArray(192,80,77);
@@ -1120,32 +1125,27 @@ macro "Pixel Color Coder with Labels" {
 		else if (colorName == "yellow_modern") cA = newArray(247,238,69);
 		/* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp */
 		else if (colorName == "radical_red") cA = newArray(255,53,94);			/* #FF355E */
-		else if (colorName == "wild_watermelon") cA = newArray(253,91,120);		/* #FD5B78 */
+		else if (colorName == "wild_watermelon") cA = newArray(253,91,120);	/* #FD5B78 */
+		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
+		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210);	/* #EE34D2 */
+		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		else if (colorName == "outrageous_orange") cA = newArray(255,96,55);	/* #FF6037 */
 		else if (colorName == "supernova_orange") cA = newArray(255,191,63);	/* FFBF3F Supernova Neon Orange*/
+		else if (colorName == "sunglow") cA = newArray(255,204,51);			/* #FFCC33 */
+		else if (colorName == "neon_carrot") cA = newArray(255,153,51);		/* #FF9933 */
 		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
-		else if (colorName == "neon_carrot") cA = newArray(255,153,51);			/* #FF9933 */
-		else if (colorName == "sunglow") cA = newArray(255,204,51); 			/* #FFCC33 */
-		else if (colorName == "laser_lemon") cA = newArray(255,255,102); 		/* #FFFF66 "Unmellow Yellow" */
-		else if (colorName == "electric_lime") cA = newArray(204,255,0); 		/* #CCFF00 */
-		else if (colorName == "screamin'_green") cA = newArray(102,255,102); 	/* #66FF66 */
-		else if (colorName == "magic_mint") cA = newArray(170,240,209); 		/* #AAF0D1 */
-		else if (colorName == "blizzard_blue") cA = newArray(80,191,230); 		/* #50BFE6 Malibu */
+		else if (colorName == "laser_lemon") cA = newArray(255,255,102);		/* #FFFF66 "Unmellow Yellow" */
+		else if (colorName == "electric_lime") cA = newArray(204,255,0);		/* #CCFF00 */
+		else if (colorName == "screamin'_green") cA = newArray(102,255,102);	/* #66FF66 */
+		else if (colorName == "magic_mint") cA = newArray(170,240,209);		/* #AAF0D1 */
+		else if (colorName == "blizzard_blue") cA = newArray(80,191,230);		/* #50BFE6 Malibu */
 		else if (colorName == "dodger_blue") cA = newArray(9,159,255);			/* #099FFF Dodger Neon Blue */
-		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
-		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); 	/* #EE34D2 */
-		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
-		else restoreExit("No color match to " + colorName);
+		else IJ.log(colorName + " not found in " + functionL + ": Color defaulted to white");
 		return cA;
 	}
 	function setBackgroundFromColorName(colorName) {
 		colorArray = getColorArrayFromColorName(colorName);
 		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
-	}
-	function pad(n) {
-	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
-	  if (lengthOf(n)==1) n= "0"+n; return n;
-	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
@@ -1170,12 +1170,13 @@ macro "Pixel Color Coder with Labels" {
 		return lutsList; /* Required to return new array */
 	}
 	function loadLutColors(lut) {
+		/* v231207: Uses String.pad instead of function: pad */
 		run(lut);
 		getLut(reds, greens, blues);
 		hexColors= newArray(256);
 		for (i=0; i<256; i++) {
 			r= toHex(reds[i]); g= toHex(greens[i]); b= toHex(blues[i]);
-			hexColors[i]= ""+ pad(r) +""+ pad(g) +""+ pad(b);
+			hexColors[i]= ""+ String.pad(r, 2) + "" + String.pad(g, 2) + "" + String.pad(b, 2);
 		}
 		return hexColors;
 	}
@@ -1184,53 +1185,67 @@ macro "Pixel Color Coder with Labels" {
 	*/
   	function getFontChoiceList() {
 		/*	v180723 first version
-			v180828 Changed order of favorites
-			v190108 Longer list of favorites
+			v180828 Changed order of favorites. v190108 Longer list of favorites. v230209 Minor optimization.
+			v230919 You can add a list of fonts that do not produce good results with the macro. 230921 more exclusions.
 		*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
-		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
+		fontNameChoices = Array.concat(IJFonts,systemFonts);
+		blackFonts = Array.filter(fontNameChoices, "([A-Za-z]+.*[bB]l.*k)");
+		eBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Ee]xtra.*[Bb]old)");
+		uBFonts = Array.filter(fontNameChoices,  "([A-Za-z]+.*[Uu]ltra.*[Bb]old)");
+		fontNameChoices = Array.concat(blackFonts, eBFonts, uBFonts, fontNameChoices); /* 'Black' and Extra and Extra Bold fonts work best */
+		faveFontList = newArray("Your favorite fonts here", "Arial Black", "Myriad Pro Black", "Myriad Pro Black Cond", "Noto Sans Blk", "Noto Sans Disp Cond Blk", "Open Sans ExtraBold", "Roboto Black", "Alegreya Black", "Alegreya Sans Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Goldman Sans Black", "Goldman Sans", "Serif");
+		/* Some fonts or font families don't work well with ASC macros, typically they do not support all useful symbols, they can be excluded here using the .* regular expression */
+		offFontList = newArray("Alegreya SC Black", "Archivo.*", "Arial Rounded.*", "Bodon.*", "Cooper.*", "Eras.*", "Fira.*", "Gill Sans.*", "Lato.*", "Libre.*", "Lucida.*",  "Merriweather.*", "Montserrat.*", "Nunito.*", "Olympia.*", "Poppins.*", "Rockwell.*", "Tw Cen.*", "Wingdings.*", "ZWAdobe.*"); /* These don't work so well. Use a ".*" to remove families */
 		faveFontListCheck = newArray(faveFontList.length);
-		counter = 0;
-		for (i=0; i<faveFontList.length; i++) {
-			for (j=0; j<fontNameChoice.length; j++) {
-				if (faveFontList[i] == fontNameChoice[j]) {
+		for (i=0,counter=0; i<faveFontList.length; i++) {
+			for (j=0; j<fontNameChoices.length; j++) {
+				if (faveFontList[i] == fontNameChoices[j]) {
 					faveFontListCheck[counter] = faveFontList[i];
-					counter +=1;
-					j = fontNameChoice.length;
+					j = fontNameChoices.length;
+					counter++;
 				}
 			}
 		}
 		faveFontListCheck = Array.trim(faveFontListCheck, counter);
-		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
-		return fontNameChoice;
+		for (i=0; i<fontNameChoices.length; i++) {
+			for (j=0; j<offFontList.length; j++){
+				if (fontNameChoices[i]==offFontList[j]) fontNameChoices = Array.deleteIndex(fontNameChoices, i);
+				if (endsWith(offFontList[j],".*")){
+					if (startsWith(fontNameChoices[i], substring(offFontList[j], 0, indexOf(offFontList[j],".*")))){
+						fontNameChoices = Array.deleteIndex(fontNameChoices, i);
+						i = maxOf(0, i-1); 
+					} 
+					// fontNameChoices = Array.filter(fontNameChoices, "(^" + offFontList[j] + ")"); /* RegEx not working and very slow */
+				} 
+			} 
+		}
+		fontNameChoices = Array.concat(faveFontListCheck, fontNameChoices);
+		for (i=0; i<fontNameChoices.length; i++) {
+			for (j=i+1; j<fontNameChoices.length; j++)
+				if (fontNameChoices[i]==fontNameChoices[j]) fontNameChoices = Array.deleteIndex(fontNameChoices, j);
+		}
+		return fontNameChoices;
 	}
-	function getResultsTableList() {
-		/* v180925 added option to open new table if none is open */
-		windowList = getList("window.titles");
-		if (windowList.length==0) {
-			Dialog.create("No open non-Window images.");
-			Dialog.addCheckbox("Do you want to open a table with line coordinates or exit?", true);
-			Dialog.show();
-			if((Dialog.getCheckbox())==true) open();
-			else restoreExit();
-			windowList = getList("window.titles");
-		}
-		tableList = newArray(windowList.length);
-		tableCounter=0;
-		for (i=0; i<tableList.length; i++) {
-			selectWindow(windowList[i]);
-			if (getInfo("window.type")=="ResultsTable") {
-				tableList[tableCounter]=windowList[i];
-				tableCounter += 1;
+	function getResultsTableList(ignoreHistograms) {
+		/* simply returns array of open results tables
+		v200723: 1st version
+		v201207: Removed warning message
+		v230804: Adds boolean ignoreHistograms option */
+		nonImageWindows = getList("window.titles");
+		// if (nonImageWindows.length==0) exit("No potential results windows are open");
+		if (nonImageWindows.length>0){
+			resultsWindows = newArray();
+			for (i=0; i<nonImageWindows.length; i++){
+				selectWindow(nonImageWindows[i]);
+				if(getInfo("window.type")=="ResultsTable")
+				if (!ignoreHistograms) resultsWindows = Array.concat(resultsWindows,nonImageWindows[i]);
+				else (indexOf(nonImageWindows[i],"Histogram")<0) resultsWindows = Array.concat(resultsWindows,nonImageWindows[i]);
 			}
+			return resultsWindows;
 		}
-		tableList = Array.trim(tableList, tableCounter);
-		if (tableCounter==0)
-			 showMessage("No Results table windows are open");
-		else tableList = Array.trim(tableList, tableCounter);
-		return tableList;
+		else return "";
 	}
 	function getSelectionFromMask(selection_Mask){
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
@@ -1249,16 +1264,17 @@ macro "Pixel Color Coder with Labels" {
 			IJ.renameResults(deactivatedResults);
 		}
 	}
-	function indexOfArray(array,string, default) {
-		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first instance of string */
-		index = default;
+	function indexOfArray(array, value, default) {
+		/* v190423 Adds "default" parameter (use -1 for backwards compatibility). Returns only first found value
+			v230902 Limits default value to array size */
+		index = minOf(lengthOf(array) - 1, default);
 		for (i=0; i<lengthOf(array); i++){
-			if (array[i]==string) {
+			if (array[i]==value) {
 				index = i;
 				i = lengthOf(array);
 			}
 		}
-		return index;
+	  return index;
 	}
 	function indexOfArrayThatContains(array, value) {
 		/* Like indexOfArray but partial matches possible
@@ -1333,16 +1349,11 @@ macro "Pixel Color Coder with Labels" {
 	}
 	function stripKnownExtensionFromString(string) {
 		/*	Note: Do not use on path as it may change the directory names
-		v210924: Tries to make sure string stays as string
-		v211014: Adds some additional cleanup
-		v211025: fixes multiple knowns issue
-		v211101: Added ".Ext_" removal
-		v211104: Restricts cleanup to end of string to reduce risk of corrupting path
-		v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
-		v220615: Tries to fix the fix for the trapped extensions ...
-		v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
-		v230505: Unwanted dupes replaced by unusefulCombos.
-		v230607: Quick fix for infinite loop on one of while statements.
+		v210924: Tries to make sure string stays as string.	v211014: Adds some additional cleanup.	v211025: fixes multiple 'known's issue.	v211101: Added ".Ext_" removal.
+		v211104: Restricts cleanup to end of string to reduce risk of corrupting path.	v211112: Tries to fix trapped extension before channel listing. Adds xlsx extension.
+		v220615: Tries to fix the fix for the trapped extensions ...	v230504: Protects directory path if included in string. Only removes doubled spaces and lines.
+		v230505: Unwanted dupes replaced by unusefulCombos.	v230607: Quick fix for infinite loop on one of while statements.
+		v230614: Added AVI.	v230905: Better fix for infinite loop. v230914: Added BMP and "_transp" and rearranged
 		*/
 		fS = File.separator;
 		string = "" + string;
@@ -1359,26 +1370,27 @@ macro "Pixel Color Coder with Labels" {
 			}
 		}
 		if (lastIndexOf(string, ".")>0 || lastIndexOf(string, "_lzw")>0) {
-			knownExt = newArray("dsx", "DSX", "tif", "tiff", "TIF", "TIFF", "png", "PNG", "GIF", "gif", "jpg", "JPG", "jpeg", "JPEG", "jp2", "JP2", "txt", "TXT", "csv", "CSV","xlsx","XLSX");
-			kEL = knownExt.length;
-			chanLabels = newArray("\(red\)","\(green\)","\(blue\)");
+			knownExts = newArray(".avi", ".csv", ".bmp", ".dsx", ".gif", ".jpg", ".jpeg", ".jp2", ".png", ".tif", ".txt", ".xlsx");
+			knownExts = Array.concat(knownExts,knownExts,"_transp","_lzw");
+			kEL = knownExts.length;
+			for (i=0; i<kEL/2; i++) knownExts[i] = toUpperCase(knownExts[i]);
+			chanLabels = newArray(" \(red\)"," \(green\)"," \(blue\)","\(red\)","\(green\)","\(blue\)");
 			for (i=0,k=0; i<kEL; i++) {
-				kExtn = "." + knownExt[i];
-				for (j=0; j<3; j++){ /* Looking for channel-label-trapped extensions */
+				for (j=0; j<chanLabels.length; j++){ /* Looking for channel-label-trapped extensions */
 					iChanLabels = lastIndexOf(string, chanLabels[j])-1;
 					if (iChanLabels>0){
 						preChan = substring(string,0,iChanLabels);
 						postChan = substring(string,iChanLabels);
-						while (indexOf(preChan,kExtn)>=0 && k<10){  /* k counter quick fix for infinite loop */
-							string = replace(preChan,kExtn,"") + postChan;
-							k++;
+						while (indexOf(preChan,knownExts[i])>0){
+							preChan = replace(preChan,knownExts[i],"");
+							string =  preChan + postChan;
 						}
 					}
 				}
-				while (endsWith(string,kExtn)) string = "" + substring(string, 0, lastIndexOf(string, kExtn));
+				while (endsWith(string,knownExts[i])) string = "" + substring(string, 0, lastIndexOf(string, knownExts[i]));
 			}
 		}
-		unwantedSuffixes = newArray("_lzw"," ", "_","-");
+		unwantedSuffixes = newArray(" ", "_","-");
 		for (i=0; i<unwantedSuffixes.length; i++){
 			while (endsWith(string,unwantedSuffixes[i])) string = substring(string,0,string.length-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
 		}
@@ -1409,27 +1421,28 @@ macro "Pixel Color Coder with Labels" {
 	+ v220128 add loops that allow removal of multiple duplication.
 	+ v220131 fixed so that suffix cleanup works even if extensions are included.
 	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
+	+ v231005 Replaced superscript abbreviations that did not work.
 	*/
 		/* Remove bad characters */
-		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
-		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
-		string= replace(string, fromCharCode(181)+"m", "um"); /* micron units */
-		string= replace(string, getInfo("micrometer.abbreviation"), "um"); /* micron units */
-		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
-		string= replace(string, fromCharCode(0x212B), "Angstrom"); /* the other Ångström unit symbol */
-		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
-		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
-		string= replace(string, "%", "pc"); /* % causes issues with html listing */
-		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		string = string.replace(fromCharCode(178), "sup2"); /* superscript 2 */
+		string = string.replace(fromCharCode(179), "sup3"); /* superscript 3 UTF-16 (decimal) */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(185), "sup-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(0xFE63) + fromCharCode(178), "sup-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string = string.replace(fromCharCode(181)+"m", "um"); /* micron units */
+		string = string.replace(getInfo("micrometer.abbreviation"), "um"); /* micron units */
+		string = string.replace(fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
+		string = string.replace(fromCharCode(0x212B), "Angstrom"); /* the other Ångström unit symbol */
+		string = string.replace(fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
+		string = string.replace(fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string = string.replace("%", "pc"); /* % causes issues with html listing */
+		string = string.replace(" ", "_"); /* Replace spaces - these can be a problem with image combination */
 		/* Remove duplicate strings */
 		unwantedDupes = newArray("8bit","8-bit","lzw");
 		for (i=0; i<lengthOf(unwantedDupes); i++){
 			iLast = lastIndexOf(string,unwantedDupes[i]);
 			iFirst = indexOf(string,unwantedDupes[i]);
 			if (iFirst!=iLast) {
-				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDupes[i]));
+				string = string.substring(0,iFirst) + string.substring(iFirst + lengthOf(unwantedDupes[i]));
 				i=-1; /* check again */
 			}
 		}
@@ -1437,11 +1450,11 @@ macro "Pixel Color Coder with Labels" {
 		for (i=0; i<lengthOf(unwantedDbls); i++){
 			iFirst = indexOf(string,unwantedDbls[i]);
 			if (iFirst>=0) {
-				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDbls[i])/2);
+				string = string.substring(0,iFirst) + string.substring(string,iFirst + lengthOf(unwantedDbls[i])/2);
 				i=-1; /* check again */
 			}
 		}
-		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
+		string = string.replace("_\\+", "\\+"); /* Clean up autofilenames */
 		/* cleanup suffixes */
 		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
 		extStart = lastIndexOf(string,".");
@@ -1470,30 +1483,41 @@ macro "Pixel Color Coder with Labels" {
 	}
 	function unitLabelFromString(string, imageUnit) {
 	/* v180404 added Feret_MinDAngle_Offset
-		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array
+		v210823 REQUIRES ASC function indexOfArray(array,string,default) for expanded "unitless" array.
+		v220808 Replaces ° with fromCharCode(0x00B0).
+		v230109 Expand px to pixels. Simplify angleUnits.
+		v231005 Look and underscores replaced by spaces too.
 		*/
 		if (endsWith(string,"\)")) { /* Label with units from string if enclosed by parentheses */
 			unitIndexStart = lastIndexOf(string, "\(");
 			unitIndexEnd = lastIndexOf(string, "\)");
 			stringUnit = substring(string, unitIndexStart+1, unitIndexEnd);
 			unitCheck = matches(stringUnit, ".*[0-9].*");
-			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit */
+			if (unitCheck==0) {  /* If the "unit" contains a number it probably isn't a unit unless it is the 0-90 degress setting */
 				unitLabel = stringUnit;
 			}
+			else if (indexOf(stringUnit,"0-90")<0 || indexOf(stringUnit,"0to90")<0) unitLabel = fromCharCode(0x00B0);
 			else {
 				unitLabel = "";
 			}
 		}
 		else {
-			unitLess = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
-			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","Angle_0-90°","Angle_0-90","FeretAngle0to90","Feret_MinDAngle_Offset","MinDistAngle");
+			noUnits = newArray("Circ.","Slice","AR","Round","Solidity","Image_Name","PixelAR","ROI_name","ObjectN","AR_Box","AR_Feret","Rnd_Feret","Compact_Feret","Elongation","Thinnes_Ratio","Squarity_AP","Squarity_AF","Squarity_Ff","Convexity","Rndnss_cAR","Fbr_Snk_Crl","Fbr_Rss2_Crl","AR_Fbr_Snk","Extent","HSF","HSFR","Hexagonality");
+			noUnitSs = newArray;
+			for (i=0; i<noUnits.length; i++) noUnitSs[i] = replace(noUnits[i], "_", " ");
+			angleUnits = newArray("Angle","FeretAngle","Cir_to_El_Tilt","0-90",fromCharCode(0x00B0),"0to90","degrees");
+			angleUnitSs = newArray;
+			for (i=0 ; i<angleUnits.length; i++) angleUnitSs[i] = replace(angleUnits[i], "_", " ");
 			chooseUnits = newArray("Mean" ,"StdDev" ,"Mode" ,"Min" ,"Max" ,"IntDen" ,"Median" ,"RawIntDen" ,"Slice");
 			if (string=="Area") unitLabel = imageUnit + fromCharCode(178);
-			else if (indexOfArray(unitLess,string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(noUnits, string,-1)>=0) unitLabel = "None";
+			else if (indexOfArray(noUnitSs, string,-1)>=0) unitLabel = "None";
 			else if (indexOfArray(chooseUnits,string,-1)>=0) unitLabel = "";
 			else if (indexOfArray(angleUnits,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
+			else if (indexOfArray(angleUnitSs,string,-1)>=0) unitLabel = fromCharCode(0x00B0);
 			else if (string=="%Area") unitLabel = "%";
 			else unitLabel = imageUnit;
+			if (indexOf(unitLabel,"px")>=0) unitLabel = "pixels";
 		}
 		return unitLabel;
 	}

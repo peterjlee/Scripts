@@ -32,10 +32,10 @@
 	+ v211104 Updated stripKnownExtensionFromString function    211112 + 230505(v221201-f2): Again  f1-7: updated functions f8: updated colors for macro consistency BUT only black currently used! F9-10 updated colors.
 	+ v221128 Updated for new version of filterArrayByContents function.
 	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use. f3: updated function stripKnownExtensionFromString v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList function. F6: Updated indexOf functions.
-	+ v230905 Added gremlin fix for difficult tables. Added rangeFinder function for auto-ranging.
+	+ v230905 Added gremlin fix for difficult tables. Added rangeFinder function for auto-ranging. F6 : Replaced function: pad.
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v230905-f3.ijm";
+	macroL = "Line_Color_Coder_v230905-f6.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -1250,11 +1250,6 @@ macro "Line Color Coder with Labels" {
 		return outputArray;
 	}
 		/* ASC mod BAR Color Functions */
-	function pad(n) {
-	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
-	  if (lengthOf(n)==1) n= "0"+n; return n;
-	  if (lengthOf(""+n)==1) n= "0"+n; return n;
-	}
 	function getLutsList() {
 		/* v180723 added check for preferred LUTs
 			v210430 expandable array version    v211029 added cividis.lut to LUT favorites v220113 added cividis-asc-linearlumin
@@ -1279,12 +1274,13 @@ macro "Line Color Coder with Labels" {
 		return lutsList; /* Required to return new array */
 	}
 	function loadLutColors(lut) {
+		/* v231207: Uses String.pad instead of function: pad */
 		run(lut);
 		getLut(reds, greens, blues);
 		hexColors= newArray(256);
 		for (i=0; i<256; i++) {
 			r= toHex(reds[i]); g= toHex(greens[i]); b= toHex(blues[i]);
-			hexColors[i]= ""+ pad(r) +""+ pad(g) +""+ pad(b);
+			hexColors[i]= ""+ String.pad(r, 2) + "" + String.pad(g, 2) + "" + String.pad(b, 2);
 		}
 		return hexColors;
 	}

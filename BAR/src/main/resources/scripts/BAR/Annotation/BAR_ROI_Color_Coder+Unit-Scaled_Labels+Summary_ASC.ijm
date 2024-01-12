@@ -31,9 +31,10 @@
 	v231213:	IJ seems to be getting picky with column names. This version skips the column name check line ~163. Fixed bad boolean command in manual selection.
 	v231213b:	Display of statistics and frequency on ramp for small numbers of features is disabled.
 	v231214:	Minor formatting and comments. Removed overly restricted Min and Max Line requirements.
+	v240112:	Frequency plots again.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v231214.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v240112b.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -611,14 +612,20 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	if (IQR>0) {	/* For some data sets IQR can be zero which produces an error in the distribution calculations */
 		autoDistW = 2 * IQR * exp((-1/3)*log(iROIs.length));	/* Uses the optimal binning of Freedman and Diaconis (summarized in [Izenman, 1991]), see https://www.fmrib.ox.ac.uk/datasets/techrep/tr00mj2/tr00mj2/node24.html */
 		autoDistWCount = round(arrayRange/autoDistW);
-		arrayDistInt = newArray();
-		arrayDistFreq =  newArray();
+		arrayDistFreq =  newArray(autoDistWCount);
+		arrayDistInt = newArray(autoDistWCount);
+		for (f=0; f<autoDistWCount + 1; f++)
+			arrayDistInt[f] = arrayMin + f * autoDistW;
 		modalBin = 0;
 		freqMax = 0;
 		for (f=0; f<autoDistWCount; f++) {
-			arrayDistInt[f] = arrayMin + (f * autoDistW);
-			for (i=0; i<iROIs.length; i++) if ((values[i]>=arrayDistInt[f]) && (values[i]<(arrayDistInt[f] + autoDistW))) arrayDistFreq[f] += 1;
-			if (arrayDistFreq[f]>freqMax) { freqMax = arrayDistFreq[f]; modalBin = f;}
+			for (i=0; i<iROIs.length; i++){
+				if ((values[i]>=arrayDistInt[f]) && (values[i]<arrayDistInt[f+1])) arrayDistFreq[f] += 1;
+			} 
+			if (arrayDistFreq[f]>freqMax) {
+				freqMax = arrayDistFreq[f];
+				modalBin = f;
+			}
 		}
 		/* use adjacent bin estimate for mode */
 		if (modalBin > 0)
@@ -718,7 +725,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			freqDLW = maxOf(1, round(rampLW/2));
 			setLineWidth(freqDLW);
 			for (f=0; f<(autoDistWCount); f++) { /* Draw All Shadows First */
-				setColor(0, 0, 0); /* Note that this color will be converted to LUT equivalent */
+				setColor(0, 0, 0); /* Don't change to "black". Note that this color will be converted to LUT equivalent */
 				if (arrayDistFreq[f] > 0) {
 					drawLine(distFreqPosX[f]-freqDLW, freqDLW, distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW);
 					drawLine(distFreqPosX[f]-freqDLW, distFreqPosY[f]-freqDLW, distFreqPosX[f + 1]-freqDLW, distFreqPosY[f]-freqDLW); /* Draw bar top */
@@ -726,7 +733,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				}
 			}
 			for (f=0; f<autoDistWCount; f++) {
-				setColor(255, 255, 255); /* Note that this color will be converted to LUT equivalent */
+				setColor(250, 250, 250); /* Note that this color will be converted to LUT equivalent */
 				if (arrayDistFreq[f] > 0) {
 					drawLine(distFreqPosX[f], freqDLW, distFreqPosX[f], distFreqPosY[f]);  /* Draw bar side - right/bottom */
 					drawLine(distFreqPosX[f], distFreqPosY[f], distFreqPosX[f + 1], distFreqPosY[f]); /* Draw bar cap */
@@ -734,8 +741,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				}
 			}
 		}
-		setColor(0, 0, 0);
-		setBackgroundColor(255, 255, 255);
+		setColor(0, 0, 0); /* Don't change to "black" */
+		setBackgroundColor(255, 255, 255);  /* Don't change to "white" */
 		numLabelFontSize = minOf(fontSize, rampH/numLabels);
 		if ((numLabelFontSize<10) && acceptMinFontSize) numLabelFontSize = maxOf(10, numLabelFontSize);
 		setFont(fontName, numLabelFontSize, fontStyle);

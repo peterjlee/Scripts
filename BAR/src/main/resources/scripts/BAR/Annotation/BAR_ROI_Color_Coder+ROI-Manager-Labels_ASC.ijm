@@ -30,10 +30,10 @@
 	v231213:	IJ seems to be getting picky with column names. This version skips the column name check line ~163. Fixed bad boolean command in manual selection.
 	v231213b:	Display of statistics and frequency on ramp for small numbers of features is disabled.
 	v231214:	Formatting options added for ROI labels. Removed overly restricted Min and Max Line requirements. Restore ROI names now working.
-	v240112:	Frequency plots again.
+	v240112:	Frequency plots again. v240119: But not if insufficient stats.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v240112.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v240119.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -618,6 +618,10 @@ macro "ROI Color Coder with ROI Labels" {
 		if (modalBin > 0)
 			mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[maxOf(0, modalBin-1)])/((arrayDistFreq[modalBin]-arrayDistFreq[maxOf(0, modalBin-1)]) + (arrayDistFreq[modalBin]-arrayDistFreq[minOf(arrayDistFreq.length-1, modalBin + 1)])));
 		Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD);
+		if (isNaN(freqSD) || isNaN(mode)){
+			freqDistRamp = false;
+			IJ.log("Unable to generate statistics required for in-legend histogram: freqSD = " + freqSD + ", mode = " + mode);
+		}
 		/* End of frequency/distribution section */
 	}
 	else freqDistRamp = false;

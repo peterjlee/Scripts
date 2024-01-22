@@ -31,10 +31,10 @@
 	v231213:	IJ seems to be getting picky with column names. This version skips the column name check line ~163. Fixed bad boolean command in manual selection.
 	v231213b:	Display of statistics and frequency on ramp for small numbers of features is disabled.
 	v231214:	Minor formatting and comments. Removed overly restricted Min and Max Line requirements.
-	v240112:	Frequency plots again.
+	v240112:	Frequency plots again. v240119: But not if insufficient stats. b: dialog typo fix
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v240112b.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v240119b.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -631,6 +631,10 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		if (modalBin > 0)
 			mode = (arrayMin + (modalBin * autoDistW)) + autoDistW * ((arrayDistFreq[modalBin]-arrayDistFreq[maxOf(0, modalBin-1)])/((arrayDistFreq[modalBin]-arrayDistFreq[maxOf(0, modalBin-1)]) + (arrayDistFreq[modalBin]-arrayDistFreq[minOf(arrayDistFreq.length-1, modalBin + 1)])));
 		Array.getStatistics(arrayDistFreq, freqMin, freqMax, freqMean, freqSD);
+		if (isNaN(freqSD) || isNaN(mode)){
+			freqDistRamp = false;
+			IJ.log("Unable to generate statistics required for in-legend histogram: freqSD = " + freqSD + ", mode = " + mode);
+		}
 		/* End of frequency/distribution section */
 	}
 	else freqDistRamp = false;
@@ -1942,7 +1946,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 						if (lastBounds!=""){
 							previousBounds = split(lastBounds, ", ");
 							if (lengthOf(previousBounds)==4)
-								usePreviousBounds = getBoolean("Do you want to use the previously saved bounds fro cropping?");
+								usePreviousBounds = getBoolean("Do you want to use the previously saved bounds for cropping?");
 						}
 						if (usePreviousBounds) makeRectangle(parseInt(previousBounds[0]), parseInt(previousBounds[1]), parseInt(previousBounds[2]), parseInt(previousBounds[3]));
 						else {

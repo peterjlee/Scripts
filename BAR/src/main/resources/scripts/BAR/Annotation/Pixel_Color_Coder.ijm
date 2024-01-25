@@ -1,10 +1,10 @@
 /* This macro is based on the Line-Color_Coder macros which itself was based on ROI_Color_Coder.ijm
 	IJ BAR: https://github.com/tferr/Scripts#scripts
 	https://imagej.net/doku.php?id=macro:roi_color_coder
-	v221128: 1st version  f2f3: Updated stripKnownExtensionFromString function.v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList and selectResultsWindow functions. F6: Updated indexOf functions. F13 : Replaced function: pad.
+	v221128: 1st version  f2f3: Updated stripKnownExtensionFromString function.v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList and selectResultsWindow functions. F6: Updated indexOf functions. F13 : Replaced function: pad. F14: Updated getColorFromColorName function (012324).
  */
 macro "Pixel Color Coder with Labels" {
-	macroL = "Pixel_Color_Coder_v221128-f13.ijm";
+	macroL = "Pixel_Color_Coder_v221128-f14.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -1078,17 +1078,13 @@ macro "Pixel Color Coder with Labels" {
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
 		   v230130 Added more descriptions and modified order.
 		   v230908: Returns "white" array if not match is found and logs issues without exiting.
-		     57 Colors 
+		   v240123: Removed duplicate entries: Now 53 unique colors 
 		*/
-		functionL = "getColorArrayFromColorName_v230911";
+		functionL = "getColorArrayFromColorName_v240123";
 		cA = newArray(255,255,255); /* defaults to white */
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
 		else if (colorName == "off-white") cA = newArray(245,245,245);
-		else if (colorName == "off-black") cA = newArray(10,10,10);
-		else if (colorName == "light_gray") cA = newArray(200,200,200);
-		else if (colorName == "gray") cA = newArray(127,127,127);
-		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "off-black") cA = newArray(10,10,10);
 		else if (colorName == "light_gray") cA = newArray(200,200,200);
 		else if (colorName == "gray") cA = newArray(127,127,127);

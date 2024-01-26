@@ -31,10 +31,10 @@
 	v231213:	IJ seems to be getting picky with column names. This version skips the column name check line ~163. Fixed bad boolean command in manual selection.
 	v231213b:	Display of statistics and frequency on ramp for small numbers of features is disabled.
 	v231214:	Minor formatting and comments. Removed overly restricted Min and Max Line requirements.
-	v240112:	Frequency plots again. v240119: But not if insufficient stats. b: dialog typo fix
+	v240112:	Frequency plots again. v240119: But not if insufficient stats. b: dialog typo fix. F1: Updated getColorFromColorName function (012324). F2: updated function unCleanLabel.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v240119b.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v240119b-f2.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -3124,12 +3124,13 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 	}
 	function unCleanLabel(string) {
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames.
-	 +  041117b to remove spaces as well.
-	 +  v220126 added getInfo("micrometer.abbreviation").
-	 +  v220128 add loops that allow removal of multiple duplication.
-	 +  v220131 fixed so that suffix cleanup works even if extensions are included.
-	 +  v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
-	 +  v231005 Replaced superscript abbreviations that did not work.
+	+ 041117b to remove spaces as well.
+	+ v220126 added getInfo("micrometer.abbreviation").
+	+ v220128 add loops that allow removal of multiple duplication.
+	+ v220131 fixed so that suffix cleanup works even if extensions are included.
+	+ v220616 Minor index range fix that does not seem to have an impact if macro is working as planned. v220715 added 8-bit to unwanted dupes. v220812 minor changes to micron and Ångström handling
+	+ v231005 Replaced superscript abbreviations that did not work.
+	+ v240124 Replace _+_ with +.
 	*/
 		/* Remove bad characters */
 		string = string.replace(fromCharCode(178), "sup2"); /* superscript 2 */
@@ -3151,20 +3152,21 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			iFirst = indexOf(string, unwantedDupes[i]);
 			if (iFirst!=iLast) {
 				string = string.substring(0, iFirst) + string.substring(iFirst + lengthOf(unwantedDupes[i]));
-				i=-1; /* check again */
+				i = -1; /* check again */
 			}
 		}
-		unwantedDbls = newArray("_-", "-_", "__", "--", "\\ + \\ + ");
+		unwantedDbls = newArray("_-", "-_", "__", "--", "\\+\\+");
 		for (i=0; i<lengthOf(unwantedDbls); i++){
 			iFirst = indexOf(string, unwantedDbls[i]);
 			if (iFirst>=0) {
-				string = string.substring(0, iFirst) + string.substring(string, iFirst + lengthOf(unwantedDbls[i])/2);
-				i=-1; /* check again */
+				string = string.substring(0, iFirst) + string.substring(string, iFirst + lengthOf(unwantedDbls[i]) / 2);
+				i = -1; /* check again */
 			}
 		}
-		string = string.replace("_\\ + ", "\\ + "); /* Clean up autofilenames */
+		string = string.replace("_\\+", "\\+"); /* Clean up autofilenames */
+		string = string.replace("\\+_", "\\+"); /* Clean up autofilenames */
 		/* cleanup suffixes */
-		unwantedSuffixes = newArray(" ", "_", "-", "\\ + "); /* things you don't wasn't to end a filename with */
+		unwantedSuffixes = newArray(" ", "_", "-", "\\+"); /* things you don't wasn't to end a filename with */
 		extStart = lastIndexOf(string, ".");
 		sL = lengthOf(string);
 		if (sL-extStart<=4 && extStart>0) extIncl = true;

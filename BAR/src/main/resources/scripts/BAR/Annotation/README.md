@@ -1,35 +1,3 @@
-# Annotation
-
-[BARs][Home] related to annotation of images.
-
-###[Combine Orthogonal Views](./Combine_Orthogonal_Views.ijm)
-   Appends top, bottom and side views to a stack in a similar way to _Image>Stacks>Ortogonal Views_
-   but extending projected views to the entire volume rather than displaying single slices. Empty
-   spaces in the image canvas will be painted with background color (frame around the Color Picker
-   Tool in the ImageJ toolbar).
-
-![combine orthogonal views](../../../../../../../images/combine-orthogonal-views.png)
-
-
-###[Cumulative Z-Project](./Cumulative_Z-Project.bsh)
-   Produces cumulative projections using ImageJ's built-in projector (_Image>Stacks>Z Project..._).
-   An immediate application of these progressive projections is the display of trailing paths of
-   moving particles in timelapse experiments.
-
-###[ROI Color Coder](./ROI_Color_Coder.ijm)
-   Colorizes ROI Manager selections by matching measurements to a lookup table (LUT),
-   generating particle-size heat maps. More information can be found on its initial
-   [documentation page][RCC page], that has yet to be transferred to [imagej.net](http://imagej.net/).
-
-   ![ROI Color Coder Output](../../../../../../../images/roi-color-coder-demo.png)
-   ![ROI Color Coder Output](../../../../../../../images/roi-color-coder-prompt.png)
-
-
-
-   See Also [Calibration Menu](../Tools/README.md#calibration-menu)
-
-[RCC page]: http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
-
 ______________This entire fork merely adds 4 extended versions of the color coding script and one for color coding lines.
 
 ###[BAR_ROI_Color_Coder+autoprefs_ASC](./BAR_ROI_Color_Coder+autoprefs_ASC.ijm)
@@ -103,6 +71,40 @@ A summary list can be added in the corners, center or a selected location listin
       Inspired by the BAR ROI Color Coder this macro color codes lines according to any Results table parameter.
 
 ![Line Color Coder example using Viridis LUT](../../../../../../../images/LineCoderExample_ViridsLin_1280x218_pal256.png)
+
+<p>=============================Rest of Original Below==========================</p>
+
+# Annotation
+
+[BARs][Home] related to annotation of images.
+
+###[Combine Orthogonal Views](./Combine_Orthogonal_Views.ijm)
+   Appends top, bottom and side views to a stack in a similar way to _Image>Stacks>Ortogonal Views_
+   but extending projected views to the entire volume rather than displaying single slices. Empty
+   spaces in the image canvas will be painted with background color (frame around the Color Picker
+   Tool in the ImageJ toolbar).
+
+![combine orthogonal views](../../../../../../../images/combine-orthogonal-views.png)
+
+
+###[Cumulative Z-Project](./Cumulative_Z-Project.bsh)
+   Produces cumulative projections using ImageJ's built-in projector (_Image>Stacks>Z Project..._).
+   An immediate application of these progressive projections is the display of trailing paths of
+   moving particles in timelapse experiments.
+
+###[ROI Color Coder](./ROI_Color_Coder.ijm)
+   Colorizes ROI Manager selections by matching measurements to a lookup table (LUT),
+   generating particle-size heat maps. More information can be found on its initial
+   [documentation page][RCC page], that has yet to be transferred to [imagej.net](http://imagej.net/).
+
+   ![ROI Color Coder Output](../../../../../../../images/roi-color-coder-demo.png)
+   ![ROI Color Coder Output](../../../../../../../images/roi-color-coder-prompt.png)
+
+
+
+   See Also [Calibration Menu](../Tools/README.md#calibration-menu)
+
+[RCC page]: http://imagejdocu.tudor.lu/doku.php?id=macro:roi_color_coder
 
 Links to Original BAR folders:
 

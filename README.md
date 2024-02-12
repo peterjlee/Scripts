@@ -1,6 +1,6 @@
-<p>_____________This entire fork merely adds 4 extended versions of the BAR color coding script and one for color coding lines.<p>
+<p>_____________This entire fork merely adds <a href="https://github.com/peterjlee/Scripts/BAR/src/main/resources/scripts/BAR/Annotation/" Title = "Applied Superconductivity Center Object Color Coding Macro Directory" >4 extended versions</a> of the BAR color coding script and one for color coding lines.<p>
 
-###[BAR_ROI_Color_Coder+autoprefs_ASC](./BAR_ROI_Color_Coder+autoprefs_ASC.ijm)
+###[BAR_ROI_Color_Coder+autoprefs_ASC](https://github.com/peterjlee/Scripts/BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder%2Bautoprefs_ASC.ijm)
 
  Additional features include:
 
@@ -40,7 +40,7 @@ A summary list can be added in the corners, center or a selected location listin
 ![Color Coder example for autoprefs with summary table version using asc-silver LUT](./images/BAR_ROI_Color_Coder53+autoprefs+Summary_512x156_pal256.png)
 
      
-###[BAR_ROI_Color_Coder_with_ROIManagerLabels](./BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder_with_ROIManagerLabels_ASC.ijm)
+###[BAR_ROI_Color_Coder_with_ROIManagerLabels](https://github.com/peterjlee/Scripts/BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder_with_ROIManagerLabels_ASC.ijm)
 
         Additional features over the autoprefs macro listed above:
 
@@ -48,7 +48,7 @@ A summary list can be added in the corners, center or a selected location listin
 
    ![Color Coder example for ROI-manager selected parameter labels version using Viridus Linear Luminosity LUT](./images/BAR_ROI_Coder_withROIManagerLabels_example_CSA+ramp_VirLinLum_574x192.gif)
         
-###[BAR_ROI_Color_Coder_with_ScaledLabels](./BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder_with_ScaledLabels_ASC.ijm)
+###[BAR_ROI_Color_Coder_with_ScaledLabels](https://github.com/peterjlee/Scripts/BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder_with_ScaledLabels_ASC.ijm)
 
       Additional features over the autoprefs macro listed above:
 
@@ -58,14 +58,14 @@ A summary list can be added in the corners, center or a selected location listin
 ![Color Coder example for scaled labels version using asc-silver LUT](./images/ScaledLabelExample_AR_580x186anim.gif)
 
 
-###[BAR_ROI_Color_Coder+ScaledLabels+Summary](./BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder+ScaledLabels+Summary_ASC.ijm)
+###[BAR_ROI_Color_Coder+ScaledLabels+Summary](https://github.com/peterjlee/Scripts/BAR/src/main/resources/scripts/BAR/Annotation/BAR_ROI_Color_Coder+ScaledLabels+Summary_ASC.ijm)
 
       As above but now also has the Summary table option.
 
 [Color Coder example for scaled labels and summary version using asc-silver LUT with ramp frequency plot and ln stats](./images/BAR_ROI_Coder_withScaledLabels_example_LnHistSummary_crop575x186.gif)
 
 
-###[LineColorCoder](./BAR/src/main/resources/scripts/BAR/Annotation/Line_Color_Coder.ijm)
+###[LineColorCoder](https://github.com/peterjlee/Scripts/BAR/src/main/resources/scripts/BAR/Annotation/Line_Color_Coder.ijm)
 
       Inspired by the BAR ROI Color Coder this macro color codes lines according to any Results table parameter.
 

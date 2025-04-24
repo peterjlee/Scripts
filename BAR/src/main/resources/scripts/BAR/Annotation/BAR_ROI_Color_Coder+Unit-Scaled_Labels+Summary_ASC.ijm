@@ -33,9 +33,10 @@
 	v231214:	Minor formatting and comments. Removed overly restricted Min and Max Line requirements.
 	v240112:	Frequency plots again. v240119: But not if insufficient stats. b: dialog typo fix. F1: Updated getColorFromColorName function (012324). F2: updated function unCleanLabel.
 	v240709:	Updated colors.
+	v250424:	Fixed interval number dialog that should not have allowed hidden decimals.
  */
 macro "ROI Color Coder with Scaled Labels and Summary" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v240119b-f2.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_Summary_ASC_v250424.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -97,8 +98,8 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			else if (edgeAction=="Remove white edge objects, then invert"){
 				removeBlackEdgeObjects();
 				run("Invert");
-			} 
-		} 
+			}
+		}
 		/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
 			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
 		if (cornerMean<1 && cornerMean!=-1) {
@@ -248,7 +249,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		}
 		else if (imageN>5) Dialog.addChoice("Image for color coding", imageList, t);
 		else Dialog.addRadioButtonGroup("Choose image for color coding:    ", imageList, imageN, 1, imageList[0]);
-		iDefHeading = indexOfArrayThatStartsWith(headingsWithRange, call("ij.Prefs.get", ascPrefsKey + "parameter", "Area"), 1); 
+		iDefHeading = indexOfArrayThatStartsWith(headingsWithRange, call("ij.Prefs.get", ascPrefsKey + "parameter", "Area"), 1);
 		Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[iDefHeading]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 		Dialog.addChoice("LUT:", luts, call("ij.Prefs.get", ascPrefsKey + "lut", luts[0]));
@@ -270,7 +271,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.setInsets(-1, 20, 0);
 		Dialog.addMessage("Negative " + sigmaChar + " \('<'\) outliers can be reported separately and set to a different color:", infoFontSize, instructionColor);
 		allColorsS = Array.concat("same", allColors);
-		iOutlierColorsS = indexOfArray(allColorsS, call("ij.Prefs.get", ascPrefsKey + "outlierColor2", allColorsS[0]), 0); 
+		iOutlierColorsS = indexOfArray(allColorsS, call("ij.Prefs.get", ascPrefsKey + "outlierColor2", allColorsS[0]), 0);
 		Dialog.setInsets(0, 20, 0);
 		Dialog.addChoice("Outliers '<': Outline color:", allColorsS, allColorsS[iOutlierColorsS]);
 		Dialog.setInsets(0, 20, 0);
@@ -396,7 +397,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			Array.print(subsetArray);
 			iROIs = newArray;
 			for (i=0; i<items; i++) iROIs[i] = parseInt(subsetArray[i])-1;
-		} 
+		}
 		else subset = false;
 	}	
 	if (subset==false) iROIs = Array.getSequence(nROIs);
@@ -479,7 +480,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		Dialog.addMessage("The LUT gradient will be remapped to this range \(limited by the ramp min and max\)\nBeyond this range the top and bottom LUT colors will be applied", infoFontSize, instructionColor);
 		Dialog.setInsets(-4, 120, 0);
 		Dialog.addCheckbox("Add legend \(ramp\) labels at Min. & Max. if inside Range", true);
-		Dialog.addNumber("No. of major intervals:", numIntervals, 0, 3, "Major tick count will be + 1 more than this");
+		Dialog.addNumber("No. of major intervals:", round(numIntervals), 0, 3, "Major tick count will be + 1 more than this");
 		defTickN = parseInt(substring(d2s(rampRange/numIntervals, 1), 0, 1)) - 1;
 		if (defTickN<2) defTickN = 4;
 		Dialog.addNumber("No. of ticks between major ticks:", defTickN, 0, 3, "i.e. 4 ticks for 5 minor intervals");
@@ -502,7 +503,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			rampFormatChoices = Array.concat(rampFormatChoices, "Frequency plotted inside legend"); /* Assumed that a histogram is not useful enough if you only have 5 objects of less */
 			freqDistRamp = call("ij.Prefs.get", ascPrefsKey + "freqDistRamp", true);
 			rampFormatChecks = Array.concat(rampFormatChecks, freqDistRamp);
-		} 
+		}
 		Dialog.setInsets(0, 70, 0);
 		Dialog.addCheckboxGroup(2, 2, rampFormatChoices, rampFormatChecks);
 		if (iROIs.length>3){ /* Assumed that stats are not useful enough if you only have 3 objects or less  */
@@ -552,7 +553,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		}
 		else {
 			freqDistRamp = false;
-		} 
+		}
 		if (iROIs.length>3){
 			statsRampLines = Dialog.getRadioButton;
 			call("ij.Prefs.set", ascPrefsKey + "statsRampLines", statsRampLines);
@@ -624,7 +625,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		for (f=0; f<autoDistWCount; f++) {
 			for (i=0; i<iROIs.length; i++){
 				if ((values[i]>=arrayDistInt[f]) && (values[i]<arrayDistInt[f+1])) arrayDistFreq[f] += 1;
-			} 
+			}
 			if (arrayDistFreq[f]>freqMax) {
 				freqMax = arrayDistFreq[f];
 				modalBin = f;
@@ -779,6 +780,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		step = rampH;
 		if (numLabels>2) step /= (numIntervals);
 		stepV = rampRange/numIntervals;
+		if (diagnostics) IJ.log ("numIntervals: " + numIntervals + ", step: " + step + ", rampH: " + rampH + ", numLabels: " + numLabels + ", stepV: " + stepV);
 		/* Create array of ramp labels that can be used to optimize label length */
 		rampLabelString = newArray;
 		for (i=0, maxDP=0; i<numLabels; i++) {
@@ -821,7 +823,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 		/* draw minor ticks */
 		if (minorTicks>0) {
 			minorTickStep = step/(minorTicks + 1);
-			numTick = numLabels + numIntervals*minorTicks - 1; /* no top tick */
+			numTick = numLabels + numIntervals * minorTicks - 1; /* no top tick */
 			for (i=1; i<numTick; i++) { /* no bottom tick */
 				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 				setLineWidth(round(rampLW/4));
@@ -1220,7 +1222,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			maxLFontS = Dialog.getNumber();
 			fontStyle = Dialog.getChoice();
 			call("ij.Prefs.set", ascPrefsKey + "objFStyle", fontStyle);
-			if (fontStyle=="unstyled") fontStyle = ""; 
+			if (fontStyle=="unstyled") fontStyle = "";
 			fontStyle += " antialiased";
 			fontName = Dialog.getChoice();
 			call("ij.Prefs.set", ascPrefsKey + "objFCol", fontName);
@@ -1255,7 +1257,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				if (summaryToFile) summaryChoice += "to file, ";
 				summaryChoice += "end";
 				summaryChoice = replace(summaryChoice, ", end", "");
-			} 
+			}
 			else summaryAdd = false;
 			paraLabPos = Dialog.getChoice(); /* Parameter Label Position */
 			statsChoiceLines = Dialog.getNumber();
@@ -1492,9 +1494,9 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 				else statsChoice2 = newArray("Outlines > :  " + outlierCounterPos + " objects " + outlierChoiceAbbrevPos + " in " + outlierColor, "Outlines < :  " + outlierCounterNeg + " objects " + outlierChoiceAbbrevNeg + " in " + outlierColor2);
 			}
 			statsChoice3 = newArray(
-				"Mean:  " + arrayMean + " " + unitLabel, 
-				"Median:  " + median + " " + unitLabel, 
-				"StdDev:  " + arraySD + " " + unitLabel, 
+				"Mean:  " + arrayMean + " " + unitLabel,
+				"Median:  " + median + " " + unitLabel,
+				"StdDev:  " + arraySD + " " + unitLabel,
 				"CoeffVar:  " + coeffVar + "%");
 			statsChoice3a = newArray("Sum:  " + arraySum + " " + unitLabel);
 			statsChoice3b = newArray("Min-Max:  " + arrayMin + " - " + arrayMax + " " + unitLabel);
@@ -1505,7 +1507,7 @@ macro "ROI Color Coder with Scaled Labels and Summary" {
 			}
 			else statsChoice3 = Array.concat(statsChoice3, statsChoice3b, statsChoice3a);
 			statsChoice4 = newArray(	/* additional frequency distribution stats */
-				"Mode:  " + mode + " " + unitLabel + " \(W = " + autoDistW + "\)", 
+				"Mode:  " + mode + " " + unitLabel + " \(W = " + autoDistW + "\)",
 				"InterQuartile Range:  " + IQR + " " + unitLabel);
 			statsChoice5 = newArray();  /* log stats */
 			eLMPS = expLnMeanPlusSDs.length;

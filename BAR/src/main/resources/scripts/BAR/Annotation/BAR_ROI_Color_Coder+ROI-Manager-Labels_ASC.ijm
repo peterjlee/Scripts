@@ -31,9 +31,11 @@
 	v231213b:	Display of statistics and frequency on ramp for small numbers of features is disabled.
 	v231214:	Formatting options added for ROI labels. Removed overly restricted Min and Max Line requirements. Restore ROI names now working.
 	v240112:	Frequency plots again. v240119: But not if insufficient stats. F1: Updated getColorFromColorName function (012324). F2: updated function unCleanLabel.
+	v240709:	Updated colors.
+	v250424:	Fixed interval number dialog that should not have allowed hidden decimals.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v240119-f2.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v250424.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -95,8 +97,8 @@ macro "ROI Color Coder with ROI Labels" {
 			else if (edgeAction=="Remove white edge objects, then invert"){
 				removeBlackEdgeObjects();
 				run("Invert");
-			} 
-		} 
+			}
+		}
 		/*	Sometimes the outline procedure will leave a pixel border around the outside - this next step checks for this.
 			i.e. the corner 4 pixels should now be all black, if not, we have a "border issue". */
 		if (cornerMean<1 && cornerMean!=-1) {
@@ -140,10 +142,12 @@ macro "ROI Color Coder with ROI Labels" {
 	sigmaChar = fromCharCode(0x03C3);
 	geq = fromCharCode(0x2265);
 	ums = getInfo("micrometer.abbreviation");
+	grayChoices = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
 	colorChoicesStd = newArray("red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange", "violet");
-	colorChoicesMod = newArray("garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
+	colorChoicesMod = newArray("aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
 	colorChoicesNeon = newArray("jazzberry_jam", "radical_red", "wild_watermelon", "outrageous_orange", "supernova_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "dodger_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
-	allColors = Array.concat(colorChoicesStd, colorChoicesMod, colorChoicesNeon);
+	colorChoicesFSU = newArray("garnet", "gold", "stadium_night", "westcott_water", "vault_garnet", "legacy_blue", "plaza_brick", "vault_gold");
+	allColors = Array.concat(colorChoicesStd, colorChoicesMod, colorChoicesNeon, colorChoicesFSU, grayChoices);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
 	if (lengthOf(tN)>43) tNL = substring(tN, 0, 21) + "..." + substring(tN, lengthOf(tN)-21);
 	else tNL = tN;
@@ -244,7 +248,7 @@ macro "ROI Color Coder with ROI Labels" {
 		}
 		else if (imageN>5) Dialog.addChoice("Image for color coding", imageList, t);
 		else Dialog.addRadioButtonGroup("Choose image for color coding:    ", imageList, imageN, 1, imageList[0]);
-		iDefHeading = indexOfArrayThatStartsWith(headingsWithRange, call("ij.Prefs.get", ascPrefsKey + "parameter", "Area"), 1); 
+		iDefHeading = indexOfArrayThatStartsWith(headingsWithRange, call("ij.Prefs.get", ascPrefsKey + "parameter", "Area"), 1);
 		Dialog.addChoice("Parameter", headingsWithRange, headingsWithRange[iDefHeading]);
 		luts=getLutsList(); /* I prefer this to new direct use of getList used in the recent versions of the BAR macro YMMV */
 		Dialog.addChoice("LUT:", luts, call("ij.Prefs.get", ascPrefsKey + "lut", luts[0]));
@@ -369,7 +373,7 @@ macro "ROI Color Coder with ROI Labels" {
 			Array.print(subsetArray);
 			iROIs = newArray;
 			for (i=0; i<items; i++) iROIs[i] = parseInt(subsetArray[i])-1;
-		} 
+		}
 		else subset = false;
 	}	
 	if (subset==false) iROIs = Array.getSequence(nROIs);
@@ -448,7 +452,7 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.addMessage("The LUT gradient will be remapped to this range \(limited by the ramp min and max\)\nBeyond this range the top and bottom LUT colors will be applied", infoFontSize, instructionColor);
 		Dialog.setInsets(-4, 120, 0);
 		Dialog.addCheckbox("Add legend \(ramp\) labels at Min. & Max. if inside Range", true);
-		Dialog.addNumber("No. of major intervals:", numIntervals, 0, 3, "Major tick count will be + 1 more than this");
+		Dialog.addNumber("No. of major intervals:", round(numIntervals), 0, 3, "Major tick count will be + 1 more than this");
 		defTickN = parseInt(substring(d2s(rampRange/numIntervals, 1), 0, 1)) - 1;
 		if (defTickN<2) defTickN = 4;
 		Dialog.addNumber("No. of ticks between major ticks:", defTickN, 0, 3, "i.e. 4 ticks for 5 minor intervals");
@@ -461,7 +465,7 @@ macro "ROI Color Coder with ROI Labels" {
 		Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[iFontStyle]);
 		fontNameChoice = getFontChoiceList();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-		Dialog.addNumber("Font size \(height\):", fontSize, 0, 3, "pixels");
+		Dialog.addNumber("Font_size \(height\):", fontSize, 0, 3, "pixels");
 		colorChoicesStd = newArray("white", "black", "light_gray", "gray", "dark_gray", "red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange");
 		labelColor = call("ij.Prefs.get", ascPrefsKey + "labelColor", "white");
 		Dialog.addChoice("ROI label color:", colorChoicesStd, labelColor);
@@ -479,7 +483,7 @@ macro "ROI Color Coder with ROI Labels" {
 			rampFormatChoices = Array.concat(rampFormatChoices, "Frequency plotted inside legend"); /* Assumed that a histogram is not useful enough if you only have 5 objects of less */
 			freqDistRamp = call("ij.Prefs.get", ascPrefsKey + "freqDistRamp", true);
 			rampFormatChecks = Array.concat(rampFormatChecks, freqDistRamp);
-		} 
+		}
 		Dialog.setInsets(0, 70, 0);
 		Dialog.addCheckboxGroup(2, 2, rampFormatChoices, rampFormatChecks);
 		if (iROIs.length>3){ /* Assumed that stats are not useful enough if you only have 3 objects or less  */
@@ -536,7 +540,7 @@ macro "ROI Color Coder with ROI Labels" {
 		}
 		else {
 			freqDistRamp = false;
-		} 
+		}
 		if (iROIs.length>3){
 			statsRampLines = Dialog.getRadioButton;
 			call("ij.Prefs.set", ascPrefsKey + "statsRampLines", statsRampLines);
@@ -608,7 +612,7 @@ macro "ROI Color Coder with ROI Labels" {
 		for (f=0; f<autoDistWCount; f++) {
 			for (i=0; i<iROIs.length; i++){
 				if ((values[i]>=arrayDistInt[f]) && (values[i]<arrayDistInt[f+1])) arrayDistFreq[f] += 1;
-			} 
+			}
 			if (arrayDistFreq[f]>freqMax) {
 				freqMax = arrayDistFreq[f];
 				modalBin = f;
@@ -763,6 +767,7 @@ macro "ROI Color Coder with ROI Labels" {
 		step = rampH;
 		if (numLabels>2) step /= (numIntervals);
 		stepV = rampRange/numIntervals;
+		if (diagnostics) IJ.log ("numIntervals: " + numIntervals + ", step: " + step + ", rampH: " + rampH + ", numLabels: " + numLabels + ", stepV: " + stepV);
 		/* Create array of ramp labels that can be used to optimize label length */
 		rampLabelString = newArray;
 		for (i=0, maxDP=0; i<numLabels; i++) {
@@ -805,7 +810,7 @@ macro "ROI Color Coder with ROI Labels" {
 		/* draw minor ticks */
 		if (minorTicks>0) {
 			minorTickStep = step/(minorTicks + 1);
-			numTick = numLabels + numIntervals*minorTicks - 1; /* no top tick */
+			numTick = numLabels + numIntervals * minorTicks - 1; /* no top tick */
 			for (i=1; i<numTick; i++) { /* no bottom tick */
 				yPos = rampH + rampOffset - i*minorTickStep -1; /* minus 1 corrects for coordinates starting at zero */
 				setLineWidth(round(rampLW/4));
@@ -1053,7 +1058,6 @@ macro "ROI Color Coder with ROI Labels" {
 				roiManager("Set Color", "#00ffffff");
 				roiManager("Set Fill Color", alpha + roiColors[lutIndex]);
 			}
-			// Roi.setFontSize(fontSize);
 			if (subset && !selectionExists){ /* For the creation of a selection area for later cropping */
 				getSelectionBounds(x, y, width, height);
 				selPosStartX = minOf(selPosStartX, x);
@@ -1771,9 +1775,10 @@ macro "ROI Color Coder with ROI Labels" {
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
 		   v230130 Added more descriptions and modified order.
 		   v230908: Returns "white" array if not match is found and logs issues without exiting.
-		     57 Colors 
+		   v240123: Removed duplicate entries: Now 53 unique colors.
+		   v240709: Added 2024 FSU-Branding Colors. Some reorganization. Now 60 unique colors.
 		*/
-		functionL = "getColorArrayFromColorName_v230911";
+		functionL = "getColorArrayFromColorName_v240709";
 		cA = newArray(255, 255, 255); /* defaults to white */
 		if (colorName == "white") cA = newArray(255, 255, 255);
 		else if (colorName == "black") cA = newArray(0, 0, 0);
@@ -1782,55 +1787,60 @@ macro "ROI Color Coder with ROI Labels" {
 		else if (colorName == "light_gray") cA = newArray(200, 200, 200);
 		else if (colorName == "gray") cA = newArray(127, 127, 127);
 		else if (colorName == "dark_gray") cA = newArray(51, 51, 51);
-		else if (colorName == "off-black") cA = newArray(10, 10, 10);
-		else if (colorName == "light_gray") cA = newArray(200, 200, 200);
-		else if (colorName == "gray") cA = newArray(127, 127, 127);
-		else if (colorName == "dark_gray") cA = newArray(51, 51, 51);
 		else if (colorName == "red") cA = newArray(255, 0, 0);
-		else if (colorName == "green") cA = newArray(0, 255, 0);					/* #00FF00 AKA Lime green */
+		else if (colorName == "green") cA = newArray(0, 255, 0);						/* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0, 0, 255);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
 		else if (colorName == "yellow") cA = newArray(255, 255, 0);
-		else if (colorName == "magenta") cA = newArray(255, 0, 255);				/* #FF00FF */
+		else if (colorName == "magenta") cA = newArray(255, 0, 255);					/* #FF00FF */
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "violet") cA = newArray(127, 0, 255);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120, 47, 64);				/* #782F40 */
-		else if (colorName == "gold") cA = newArray(206, 184, 136);				/* #CEB888 */
-		else if (colorName == "aqua_modern") cA = newArray(75, 172, 198);		/* #4bacc6 AKA "Viking" aqua */
-		else if (colorName == "blue_accent_modern") cA = newArray(79, 129, 189); /* #4f81bd */
-		else if (colorName == "blue_dark_modern") cA = newArray(31, 73, 125);	/* #1F497D */
-		else if (colorName == "blue_honolulu") cA = newArray(0, 118, 182);		/* Honolulu Blue #006db0 */
+			/* Excel Modern  + */
+		else if (colorName == "aqua_modern") cA = newArray(75, 172, 198);			/* #4bacc6 AKA "Viking" aqua */
+		else if (colorName == "blue_accent_modern") cA = newArray(79, 129, 189);	/* #4f81bd */
+		else if (colorName == "blue_dark_modern") cA = newArray(31, 73, 125);		/* #1F497D */
+		else if (colorName == "blue_honolulu") cA = newArray(0, 118, 182);			/* Honolulu Blue #006db0 */
 		else if (colorName == "blue_modern") cA = newArray(58, 93, 174);			/* #3a5dae */
-		else if (colorName == "gray_modern") cA = newArray(83, 86, 90);			/* bright gray #53565A */
-		else if (colorName == "green_dark_modern") cA = newArray(121, 133, 65);	/* Wasabi #798541 */
-		else if (colorName == "green_modern") cA = newArray(155, 187, 89);		/* #9bbb59 AKA "Chelsea Cucumber" */
-		else if (colorName == "green_modern_accent") cA = newArray(214, 228, 187); /* #D6E4BB AKA "Gin" */
+		else if (colorName == "gray_modern") cA = newArray(83, 86, 90);				/* bright gray #53565A */
+		else if (colorName == "green_dark_modern") cA = newArray(121, 133, 65);		/* Wasabi #798541 */
+		else if (colorName == "green_modern") cA = newArray(155, 187, 89);			/* #9bbb59 AKA "Chelsea Cucumber" */
+		else if (colorName == "green_modern_accent") cA = newArray(214, 228, 187); 	/* #D6E4BB AKA "Gin" */
 		else if (colorName == "green_spring_accent") cA = newArray(0, 255, 102);	/* #00FF66 AKA "Spring Green" */
-		else if (colorName == "orange_modern") cA = newArray(247, 150, 70);		/* #f79646 tan hide, light orange */
-		else if (colorName == "pink_modern") cA = newArray(255, 105, 180);		/* hot pink #ff69b4 */
+		else if (colorName == "orange_modern") cA = newArray(247, 150, 70);			/* #f79646 tan hide, light orange */
+		else if (colorName == "pink_modern") cA = newArray(255, 105, 180);			/* hot pink #ff69b4 */
 		else if (colorName == "purple_modern") cA = newArray(128, 100, 162);		/* blue-magenta, purple paradise #8064A2 */
-		else if (colorName == "jazzberry_jam") cA = newArray(165, 11, 94);
 		else if (colorName == "red_n_modern") cA = newArray(227, 24, 55);
 		else if (colorName == "red_modern") cA = newArray(192, 80, 77);
 		else if (colorName == "tan_modern") cA = newArray(238, 236, 225);
 		else if (colorName == "violet_modern") cA = newArray(76, 65, 132);
 		else if (colorName == "yellow_modern") cA = newArray(247, 238, 69);
-		/* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp */
+			/* FSU */
+		else if (colorName == "garnet") cA = newArray(120, 47, 64);					/* #782F40 */
+		else if (colorName == "gold") cA = newArray(206, 184, 136);					/* #CEB888 */
+		else if (colorName == "gulf_sands") cA = newArray(223, 209, 167);				/* #DFD1A7 */
+		else if (colorName == "stadium_night") cA = newArray(16, 24, 32);				/* #101820 */
+		else if (colorName == "westcott_water") cA = newArray(92, 184, 178);			/* #5CB8B2 */
+		else if (colorName == "vault_garnet") cA = newArray(166, 25, 46);				/* #A6192E */
+		else if (colorName == "legacy_blue") cA = newArray(66, 85, 99);				/* #425563 */
+		else if (colorName == "plaza_brick") cA = newArray(66, 85, 99);				/* #572932  */
+		else if (colorName == "vault_gold") cA = newArray(255, 199, 44);				/* #FFC72C  */
+		   /* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp   */
 		else if (colorName == "radical_red") cA = newArray(255, 53, 94);			/* #FF355E */
-		else if (colorName == "wild_watermelon") cA = newArray(253, 91, 120);	/* #FD5B78 */
+		else if (colorName == "jazzberry_jam") cA = newArray(165, 11, 94);
+		else if (colorName == "wild_watermelon") cA = newArray(253, 91, 120);		/* #FD5B78 */
 		else if (colorName == "shocking_pink") cA = newArray(255, 110, 255);		/* #FF6EFF Ultra Pink */
 		else if (colorName == "razzle_dazzle_rose") cA = newArray(238, 52, 210);	/* #EE34D2 */
 		else if (colorName == "hot_magenta") cA = newArray(255, 0, 204);			/* #FF00CC AKA Purple Pizzazz */
-		else if (colorName == "outrageous_orange") cA = newArray(255, 96, 55);	/* #FF6037 */
-		else if (colorName == "supernova_orange") cA = newArray(255, 191, 63);	/* FFBF3F Supernova Neon Orange*/
-		else if (colorName == "sunglow") cA = newArray(255, 204, 51);			/* #FFCC33 */
-		else if (colorName == "neon_carrot") cA = newArray(255, 153, 51);		/* #FF9933 */
-		else if (colorName == "atomic_tangerine") cA = newArray(255, 153, 102);	/* #FF9966 */
-		else if (colorName == "laser_lemon") cA = newArray(255, 255, 102);		/* #FFFF66 "Unmellow Yellow" */
-		else if (colorName == "electric_lime") cA = newArray(204, 255, 0);		/* #CCFF00 */
-		else if (colorName == "screamin'_green") cA = newArray(102, 255, 102);	/* #66FF66 */
-		else if (colorName == "magic_mint") cA = newArray(170, 240, 209);		/* #AAF0D1 */
+		else if (colorName == "outrageous_orange") cA = newArray(255, 96, 55);		/* #FF6037 */
+		else if (colorName == "supernova_orange") cA = newArray(255, 191, 63);		/* FFBF3F Supernova Neon Orange*/
+		else if (colorName == "sunglow") cA = newArray(255, 204, 51);				/* #FFCC33 */
+		else if (colorName == "neon_carrot") cA = newArray(255, 153, 51);			/* #FF9933 */
+		else if (colorName == "atomic_tangerine") cA = newArray(255, 153, 102);		/* #FF9966 */
+		else if (colorName == "laser_lemon") cA = newArray(255, 255, 102);			/* #FFFF66 "Unmellow Yellow" */
+		else if (colorName == "electric_lime") cA = newArray(204, 255, 0);			/* #CCFF00 */
+		else if (colorName == "screamin'_green") cA = newArray(102, 255, 102);		/* #66FF66 */
+		else if (colorName == "magic_mint") cA = newArray(170, 240, 209);			/* #AAF0D1 */
 		else if (colorName == "blizzard_blue") cA = newArray(80, 191, 230);		/* #50BFE6 Malibu */
 		else if (colorName == "dodger_blue") cA = newArray(9, 159, 255);			/* #099FFF Dodger Neon Blue */
 		else IJ.log(colorName + " not found in " + functionL + ": Color defaulted to white");

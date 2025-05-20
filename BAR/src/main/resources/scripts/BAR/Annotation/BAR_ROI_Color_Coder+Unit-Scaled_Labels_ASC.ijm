@@ -33,9 +33,10 @@
 	v240112:	Frequency plots again. v240119: But not if insufficient stats. b: dialog typo fix. F1: Updated getColorFromColorName function (012324). F2: updated function unCleanLabel.
 	v240709:	Updated colors.
 	v250424:	Fixed interval number dialog that should not have allowed hidden decimals.
+	v250509:	Initial fontSize is integer to match addNumber dp.
  */
 macro "ROI Color Coder with Scaled Labels" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_ASC_v250424.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_ASC_v250509.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -154,7 +155,7 @@ macro "ROI Color Coder with Scaled Labels" {
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	acceptMinFontSize = true;
-	fontSize = maxOf(10, imageHeight/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(10, round(imageHeight / 28)); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange = newArray;
@@ -274,7 +275,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		Dialog.setInsets(0, 20, 0);
 		Dialog.addChoice("Outliers '<': Outline color:", allColorsS, allColorsS[iOutlierColorsS]);
 		Dialog.setInsets(0, 20, 0);
-		Dialog.addNumber("Outlier outline thickness:", call("ij.Prefs.get", ascPrefsKey + "outlierStrokePC", 2), 0, 3, "% of font size");
+		Dialog.addNumber("Outlier outline thickness:", round (call("ij.Prefs.get", ascPrefsKey + "outlierStrokePC"), 2), 0, 3, "% of font size");
 		Dialog.setInsets(10, 20, 0);
 		Dialog.addCheckbox("Apply colors and formatted labels to image copy \(no change to original\)", true);
 		if (selectionExists) {
@@ -538,11 +539,11 @@ macro "ROI Color Coder with Scaled Labels" {
 		call("ij.Prefs.set", ascPrefsKey + "rampFStyle", fontStyle);
 		if (fontStyle=="unstyled") fontStyle="";
 		fontStyle += " antialiased"; /* why not? */
-		fontName = Dialog.getChoice;
-		fontSize = Dialog.getNumber;
-		brdr = Dialog.getCheckbox;
+		fontName = Dialog.getChoice();
+		fontSize = Dialog.getNumber();
+		brdr = Dialog.getCheckbox();
 		call("ij.Prefs.set", ascPrefsKey + "brdr", brdr);
-		rotLegend = Dialog.getCheckbox;
+		rotLegend = Dialog.getCheckbox();
 		call("ij.Prefs.set", ascPrefsKey + "rotLegend", rotLegend);
 		offWhiteIntRampLabels = Dialog.getCheckbox();
 		call("ij.Prefs.set", ascPrefsKey + "offWhiteIntRampLabels", offWhiteIntRampLabels);
@@ -1162,11 +1163,11 @@ macro "ROI Color Coder with Scaled Labels" {
 			iColor = indexOfArray(colorChoices, objectFontColor, 2);
 			Dialog.addChoice("Object label color:", colorChoices, colorChoices[iColor]);
 			Dialog.addNumber("Font scaling:", 60, 0, 3, "\% of auto \(" + round(fontSize) + "\)");
-			minROIFont = round(imageWidth/90);
+			minROIFont = round(imageWidth / 90);
 			if ((minROIFont<10) && acceptMinFontSize) minROIFont = 10;
 			Dialog.addNumber("Restrict label font size:", minROIFont, 0, 4, "Min to ");
 			Dialog.setInsets(-28, 90, 0);
-			maxROIFont = round(imageWidth/16);
+			maxROIFont = round(imageWidth / 16);
 			if ((maxROIFont<10) && acceptMinFontSize) maxROIFont = 10;
 			Dialog.addNumber("Max", maxROIFont, 0, 4, "Max");
 			iFontStyle = indexOfArray(fontStyleChoice, call("ij.Prefs.get", ascPrefsKey + "objFStyle", "bold"), 0);

@@ -27,9 +27,10 @@
 	+ v211104: Updated stripKnownExtensionFromString function    v211112+v220616+v230505(f8)+060723(f10): Again  (f3)220510 updated checkForPlugins f4-5 updated pad function f6-7 updated color functions
 	+ v230825:	Adds rangeFinder function. Intervals automatic. f1: Updates indexOf functions.
 	+ v230905: Tweaked rangefinding and updated functions. F1: updated functions. F7 : Replaced function: pad. F8: Updated function checkForRoiManager_v231211. F9: updated function unCleanLabel.
+	+ v250509: Default integer fontSize.
 */
 macro "ROI Color Coder with settings generated from data"{
-	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v230905-f9.ijm";
+	macroL = "BAR_ROI_Color_Coder+autoprefs_ASC_v250509.ijm";
 	requires("1.53g"); /* Uses expandable arrays */
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -70,7 +71,7 @@ macro "ROI Color Coder with settings generated from data"{
 	tN = unCleanLabel(tN); /* remove special characters and spaces that might cause issues saving file */
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
-	fontSize = maxOf(8,imageHeight/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(8, round(imageHeight/28)); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange= newArray;
@@ -168,7 +169,7 @@ macro "ROI Color Coder with settings generated from data"{
 		rampMax= parseFloat(range[1]);
 	}
 	if (indexOf(rangeS, "-")==0) rampMin = 0 - rampMin; /* checks to see if rampMin is a negative value (lets hope the rampMax isn't). */
-	fontSR2 = fontSize * thinLinesFontSTweak/100;
+	fontSR2 = round(fontSize * thinLinesFontSTweak/100);
 	rampLW = maxOf(1, round(rampH/512)); /* ramp line width with a minimum of 1 pixel */
 	minmaxLW = round(rampLW / 4); /* line widths for ramp stats */
 	/* get values for chosen parameter */
@@ -341,13 +342,13 @@ macro "ROI Color Coder with settings generated from data"{
 			rampMinPos = round(fontSize/2 + (rampH * (1 - trueMinFactor)) +1.5*fontSize)-1;
 			if (trueMaxFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("Max", round((rampW-getStringWidth("Max"))/2), round(rampMaxPos+0.5*fontSR2));
+				drawString("Max", round((rampW - getStringWidth("Max"))/2), round(rampMaxPos + 0.5 * fontSR2));
 				drawLine(rampLW, rampMaxPos, tickLR, rampMaxPos);
 				drawLine(rampW-1-tickLR, rampMaxPos, rampW-rampLW-1, rampMaxPos);
 			}
 			if (trueMinFactor>0) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("Min", round((rampW-getStringWidth("Min"))/2), round(rampMinPos+0.5*fontSR2));
+				drawString("Min", round((rampW-getStringWidth("Min"))/2), round(rampMinPos + 0.5 * fontSR2));
 				drawLine(rampLW, rampMinPos, tickLR, rampMinPos);
 				drawLine(rampW-1-tickLR, rampMinPos, rampW-rampLW-1, rampMinPos);
 			}
@@ -356,16 +357,16 @@ macro "ROI Color Coder with settings generated from data"{
 			meanFactor = (arrayMean-rampMin)/(rampRange);
 			plusSDFactor =  (arrayMean+arraySD-rampMin)/(rampRange);
 			minusSDFactor =  (arrayMean-arraySD-rampMin)/(rampRange);
-			meanPos = round(fontSize/2 + (rampH * (1 - meanFactor)) +1.5*fontSize)-1;
-			plusSDPos = round(fontSize/2 + (rampH * (1 - plusSDFactor)) +1.5*fontSize)-1;
-			minusSDPos = round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize)-1;
-			setFont(fontName, 0.9*fontSR2, fontStyle);
-			drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos+0.4*fontSR2));
+			meanPos = round(fontSize/2 + (rampH * (1 - meanFactor)) + 1.5 * fontSize) - 1;
+			plusSDPos = round(fontSize/2 + (rampH * (1 - plusSDFactor)) + 1.5 * fontSize) - 1;
+			minusSDPos = round(fontSize/2 + (rampH * (1 - minusSDFactor)) +1.5*fontSize) -1 ;
+			setFont(fontName, 0.9 * fontSR2, fontStyle);
+			drawString("Mean", round((rampW-getStringWidth("Mean"))/2), round(meanPos + 0.4 * fontSR2));
 			drawLine(rampLW, meanPos, tickLR, meanPos);
-			drawLine(rampW-1-tickLR, meanPos, rampW-rampLW-1, meanPos);
+			drawLine(rampW - 1 - tickLR, meanPos, rampW - rampLW - 1, meanPos);
 			if (plusSDFactor<1) {
 				setFont(fontName, fontSR2, fontStyle);
-				drawString("+"+sigmaChar, round((rampW-getStringWidth("+"+sigmaChar))/2), round(plusSDPos+0.5*fontSR2));
+				drawString("+" + sigmaChar, round((rampW-getStringWidth("+" + sigmaChar))/2), round(plusSDPos + 0.5 * fontSR2));
 				drawLine(rampLW, plusSDPos, tickLR, plusSDPos);
 				drawLine(rampW-1-tickLR, plusSDPos, rampW-rampLW-1, plusSDPos);
 			}

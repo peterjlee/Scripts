@@ -33,10 +33,11 @@
 	+ v221128 Updated for new version of filterArrayByContents function.
 	+ v221202 Adds options to use a fixed origin coordinates and different line types (i.e. arrows). Also saves more settings for ease of use. f3: updated function stripKnownExtensionFromString v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList function. F6: Updated indexOf functions.
 	+ v230905 Added gremlin fix for difficult tables. Added rangeFinder function for auto-ranging. F6 : Replaced function: pad. F7: updated function unCleanLabel.
-	v250424:	Fixed interval number dialog that should not have allowed hidden decimals.
+	+ v250424:	Fixed interval number dialog that should not have allowed hidden decimals.
+	+ v250509:	Initial fontSize is integer to match addNumber dp.
  */
 macro "Line Color Coder with Labels" {
-	macroL = "Line_Color_Coder_v250424.ijm";
+	macroL = "Line_Color_Coder_v250509.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -105,7 +106,7 @@ macro "Line Color Coder with Labels" {
 	else tNL = tN;
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
-	fontSize = maxOf(8,rampH/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(10, round(imageHeight / 28)); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	/* Now variables specific to line drawing: */
 	defaultLineWidth = maxOf(1,round((imageWidth+imageHeight)/1000));

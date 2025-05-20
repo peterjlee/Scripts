@@ -2,9 +2,10 @@
 	IJ BAR: https://github.com/tferr/Scripts#scripts
 	https://imagej.net/doku.php?id=macro:roi_color_coder
 	v221128: 1st version  f2f3: Updated stripKnownExtensionFromString function.v230615 updated addImageToStack function. f5: v230804 version of getResultsTableList and selectResultsWindow functions. F6: Updated indexOf functions. F13 : Replaced function: pad. F14: Updated getColorFromColorName function (012324). F15: updated function unCleanLabel.
+	v250509: Initial fontSize is integer to match addNumber dp.
  */
 macro "Pixel Color Coder with Labels" {
-	macroL = "Pixel_Color_Coder_v221128-f15.ijm";
+	macroL = "Pixel_Color_Coder_v250509.ijm";
 	requires("1.47r");
 	if (!checkForPluginNameContains("Fiji_Plugins")) exit("Sorry this macro requires some functions in the Fiji_Plugins package");
 	/* Needs Fiji_pluings for autoCrop */
@@ -48,7 +49,7 @@ macro "Pixel Color Coder with Labels" {
 	else tNL = tN;
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.88 * imageHeight); /* suggest ramp slightly small to allow room for labels */
-	fontSize = maxOf(8,rampH/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(8,round(rampH / 28)); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	/* To make it easier to find coordinates the heading are now filtered for X and Y */
@@ -789,7 +790,7 @@ macro "Pixel Color Coder with Labels" {
 	showStatus("Pixel Drawing Macro Finished");
 }
 	function getBar(p1, p2) {
-		/* from https://imagej.nih.gov/ij//macros/ProgressBar.txt */
+		/* from https://imagej.net//macros/ProgressBar.txt */
         n = 20;
         bar1 = "--------------------";
         bar2 = "********************";

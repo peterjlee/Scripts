@@ -33,9 +33,10 @@
 	v240112:	Frequency plots again. v240119: But not if insufficient stats. F1: Updated getColorFromColorName function (012324). F2: updated function unCleanLabel.
 	v240709:	Updated colors.
 	v250424:	Fixed interval number dialog that should not have allowed hidden decimals.
+	v250509:	Initial fontSize is integer to match addNumber dp.
  */
 macro "ROI Color Coder with ROI Labels" {
-	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v250424.ijm";
+	macroL = "BAR_ROI_Color_Coder_ROI-Manager-Labels_ASC_v250509.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -154,7 +155,7 @@ macro "ROI Color Coder with ROI Labels" {
 	imageHeight = getHeight(); imageWidth = getWidth();
 	rampH = round(0.89 * imageHeight); /* suggest ramp slightly small to allow room for labels */
 	acceptMinFontSize = true;
-	fontSize = maxOf(10, imageHeight/28); /* default fonts size based on imageHeight */
+	fontSize = maxOf(10, round(imageHeight/28)); /* default fonts size based on imageHeight */
 	imageDepth = bitDepth(); /* required for shadows at different bit depths */
 	headings = split(String.getResultsHeadings, "\t"); /* the tab specificity avoids problems with unusual column titles */
 	headingsWithRange = newArray;
@@ -469,7 +470,7 @@ macro "ROI Color Coder with ROI Labels" {
 		colorChoicesStd = newArray("white", "black", "light_gray", "gray", "dark_gray", "red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange");
 		labelColor = call("ij.Prefs.get", ascPrefsKey + "labelColor", "white");
 		Dialog.addChoice("ROI label color:", colorChoicesStd, labelColor);
-		Dialog.addNumber("ROI label font size:", fontSize/2, 0, 3, "pixels");
+		Dialog.addNumber("ROI label font size:", round(fontSize/2), 0, 3, "pixels");
 		labelFormatChoices = newArray("Bold ROI label", "Draw background behind ROI label");
 		labelFormatChecks = newArray(call("ij.Prefs.get", ascPrefsKey + "labelBold", true), call("ij.Prefs.get", ascPrefsKey + "labelBkgrd", true));
 		Dialog.setInsets(0, 70, 0);
@@ -1216,7 +1217,7 @@ macro "ROI Color Coder with ROI Labels" {
 		iExp = indexOf(stepSci, "E");
 		stepExp = parseInt(substring(stepSci, iExp + 1));
 		if (stepExp<-7) dP = -1; /* Scientific Notation */
-		else if (stepExp<0) dP = -1*stepExp + 1;
+		else if (stepExp<0) dP = -1 * stepExp + 1;
 		else if (stepExp>=5) dP = -1; /* Scientific Notation */
 		else if (stepExp>=2) dP = 0;
 		else if (stepExp>=0) dP = 1;
@@ -1479,7 +1480,8 @@ macro "ROI Color Coder with ROI Labels" {
 	function checkForUnits() {  /* Generic version
 		/* v161108 (adds inches to possible reasons for checking calibration)
 		 v170914 Radio dialog with more information displayed
-		 v200925 looks for pixels unit too; v210428 just adds function label */
+		 v200925 looks for pixels unit too; v210428 just adds function label
+		NOTE: REQUIRES ASC restoreExit function which requires previous run of saveSettings		 */
 		functionL = "checkForUnits_v210428";
 		getPixelSize(unit, pixelWidth, pixelHeight);
 		if (pixelWidth!=pixelHeight || pixelWidth==1 || unit=="" || unit=="inches" || unit=="pixels"){

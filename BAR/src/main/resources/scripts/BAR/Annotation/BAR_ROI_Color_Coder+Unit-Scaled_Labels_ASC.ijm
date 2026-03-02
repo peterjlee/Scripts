@@ -36,7 +36,7 @@
 	v250509:	Initial fontSize is integer to match addNumber dp.
  */
 macro "ROI Color Coder with Scaled Labels" {
-	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_ASC_v250509.ijm";
+	macroL = "BAR_ROI_Color_Coder_Unit-Scaled_Labels_ASC_v250509_f1.ijm";
 	macroV = substring(macroL, lastIndexOf(macroL, "_v") + 2, maxOf(lastIndexOf(macroL, "."), lastIndexOf(macroL, "_v") + 8));
 	requires("1.53g"); /* Uses expandable arrays */
 	close("*Ramp"); /* cleanup: closes previous ramp windows, NOTE this is case insensitive */
@@ -145,10 +145,11 @@ macro "ROI Color Coder with Scaled Labels" {
 	ums = getInfo("micrometer.abbreviation");
 	grayChoices = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
 	colorChoicesStd = newArray("red", "green", "blue", "cyan", "magenta", "yellow", "pink", "orange", "violet");
+	colorChoicesMaterials = newArray("bronze", "antique_bronze", "brass", "dull_brass", "chrome", "copper", "aged_copper", "dusky_copper", "light_copper", "garnet", "burnished_gold", "gold", "slate_gray", "titanium", "vault_garnet", "plaza_brick", "vault_gold");
 	colorChoicesMod = newArray("aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
 	colorChoicesNeon = newArray("jazzberry_jam", "radical_red", "wild_watermelon", "outrageous_orange", "supernova_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "dodger_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
-	colorChoicesFSU = newArray("garnet", "gold", "stadium_night", "westcott_water", "vault_garnet", "legacy_blue", "plaza_brick", "vault_gold");
-	allColors = Array.concat(colorChoicesStd, colorChoicesMod, colorChoicesNeon, colorChoicesFSU, grayChoices);
+	colorChoicesFSU = newArray("stadium_night", "westcott_water", "legacy_blue"); /* Materials colors moved to Materials set */
+	allColors = Array.concat(colorChoicesStd, colorChoicesMaterials, colorChoicesMod, colorChoicesNeon, colorChoicesFSU, grayChoices);
 	tN = stripKnownExtensionFromString(unCleanLabel(t)); /* File.nameWithoutExtension is specific to last opened file, also remove special characters that might cause issues saving file */
 	if (lengthOf(tN)>43) tNL = substring(tN, 0, 21) + "..." + substring(tN, lengthOf(tN)-21);
 	else tNL = tN;
@@ -275,7 +276,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		Dialog.setInsets(0, 20, 0);
 		Dialog.addChoice("Outliers '<': Outline color:", allColorsS, allColorsS[iOutlierColorsS]);
 		Dialog.setInsets(0, 20, 0);
-		Dialog.addNumber("Outlier outline thickness:", round (call("ij.Prefs.get", ascPrefsKey + "outlierStrokePC"), 2), 0, 3, "% of font size");
+		Dialog.addNumber("Outlier outline thickness:", round(call("ij.Prefs.get", ascPrefsKey + "outlierStrokePC"), 2), 0, 3, "% of font size");
 		Dialog.setInsets(10, 20, 0);
 		Dialog.addCheckbox("Apply colors and formatted labels to image copy \(no change to original\)", true);
 		if (selectionExists) {
@@ -2191,6 +2192,7 @@ macro "ROI Color Coder with Scaled Labels" {
 		   v230908: Returns "white" array if not match is found and logs issues without exiting.
 		   v240123: Removed duplicate entries: Now 53 unique colors.
 		   v240709: Added 2024 FSU-Branding Colors. Some reorganization. Now 60 unique colors.
+		   v260202: Added 12 (mostly metallic) "Materials" colors. Now 72 unique colors.
 		*/
 		functionL = "getColorArrayFromColorName_v240709";
 		cA = newArray(255, 255, 255); /* defaults to white */
@@ -2237,8 +2239,21 @@ macro "ROI Color Coder with Scaled Labels" {
 		else if (colorName == "westcott_water") cA = newArray(92, 184, 178);			/* #5CB8B2 */
 		else if (colorName == "vault_garnet") cA = newArray(166, 25, 46);				/* #A6192E */
 		else if (colorName == "legacy_blue") cA = newArray(66, 85, 99);				/* #425563 */
-		else if (colorName == "plaza_brick") cA = newArray(66, 85, 99);				/* #572932  */
-		else if (colorName == "vault_gold") cA = newArray(255, 199, 44);				/* #FFC72C  */
+		else if (colorName == "plaza_brick") cA = newArray(66, 85, 99);				/* #572932 */
+		else if (colorName == "vault_gold") cA = newArray(255, 199, 44);				/* #FFC72C */
+			/* Materials */
+		else if (colorName == "bronze") cA = newArray(205, 127, 50);					/* #CD7F32 */
+		else if (colorName == "antique_bronze") cA = newArray(102, 93, 30);			/* #665D1E */
+		else if (colorName == "brass") cA = newArray(181, 166, 66);					/* #B5A642 */
+		else if (colorName == "dull_brass") cA = newArray(rgb(142, 124, 80);			/* #8E7C50 */
+		else if (colorName == "burnished_gold") cA = newArray(rgb(133, 109, 77);		/* #856D4D */
+		else if (colorName == "chrome") cA = newArray(229, 228, 226);					/* #E5E4E2 */
+		else if (colorName == "copper") cA = newArray(184, 115, 51);					/* #B87333 */
+		else if (colorName == "aged_copper") cA = newArray(110, 58, 7));				/* #6E3A07 */
+		else if (colorName == "dusky_copper") cA = newArray(110, 59, 59);				/* #6E3B3B */
+		else if (colorName == "light_copper") cA = newArray(218, 138, 103);			/* #DA8A67 */
+		else if (colorName == "slate_gray") cA = newArray(112, 128, 144);				/* #708090 */
+		else if (colorName == "titanium") cA = newArray(135, 134, 129);				/* #878681 */
 		   /* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp   */
 		else if (colorName == "radical_red") cA = newArray(255, 53, 94);			/* #FF355E */
 		else if (colorName == "jazzberry_jam") cA = newArray(165, 11, 94);
